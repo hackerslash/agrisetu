@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Link from "next/link";
 import { authApi } from "@repo/api-client";
+import { Building2, CreditCard, ArrowRight } from "lucide-react";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -44,38 +45,38 @@ export function LoginForm() {
           className="font-bold"
           style={{
             fontFamily: "Plus Jakarta Sans",
-            fontSize: 24,
-            color: "#1A1A1A",
+            fontSize: 26,
+            color: "#2C5F2D",
           }}
         >
-          Welcome back
+          Vendor Portal
         </h2>
-        <p style={{ fontSize: 14, color: "#A0A0A0" }}>
-          Sign in to your vendor account
+        <p style={{ fontSize: 14, color: "#A0A0A0", lineHeight: 1.4 }}>
+          Sign in to manage your bids, orders, and payments.
         </p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
         {/* Email */}
         <div className="flex flex-col gap-1.5">
-          <label style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}>
-            Email address
+          <label style={{ fontSize: 13, fontWeight: 600, color: "#2C5F2D" }}>
+            Business Email
           </label>
           <input
             {...register("email")}
             type="email"
-            placeholder="you@business.com"
+            placeholder="vendor@agrimart.in"
             className="w-full outline-none"
             style={{
-              backgroundColor: "#EDE8DF",
-              borderRadius: 14,
+              backgroundColor: "#F7F5F0",
+              borderRadius: 12,
               height: 52,
               padding: "0 16px",
-              fontSize: 14,
-              color: "#1A1A1A",
+              fontSize: 15,
+              color: "#2C5F2D",
               border: errors.email
                 ? "1.5px solid #EF4444"
-                : "1.5px solid transparent",
+                : "1px solid #EDE8DF",
             }}
           />
           {errors.email && (
@@ -87,7 +88,7 @@ export function LoginForm() {
 
         {/* Password */}
         <div className="flex flex-col gap-1.5">
-          <label style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}>
+          <label style={{ fontSize: 13, fontWeight: 600, color: "#2C5F2D" }}>
             Password
           </label>
           <input
@@ -96,15 +97,15 @@ export function LoginForm() {
             placeholder="••••••••"
             className="w-full outline-none"
             style={{
-              backgroundColor: "#EDE8DF",
-              borderRadius: 14,
+              backgroundColor: "#F7F5F0",
+              borderRadius: 12,
               height: 52,
               padding: "0 16px",
               fontSize: 14,
               color: "#1A1A1A",
               border: errors.password
                 ? "1.5px solid #EF4444"
-                : "1.5px solid transparent",
+                : "1px solid #EDE8DF",
             }}
           />
           {errors.password && (
@@ -114,9 +115,25 @@ export function LoginForm() {
           )}
         </div>
 
-        {/* Forgot password */}
-        <div className="flex justify-end">
-          <a style={{ fontSize: 13, color: "#2C5F2D", fontWeight: 500 }}>
+        {/* Remember me + Forgot password */}
+        <div className="flex items-center justify-between">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <div
+              className="flex items-center justify-center rounded"
+              style={{
+                width: 18,
+                height: 18,
+                border: "1px solid #D8D8D8",
+                backgroundColor: "#FFFFFF",
+                flexShrink: 0,
+              }}
+            />
+            <span style={{ fontSize: 13, color: "#A0A0A0" }}>Remember me</span>
+          </label>
+          <a
+            href="#"
+            style={{ fontSize: 14, color: "#2C5F2D", fontWeight: 600 }}
+          >
             Forgot password?
           </a>
         </div>
@@ -138,7 +155,7 @@ export function LoginForm() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="flex items-center justify-center font-semibold rounded-xl transition-opacity"
+          className="flex items-center justify-center gap-2 font-bold rounded-xl transition-opacity"
           style={{
             backgroundColor: "#2C5F2D",
             color: "white",
@@ -149,7 +166,14 @@ export function LoginForm() {
             cursor: isSubmitting ? "not-allowed" : "pointer",
           }}
         >
-          {isSubmitting ? "Signing in…" : "Sign In"}
+          {isSubmitting ? (
+            "Signing in…"
+          ) : (
+            <>
+              Sign In
+              <ArrowRight size={20} />
+            </>
+          )}
         </button>
 
         {/* Divider */}
@@ -158,24 +182,62 @@ export function LoginForm() {
             className="flex-1"
             style={{ height: 1, backgroundColor: "#EDE8DF" }}
           />
-          <span style={{ fontSize: 13, color: "#A0A0A0" }}>or</span>
+          <span style={{ fontSize: 13, color: "#A0A0A0" }}>
+            or continue with
+          </span>
           <div
             className="flex-1"
             style={{ height: 1, backgroundColor: "#EDE8DF" }}
           />
         </div>
 
+        {/* GSTIN Login + DigiLocker */}
+        <div className="flex gap-3">
+          <button
+            type="button"
+            className="flex-1 flex items-center justify-center gap-2 rounded-xl font-semibold"
+            style={{
+              backgroundColor: "#F7F5F0",
+              color: "#2C5F2D",
+              height: 48,
+              fontSize: 14,
+              border: "none",
+              cursor: "pointer",
+            }}
+          >
+            <Building2 size={18} color="#2C5F2D" />
+            GSTIN Login
+          </button>
+          <button
+            type="button"
+            className="flex-1 flex items-center justify-center gap-2 rounded-xl font-semibold"
+            style={{
+              backgroundColor: "#F7F5F0",
+              color: "#2C5F2D",
+              height: 48,
+              fontSize: 14,
+              border: "none",
+              cursor: "pointer",
+            }}
+          >
+            <CreditCard size={18} color="#2C5F2D" />
+            DigiLocker
+          </button>
+        </div>
+
         {/* Register link */}
         <div className="flex items-center justify-center gap-1.5">
-          <span style={{ fontSize: 14, color: "#A0A0A0" }}>
-            Don&apos;t have an account?
-          </span>
+          <span style={{ fontSize: 14, color: "#A0A0A0" }}>New Vendor?</span>
           <Link
             href="/register"
-            className="font-semibold"
-            style={{ fontSize: 14, color: "#2C5F2D" }}
+            className="font-bold"
+            style={{
+              fontSize: 14,
+              color: "#2C5F2D",
+              fontFamily: "Plus Jakarta Sans",
+            }}
           >
-            Register as vendor
+            Register as Vendor
           </Link>
         </div>
       </form>

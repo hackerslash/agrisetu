@@ -40,6 +40,18 @@ class StatusBadge extends StatelessWidget {
           color: AppColors.primary,
           bgColor: const Color(0xFFDCF2DC),
         );
+      case OrderStatus.processing:
+        return StatusBadge(
+          label: status.displayLabel,
+          color: const Color(0xFF92400E),
+          bgColor: const Color(0xFFFEF3C7),
+        );
+      case OrderStatus.outForDelivery:
+        return StatusBadge(
+          label: status.displayLabel,
+          color: const Color(0xFF1D4ED8),
+          bgColor: const Color(0xFFDBEAFE),
+        );
       case OrderStatus.dispatched:
         return StatusBadge(
           label: 'In Transit',
@@ -81,6 +93,18 @@ class StatusBadge extends StatelessWidget {
           label: 'Payment',
           color: AppColors.primary,
           bgColor: const Color(0xFFDCF2DC),
+        );
+      case ClusterStatus.processing:
+        return StatusBadge(
+          label: status.displayLabel,
+          color: const Color(0xFF92400E),
+          bgColor: const Color(0xFFFEF3C7),
+        );
+      case ClusterStatus.outForDelivery:
+        return StatusBadge(
+          label: status.displayLabel,
+          color: const Color(0xFF1D4ED8),
+          bgColor: const Color(0xFFDBEAFE),
         );
       case ClusterStatus.dispatched:
         return StatusBadge(

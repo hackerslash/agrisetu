@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell } from "lucide-react";
+import { Bell, Calendar } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { clearAuthToken } from "@repo/api-client";
 
@@ -8,15 +8,28 @@ interface TopBarProps {
   title: string;
   subtitle?: string;
   vendorName?: string;
+  showDatePill?: boolean;
+  actions?: React.ReactNode;
 }
 
-export function TopBar({ title, subtitle, vendorName }: TopBarProps) {
+export function TopBar({
+  title,
+  subtitle,
+  vendorName,
+  showDatePill,
+  actions,
+}: TopBarProps) {
   const router = useRouter();
 
   function handleLogout() {
     clearAuthToken();
     router.push("/login");
   }
+
+  const dateLabel = new Date().toLocaleDateString("en-IN", {
+    month: "short",
+    year: "numeric",
+  });
 
   return (
     <header
@@ -47,24 +60,40 @@ export function TopBar({ title, subtitle, vendorName }: TopBarProps) {
         )}
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
+        {/* Optional custom actions (e.g. New Gig button) */}
+        {actions}
+
+        {/* Date pill — shown on Dashboard */}
+        {showDatePill && (
+          <div
+            className="flex items-center gap-2 rounded-xl"
+            style={{ padding: "8px 14px", backgroundColor: "#F7F5F0" }}
+          >
+            <Calendar size={15} color="#A0A0A0" />
+            <span style={{ fontSize: 13, fontWeight: 500, color: "#2C5F2D" }}>
+              {dateLabel}
+            </span>
+          </div>
+        )}
+
         <button
           className="flex items-center justify-center rounded-xl transition-colors hover:bg-[#F7F5F0]"
-          style={{ width: 40, height: 40 }}
+          style={{ width: 38, height: 38 }}
         >
-          <Bell size={18} color="#A0A0A0" />
+          <Bell size={18} color="#2C5F2D" />
         </button>
 
         <button
           onClick={handleLogout}
           className="flex items-center justify-center rounded-full"
           style={{
-            width: 36,
-            height: 36,
+            width: 38,
+            height: 38,
             backgroundColor: "#2C5F2D",
             color: "white",
             fontSize: 13,
-            fontWeight: 600,
+            fontWeight: 700,
             fontFamily: "Plus Jakarta Sans",
           }}
           title="Logout"

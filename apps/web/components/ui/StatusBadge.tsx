@@ -15,6 +15,12 @@ const STATUS_STYLES: Record<
   CLUSTERED: { bg: "#E0F2FE", text: "#0369A1", label: "Clustered" },
   PAYMENT_PENDING: { bg: "#FEF9C3", text: "#A16207", label: "Payment Pending" },
   PAID: { bg: "#DBEAFE", text: "#1D4ED8", label: "Paid" },
+  PROCESSING: { bg: "#FEF3C7", text: "#92400E", label: "Processing" },
+  OUT_FOR_DELIVERY: {
+    bg: "#DBEAFE",
+    text: "#1D4ED8",
+    label: "Out for Delivery",
+  },
   DISPATCHED: { bg: "#F3E8FF", text: "#7E22CE", label: "Dispatched" },
   DELIVERED: { bg: "#D1FAE5", text: "#065F46", label: "Delivered" },
   REJECTED: { bg: "#FEF2F2", text: "#B03A2E", label: "Rejected" },

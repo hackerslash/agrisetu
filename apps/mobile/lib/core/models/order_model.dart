@@ -3,6 +3,8 @@ enum OrderStatus {
   clustered,
   paymentPending,
   paid,
+  processing,
+  outForDelivery,
   dispatched,
   delivered,
   rejected,
@@ -10,28 +12,53 @@ enum OrderStatus {
 
   static OrderStatus fromString(String value) {
     switch (value.toUpperCase()) {
-      case 'PENDING': return OrderStatus.pending;
-      case 'CLUSTERED': return OrderStatus.clustered;
-      case 'PAYMENT_PENDING': return OrderStatus.paymentPending;
-      case 'PAID': return OrderStatus.paid;
-      case 'DISPATCHED': return OrderStatus.dispatched;
-      case 'DELIVERED': return OrderStatus.delivered;
-      case 'REJECTED': return OrderStatus.rejected;
-      case 'FAILED': return OrderStatus.failed;
-      default: return OrderStatus.pending;
+      case 'PENDING':
+        return OrderStatus.pending;
+      case 'CLUSTERED':
+        return OrderStatus.clustered;
+      case 'PAYMENT_PENDING':
+        return OrderStatus.paymentPending;
+      case 'PAID':
+        return OrderStatus.paid;
+      case 'PROCESSING':
+        return OrderStatus.processing;
+      case 'OUT_FOR_DELIVERY':
+        return OrderStatus.outForDelivery;
+      case 'DISPATCHED':
+        return OrderStatus.dispatched;
+      case 'DELIVERED':
+        return OrderStatus.delivered;
+      case 'REJECTED':
+        return OrderStatus.rejected;
+      case 'FAILED':
+        return OrderStatus.failed;
+      default:
+        return OrderStatus.pending;
     }
   }
 
   String get displayLabel {
     switch (this) {
-      case OrderStatus.pending: return 'Pending';
-      case OrderStatus.clustered: return 'In Cluster';
-      case OrderStatus.paymentPending: return 'Payment Due';
-      case OrderStatus.paid: return 'Paid';
-      case OrderStatus.dispatched: return 'In Transit';
-      case OrderStatus.delivered: return 'Delivered';
-      case OrderStatus.rejected: return 'Rejected';
-      case OrderStatus.failed: return 'Failed';
+      case OrderStatus.pending:
+        return 'Pending';
+      case OrderStatus.clustered:
+        return 'In Cluster';
+      case OrderStatus.paymentPending:
+        return 'Payment Due';
+      case OrderStatus.paid:
+        return 'Paid';
+      case OrderStatus.processing:
+        return 'Processing';
+      case OrderStatus.outForDelivery:
+        return 'Out for Delivery';
+      case OrderStatus.dispatched:
+        return 'In Transit';
+      case OrderStatus.delivered:
+        return 'Delivered';
+      case OrderStatus.rejected:
+        return 'Rejected';
+      case OrderStatus.failed:
+        return 'Failed';
     }
   }
 }
@@ -72,7 +99,8 @@ class Order {
       status: OrderStatus.fromString(json['status'] as String),
       createdAt: DateTime.parse(json['createdAt'] as String),
       clusterMember: json['clusterMember'] != null
-          ? ClusterMember.fromJson(json['clusterMember'] as Map<String, dynamic>)
+          ? ClusterMember.fromJson(
+              json['clusterMember'] as Map<String, dynamic>)
           : null,
     );
   }
@@ -118,28 +146,56 @@ class ClusterMember {
 }
 
 enum ClusterStatus {
-  forming, voting, payment, dispatched, completed, failed;
+  forming,
+  voting,
+  payment,
+  processing,
+  outForDelivery,
+  dispatched,
+  completed,
+  failed;
 
   static ClusterStatus fromString(String value) {
     switch (value.toUpperCase()) {
-      case 'FORMING': return ClusterStatus.forming;
-      case 'VOTING': return ClusterStatus.voting;
-      case 'PAYMENT': return ClusterStatus.payment;
-      case 'DISPATCHED': return ClusterStatus.dispatched;
-      case 'COMPLETED': return ClusterStatus.completed;
-      case 'FAILED': return ClusterStatus.failed;
-      default: return ClusterStatus.forming;
+      case 'FORMING':
+        return ClusterStatus.forming;
+      case 'VOTING':
+        return ClusterStatus.voting;
+      case 'PAYMENT':
+        return ClusterStatus.payment;
+      case 'PROCESSING':
+        return ClusterStatus.processing;
+      case 'OUT_FOR_DELIVERY':
+        return ClusterStatus.outForDelivery;
+      case 'DISPATCHED':
+        return ClusterStatus.dispatched;
+      case 'COMPLETED':
+        return ClusterStatus.completed;
+      case 'FAILED':
+        return ClusterStatus.failed;
+      default:
+        return ClusterStatus.forming;
     }
   }
 
   String get displayLabel {
     switch (this) {
-      case ClusterStatus.forming: return 'Forming';
-      case ClusterStatus.voting: return 'Voting';
-      case ClusterStatus.payment: return 'Payment';
-      case ClusterStatus.dispatched: return 'In Transit';
-      case ClusterStatus.completed: return 'Completed';
-      case ClusterStatus.failed: return 'Failed';
+      case ClusterStatus.forming:
+        return 'Forming';
+      case ClusterStatus.voting:
+        return 'Voting';
+      case ClusterStatus.payment:
+        return 'Payment';
+      case ClusterStatus.processing:
+        return 'Processing';
+      case ClusterStatus.outForDelivery:
+        return 'Out for Delivery';
+      case ClusterStatus.dispatched:
+        return 'In Transit';
+      case ClusterStatus.completed:
+        return 'Completed';
+      case ClusterStatus.failed:
+        return 'Failed';
     }
   }
 }
@@ -181,8 +237,9 @@ class Cluster {
     this.ratings = const [],
   });
 
-  double get fillPercent =>
-      targetQuantity > 0 ? (currentQuantity / targetQuantity).clamp(0.0, 1.0) : 0;
+  double get fillPercent => targetQuantity > 0
+      ? (currentQuantity / targetQuantity).clamp(0.0, 1.0)
+      : 0;
   int get membersCount => members.length;
 
   factory Cluster.fromJson(Map<String, dynamic> json) {
@@ -299,15 +356,23 @@ class Vendor {
 }
 
 enum PaymentStatus {
-  pending, success, failed, refunded;
+  pending,
+  success,
+  failed,
+  refunded;
 
   static PaymentStatus fromString(String value) {
     switch (value.toUpperCase()) {
-      case 'PENDING': return PaymentStatus.pending;
-      case 'SUCCESS': return PaymentStatus.success;
-      case 'FAILED': return PaymentStatus.failed;
-      case 'REFUNDED': return PaymentStatus.refunded;
-      default: return PaymentStatus.pending;
+      case 'PENDING':
+        return PaymentStatus.pending;
+      case 'SUCCESS':
+        return PaymentStatus.success;
+      case 'FAILED':
+        return PaymentStatus.failed;
+      case 'REFUNDED':
+        return PaymentStatus.refunded;
+      default:
+        return PaymentStatus.pending;
     }
   }
 }

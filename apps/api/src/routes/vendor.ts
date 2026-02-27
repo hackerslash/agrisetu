@@ -143,7 +143,10 @@ router.get("/gigs", async (req, res) => {
 const createGigSchema = z.object({
   cropName: z.string().min(1),
   variety: z.string().optional(),
-  unit: z.string().min(1).transform((v) => v.toLowerCase().trim()),
+  unit: z
+    .string()
+    .min(1)
+    .transform((v) => v.toLowerCase().trim()),
   minQuantity: z.number().positive(),
   pricePerUnit: z.number().positive(),
   availableQuantity: z.number().positive(),
@@ -163,7 +166,11 @@ router.post("/gigs", async (req, res) => {
     });
     // If published immediately, sync matching FORMING clusters
     if (gig.status === GigStatus.PUBLISHED) {
-      await syncClustersForPublishedGig(gig.cropName, gig.unit, gig.minQuantity);
+      await syncClustersForPublishedGig(
+        gig.cropName,
+        gig.unit,
+        gig.minQuantity,
+      );
     }
     success(res, gig, 201);
   } catch {
@@ -174,7 +181,10 @@ router.post("/gigs", async (req, res) => {
 const updateGigSchema = z.object({
   cropName: z.string().optional(),
   variety: z.string().optional(),
-  unit: z.string().optional().transform((v) => v?.toLowerCase().trim()),
+  unit: z
+    .string()
+    .optional()
+    .transform((v) => v?.toLowerCase().trim()),
   minQuantity: z.number().positive().optional(),
   pricePerUnit: z.number().positive().optional(),
   availableQuantity: z.number().positive().optional(),
@@ -257,7 +267,10 @@ router.get("/clusters", async (req, res) => {
     // Build case-insensitive crop+unit filter
     const gigFilters = vendorGigs.map((g) => ({
       cropName: { equals: g.cropName, mode: "insensitive" as const },
-      unit: { equals: g.unit.toLowerCase().trim(), mode: "insensitive" as const },
+      unit: {
+        equals: g.unit.toLowerCase().trim(),
+        mode: "insensitive" as const,
+      },
     }));
 
     const clusters = await prisma.cluster.findMany({
@@ -464,6 +477,122 @@ router.post("/orders/:id/reject", async (req, res) => {
     }
 
     success(res, { rejected: true, reason: parsed.data.reason });
+  } catch {
+    error(res, "Internal server error", 500);
+  }
+});
+
+router.patch("/orders/:id/process", async (req, res) => {
+  try {
+    const cluster = await prisma.cluster.findFirst({
+      where: { id: req.params.id, vendorId: req.user!.id },
+      include: { members: true },
+    });
+    if (!cluster) {
+      error(res, "Order not found", 404);
+      return;
+    }
+    if (cluster.status !== ClusterStatus.PAYMENT) {
+      error(res, "Order must be in PAYMENT status to mark as processing", 400);
+      return;
+    }
+
+    await prisma.cluster.update({
+      where: { id: req.params.id },
+      data: { status: ClusterStatus.PROCESSING },
+    });
+
+    await prisma.delivery.updateMany({
+      where: { clusterId: req.params.id },
+      data: {
+        trackingSteps: [
+          {
+            step: "Order Received",
+            status: "completed",
+            timestamp: new Date().toISOString(),
+          },
+          {
+            step: "Processing",
+            status: "in_progress",
+            timestamp: new Date().toISOString(),
+          },
+          { step: "Ready for Delivery", status: "pending", timestamp: null },
+          { step: "Out for Delivery", status: "pending", timestamp: null },
+          { step: "Delivered", status: "pending", timestamp: null },
+        ],
+      },
+    });
+
+    await prisma.order.updateMany({
+      where: { id: { in: cluster.members.map((m) => m.orderId) } },
+      data: { status: OrderStatus.PROCESSING },
+    });
+
+    success(res, { processing: true });
+  } catch {
+    error(res, "Internal server error", 500);
+  }
+});
+
+router.patch("/orders/:id/out-for-delivery", async (req, res) => {
+  try {
+    const cluster = await prisma.cluster.findFirst({
+      where: { id: req.params.id, vendorId: req.user!.id },
+      include: { members: true },
+    });
+    if (!cluster) {
+      error(res, "Order not found", 404);
+      return;
+    }
+    if (cluster.status !== ClusterStatus.PROCESSING) {
+      error(
+        res,
+        "Order must be in PROCESSING status to mark as out for delivery",
+        400,
+      );
+      return;
+    }
+
+    await prisma.cluster.update({
+      where: { id: req.params.id },
+      data: { status: ClusterStatus.OUT_FOR_DELIVERY },
+    });
+
+    await prisma.delivery.updateMany({
+      where: { clusterId: req.params.id },
+      data: {
+        trackingSteps: [
+          {
+            step: "Order Received",
+            status: "completed",
+            timestamp: new Date().toISOString(),
+          },
+          {
+            step: "Processing",
+            status: "completed",
+            timestamp: new Date().toISOString(),
+          },
+          {
+            step: "Ready for Delivery",
+            status: "completed",
+            timestamp: new Date().toISOString(),
+          },
+          {
+            step: "Out for Delivery",
+            status: "in_progress",
+            timestamp: new Date().toISOString(),
+          },
+          { step: "Delivered", status: "pending", timestamp: null },
+        ],
+      },
+    });
+
+    await prisma.order.updateMany({
+      where: { id: { in: cluster.members.map((m) => m.orderId) } },
+      data: { status: OrderStatus.OUT_FOR_DELIVERY },
+    });
+
+    success(res, { outForDelivery: true });
   } catch {
     error(res, "Internal server error", 500);
   }

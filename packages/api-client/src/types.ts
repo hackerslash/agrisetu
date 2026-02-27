@@ -7,6 +7,8 @@ export type OrderStatus =
   | "CLUSTERED"
   | "PAYMENT_PENDING"
   | "PAID"
+  | "PROCESSING"
+  | "OUT_FOR_DELIVERY"
   | "DISPATCHED"
   | "DELIVERED"
   | "REJECTED"
@@ -15,6 +17,8 @@ export type ClusterStatus =
   | "FORMING"
   | "VOTING"
   | "PAYMENT"
+  | "PROCESSING"
+  | "OUT_FOR_DELIVERY"
   | "DISPATCHED"
   | "COMPLETED"
   | "FAILED";

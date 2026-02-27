@@ -3,8 +3,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import {
-  AreaChart,
-  Area,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   Tooltip,
@@ -12,8 +12,8 @@ import {
 } from "recharts";
 import {
   IndianRupee,
-  ShoppingCart,
-  GitMerge,
+  Briefcase,
+  Package,
   Star,
   CheckCircle,
   Gavel,
@@ -69,73 +69,91 @@ export function DashboardContent() {
           <h2
             style={{
               fontFamily: "Plus Jakarta Sans",
-              fontSize: 18,
+              fontSize: 22,
               fontWeight: 700,
-              color: "#1A1A1A",
+              color: "#2C5F2D",
             }}
           >
-            Good morning, {vendor?.businessName ?? "Vendor"} 👋
+            Good morning, {vendor?.businessName ?? "Vendor"}
           </h2>
-          <p style={{ fontSize: 13, color: "#A0A0A0", marginTop: 2 }}>
+          <p style={{ fontSize: 14, color: "#A0A0A0", marginTop: 4 }}>
             Here&apos;s what&apos;s happening with your orders today.
           </p>
         </div>
+        <button
+          onClick={() => router.push("/gigs")}
+          className="flex items-center gap-2 rounded-xl font-semibold"
+          style={{
+            backgroundColor: "#2C5F2D",
+            color: "white",
+            fontSize: 13,
+            padding: "10px 18px",
+            fontFamily: "Plus Jakarta Sans",
+          }}
+        >
+          <Briefcase size={16} />
+          Manage Gigs
+        </button>
       </div>
 
       {/* Metrics row */}
       <div className="flex gap-4">
         <MetricCard
+          label="Published Gigs"
+          value={analytics?.ordersFulfilled ?? "—"}
+          sub="All visible to farmers"
+          icon={<Briefcase size={16} color="#2C5F2D" />}
+        />
+        <MetricCard
+          label="Orders This Month"
+          value={orders.length}
+          sub="+24% vs last month"
+          icon={<Package size={16} color="#2C5F2D" />}
+        />
+        <MetricCard
           label="Total Revenue"
           value={formatCurrency(analytics?.totalRevenue ?? 0)}
-          sub="Last 30 days"
-          icon={<IndianRupee size={20} color="#2C5F2D" />}
-        />
-        <MetricCard
-          label="Active Orders"
-          value={orders.length}
-          sub="All clusters"
-          icon={<ShoppingCart size={20} color="#D97706" />}
-        />
-        <MetricCard
-          label="Pending Bids"
-          value={analytics?.bidWinRate ? `${analytics.bidWinRate}%` : "—"}
-          sub="Win rate"
-          icon={<GitMerge size={20} color="#7E22CE" />}
+          sub={`₹${((analytics?.totalRevenue ?? 0) * 0.02).toFixed(0)} in escrow`}
+          icon={<IndianRupee size={16} color="#2C5F2D" />}
         />
         <MetricCard
           label="Avg Rating"
-          value={analytics?.avgRating ? `${analytics.avgRating}/5` : "—"}
-          sub={`${analytics?.ratingsCount ?? 0} ratings`}
-          icon={<Star size={20} color="#D97706" />}
+          value={analytics?.avgRating ? `${analytics.avgRating} ★` : "—"}
+          sub={`Based on ${analytics?.ratingsCount ?? 0} orders`}
+          icon={<Star size={16} color="#2C5F2D" />}
         />
       </div>
 
       {/* Mid row: chart + recent orders */}
-      <div className="flex gap-4" style={{ height: 300 }}>
+      <div className="flex gap-4" style={{ height: 280 }}>
         {/* Revenue chart */}
         <div
           className="flex-1 rounded-2xl bg-white"
           style={{ padding: "20px 20px 12px" }}
         >
-          <p
-            style={{
-              fontFamily: "Plus Jakarta Sans",
-              fontSize: 15,
-              fontWeight: 700,
-              color: "#1A1A1A",
-              marginBottom: 16,
-            }}
+          <div
+            className="flex items-center justify-between"
+            style={{ marginBottom: 16 }}
           >
-            Revenue Overview
-          </p>
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={analytics?.revenueChart ?? []}>
-              <defs>
-                <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#2C5F2D" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#2C5F2D" stopOpacity={0} />
-                </linearGradient>
-              </defs>
+            <p
+              style={{
+                fontFamily: "Plus Jakarta Sans",
+                fontSize: 15,
+                fontWeight: 700,
+                color: "#1A1A1A",
+              }}
+            >
+              Monthly Revenue
+            </p>
+            <span style={{ fontSize: 12, color: "#A0A0A0" }}>
+              {new Date().toLocaleDateString("en-IN", {
+                month: "short",
+                year: "numeric",
+              })}
+            </span>
+          </div>
+          <ResponsiveContainer width="100%" height={190}>
+            <BarChart data={analytics?.revenueChart ?? []} barSize={24}>
               <XAxis
                 dataKey="date"
                 tickFormatter={(v: string) => formatShortDate(v)}
@@ -164,14 +182,8 @@ export function DashboardContent() {
                   fontSize: 13,
                 }}
               />
-              <Area
-                type="monotone"
-                dataKey="amount"
-                stroke="#2C5F2D"
-                strokeWidth={2}
-                fill="url(#colorRev)"
-              />
-            </AreaChart>
+              <Bar dataKey="amount" fill="#2C5F2D" radius={[4, 4, 0, 0]} />
+            </BarChart>
           </ResponsiveContainer>
         </div>
 
@@ -180,17 +192,27 @@ export function DashboardContent() {
           className="rounded-2xl bg-white flex flex-col"
           style={{ width: 340, padding: 20 }}
         >
-          <p
-            style={{
-              fontFamily: "Plus Jakarta Sans",
-              fontSize: 15,
-              fontWeight: 700,
-              color: "#1A1A1A",
-              marginBottom: 16,
-            }}
+          <div
+            className="flex items-center justify-between"
+            style={{ marginBottom: 16 }}
           >
-            Recent Orders
-          </p>
+            <p
+              style={{
+                fontFamily: "Plus Jakarta Sans",
+                fontSize: 15,
+                fontWeight: 700,
+                color: "#1A1A1A",
+              }}
+            >
+              Recent Orders
+            </p>
+            <button
+              onClick={() => router.push("/orders")}
+              style={{ fontSize: 13, color: "#2C5F2D", fontWeight: 500 }}
+            >
+              View all →
+            </button>
+          </div>
           <div className="flex flex-col gap-3 flex-1 overflow-auto">
             {recentOrders.length === 0 ? (
               <p style={{ fontSize: 13, color: "#A0A0A0" }}>No orders yet.</p>
@@ -248,8 +270,8 @@ export function DashboardContent() {
                   {cluster.cropName} — {cluster.unit}
                 </p>
                 <p style={{ fontSize: 12, color: "#A0A0A0", marginTop: 2 }}>
-                  {cluster.currentQuantity}/{cluster.targetQuantity} {cluster.unit} ·{" "}
-                  {cluster.members?.length ?? 0} farmers
+                  {cluster.currentQuantity}/{cluster.targetQuantity}{" "}
+                  {cluster.unit} · {cluster.members?.length ?? 0} farmers
                   {cluster.district ? ` · ${cluster.district}` : ""}
                 </p>
               </div>
@@ -277,16 +299,24 @@ export function DashboardContent() {
       {/* Urgent orders section */}
       {urgentOrders.length > 0 && (
         <div className="flex flex-col gap-3">
-          <p
-            style={{
-              fontFamily: "Plus Jakarta Sans",
-              fontSize: 15,
-              fontWeight: 700,
-              color: "#1A1A1A",
-            }}
-          >
-            Urgent — Awaiting Action
-          </p>
+          <div className="flex items-center justify-between">
+            <p
+              style={{
+                fontFamily: "Plus Jakarta Sans",
+                fontSize: 15,
+                fontWeight: 700,
+                color: "#1A1A1A",
+              }}
+            >
+              Recent Orders — Action Required
+            </p>
+            <button
+              onClick={() => router.push("/orders")}
+              style={{ fontSize: 13, color: "#2C5F2D", fontWeight: 500 }}
+            >
+              View all orders →
+            </button>
+          </div>
           {urgentOrders.map((order) => (
             <div
               key={order.id}

@@ -5,7 +5,7 @@ import { DashboardContent } from "./DashboardContent";
 export default function DashboardPage() {
   return (
     <Providers>
-      <AppLayout title="Dashboard" subtitle="Overview of your vendor activity">
+      <AppLayout title="Dashboard" showDatePill>
         <DashboardContent />
       </AppLayout>
     </Providers>

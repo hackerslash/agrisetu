@@ -2,7 +2,7 @@ class AppConstants {
   // API
   // static const String apiBaseUrl = 'http://10.0.2.2:3001/api/v1'; // Android emulator
   // static const String apiBaseUrl = 'http://localhost:3001/api/v1'; // iOS simulator
-  static const String apiBaseUrl = 'http://192.168.0.103:3001/api/v1'; // Physical device (Mac LAN IP)
+  static const String apiBaseUrl = 'http://localhost:3001/api/v1'; // Physical device (Mac LAN IP)
 
   // Storage keys
   static const String tokenKey = 'agrisetu_token';

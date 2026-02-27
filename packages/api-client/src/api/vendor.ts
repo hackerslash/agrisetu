@@ -109,6 +109,14 @@ export async function rejectOrder(
   await getApiClient().post(`/vendor/orders/${id}/reject`, data);
 }
 
+export async function processOrder(id: string): Promise<void> {
+  await getApiClient().patch(`/vendor/orders/${id}/process`);
+}
+
+export async function outForDeliveryOrder(id: string): Promise<void> {
+  await getApiClient().patch(`/vendor/orders/${id}/out-for-delivery`);
+}
+
 export async function dispatchOrder(id: string): Promise<void> {
   await getApiClient().patch(`/vendor/orders/${id}/dispatch`);
 }

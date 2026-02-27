@@ -179,7 +179,7 @@ components/
 
 **Stack:** Flutter/Dart SDK ^3.5.0, Riverpod 2.x (state), go_router (navigation), Dio (HTTP), FlutterSecureStorage (JWT), google_fonts, shimmer, pinput
 
-**API base URL:** `http://192.168.0.103:3001/api/v1` (LAN device). Commented alternatives: `10.0.2.2` (Android emulator), `localhost` (iOS simulator).
+**API base URL:** `http://localhost:3001/api/v1` (LAN device). Commented alternatives: `10.0.2.2` (Android emulator), `localhost` (iOS simulator).
 
 **Source layout:**
 

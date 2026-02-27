@@ -72,6 +72,7 @@ export function GigEditor({ initialData }: GigEditorProps) {
   const [publishStatus, setPublishStatus] = useState<"DRAFT" | "PUBLISHED">(
     initialData?.status === "PUBLISHED" ? "PUBLISHED" : "DRAFT",
   );
+  const [autoSync, setAutoSync] = useState(false);
   const [apiError, setApiError] = useState("");
 
   const {
@@ -269,9 +270,9 @@ export function GigEditor({ initialData }: GigEditorProps) {
           </div>
         </div>
 
-        {/* Right: status + actions */}
+        {/* Right: publish settings + actions */}
         <div className="flex flex-col gap-4" style={{ width: 280 }}>
-          {/* Status card */}
+          {/* Publish Settings card */}
           <div
             className="bg-white rounded-2xl flex flex-col gap-4"
             style={{ padding: 20 }}
@@ -279,67 +280,128 @@ export function GigEditor({ initialData }: GigEditorProps) {
             <p
               style={{
                 fontFamily: "Plus Jakarta Sans",
-                fontSize: 15,
+                fontSize: 14,
                 fontWeight: 700,
                 color: "#1A1A1A",
               }}
             >
-              Status
+              Publish Settings
             </p>
-            <div className="flex gap-2">
-              {(["DRAFT", "PUBLISHED"] as const).map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setPublishStatus(s)}
-                  className="flex-1 rounded-xl font-semibold transition-all"
+
+            {/* Status dropdown */}
+            <div className="flex flex-col gap-1.5">
+              <label
+                style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}
+              >
+                Status
+              </label>
+              <div className="relative">
+                <select
+                  value={publishStatus}
+                  onChange={(e) =>
+                    setPublishStatus(e.target.value as "DRAFT" | "PUBLISHED")
+                  }
+                  className="w-full outline-none appearance-none"
                   style={{
-                    padding: "10px 0",
-                    fontSize: 13,
-                    backgroundColor:
-                      publishStatus === s
-                        ? s === "PUBLISHED"
-                          ? "#2C5F2D"
-                          : "#EDE8DF"
-                        : "#F7F5F0",
-                    color:
-                      publishStatus === s
-                        ? s === "PUBLISHED"
-                          ? "white"
-                          : "#1A1A1A"
-                        : "#A0A0A0",
+                    backgroundColor: "#F7F5F0",
+                    borderRadius: 10,
+                    height: 40,
+                    padding: "0 36px 0 14px",
+                    fontSize: 14,
+                    color: "#1A1A1A",
+                    border: "1.5px solid transparent",
+                    cursor: "pointer",
                   }}
                 >
-                  {s === "PUBLISHED" ? "Published" : "Draft"}
-                </button>
-              ))}
+                  <option value="PUBLISHED">Published</option>
+                  <option value="DRAFT">Draft</option>
+                </select>
+                <span
+                  className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                  style={{ fontSize: 10, color: "#A0A0A0" }}
+                >
+                  ▼
+                </span>
+              </div>
             </div>
-            <p style={{ fontSize: 12, color: "#A0A0A0" }}>
-              {publishStatus === "PUBLISHED"
-                ? "Farmers can see and join this gig."
-                : "Only you can see this gig."}
-            </p>
+
+            {/* Auto-sync toggle */}
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => setAutoSync(!autoSync)}
+                className="relative rounded-full transition-colors flex-shrink-0"
+                style={{
+                  width: 44,
+                  height: 24,
+                  backgroundColor: autoSync ? "#2C5F2D" : "#EDE8DF",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 0,
+                }}
+              >
+                <span
+                  className="absolute top-1 rounded-full bg-white shadow transition-all"
+                  style={{
+                    width: 16,
+                    height: 16,
+                    left: autoSync ? 24 : 4,
+                  }}
+                />
+              </button>
+              <span style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}>
+                Auto-sync mandi price
+              </span>
+            </div>
+
+            {/* Info box */}
+            <div
+              className="flex gap-2 rounded-xl"
+              style={{ backgroundColor: "#E8F5E9", padding: 12 }}
+            >
+              <span style={{ fontSize: 12, color: "#2C5F2D", flexShrink: 0 }}>
+                ⓘ
+              </span>
+              <p style={{ fontSize: 12, color: "#2C5F2D", lineHeight: 1.5 }}>
+                Publish makes this gig visible to farmers&apos; mobile apps in
+                your selected regions.
+              </p>
+            </div>
           </div>
 
           {/* Action buttons */}
           <button
             type="submit"
             disabled={isSubmitting}
-            className="flex items-center justify-center rounded-xl font-semibold"
+            className="flex items-center justify-center rounded-xl font-bold"
             style={{
               backgroundColor: "#2C5F2D",
               color: "white",
-              height: 52,
+              height: 48,
               fontSize: 15,
               fontFamily: "Plus Jakarta Sans",
               opacity: isSubmitting ? 0.7 : 1,
             }}
           >
-            {isSubmitting
-              ? "Saving…"
-              : publishStatus === "PUBLISHED"
-                ? "Publish Gig"
-                : "Save Draft"}
+            {isSubmitting ? "Saving…" : "Save Status"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setPublishStatus("DRAFT");
+            }}
+            className="flex items-center justify-center rounded-xl font-semibold"
+            style={{
+              backgroundColor: "#FFFFFF",
+              color: "#2C5F2D",
+              height: 44,
+              fontSize: 14,
+              fontFamily: "Plus Jakarta Sans",
+              border: "1.5px solid #A0A0A0",
+            }}
+          >
+            Save Draft
           </button>
 
           <button
@@ -347,10 +409,11 @@ export function GigEditor({ initialData }: GigEditorProps) {
             onClick={() => router.push("/gigs")}
             className="flex items-center justify-center rounded-xl font-semibold"
             style={{
-              backgroundColor: "#F7F5F0",
-              color: "#1A1A1A",
-              height: 48,
+              backgroundColor: "#FEF2F2",
+              color: "#DC2626",
+              height: 44,
               fontSize: 14,
+              fontFamily: "Plus Jakarta Sans",
             }}
           >
             Cancel

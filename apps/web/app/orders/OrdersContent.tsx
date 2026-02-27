@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { Eye, Gavel, X } from "lucide-react";
+import { Eye, Gavel, X, Search, Download } from "lucide-react";
 import { vendorApi } from "@repo/api-client";
 import type { Cluster, Gig } from "@repo/api-client";
 import { StatusBadge } from "../../components/ui/StatusBadge";
@@ -140,45 +140,36 @@ export function OrdersContent() {
   return (
     <div className="flex flex-col gap-6">
       {/* Stats strip */}
-      <div className="flex gap-4">
+      <div className="flex gap-3">
         {[
+          { label: "New Orders", value: stats.new, color: "#1A1A1A" },
+          { label: "Processing", value: stats.inProgress, color: "#2C5F2D" },
           {
-            label: "New Orders",
-            value: stats.new,
-            color: "#D97706",
-            bg: "#FFF3CD",
-          },
-          {
-            label: "In Progress",
-            value: stats.inProgress,
-            color: "#7E22CE",
-            bg: "#F3E8FF",
-          },
-          {
-            label: "Completed",
+            label: "Ready for Delivery",
             value: stats.completed,
-            color: "#065F46",
-            bg: "#D1FAE5",
+            color: "#F59E0B",
           },
-        ].map(({ label, value, color, bg }) => (
+        ].map(({ label, value, color }) => (
           <div
             key={label}
-            className="flex items-center gap-4 rounded-2xl"
-            style={{ flex: 1, backgroundColor: bg, padding: "16px 20px" }}
+            className="flex flex-col gap-1 rounded-2xl"
+            style={{
+              flex: 1,
+              backgroundColor: "#FFFFFF",
+              padding: "14px 20px",
+            }}
           >
-            <div>
-              <p
-                style={{
-                  fontSize: 28,
-                  fontWeight: 800,
-                  fontFamily: "Plus Jakarta Sans",
-                  color,
-                }}
-              >
-                {value}
-              </p>
-              <p style={{ fontSize: 13, color }}>{label}</p>
-            </div>
+            <p
+              style={{
+                fontSize: 22,
+                fontWeight: 700,
+                fontFamily: "Plus Jakarta Sans",
+                color,
+              }}
+            >
+              {value}
+            </p>
+            <p style={{ fontSize: 12, color: "#A0A0A0" }}>{label}</p>
           </div>
         ))}
       </div>
@@ -222,22 +213,27 @@ export function OrdersContent() {
                 borderBottom: "1px solid #F0EDE8",
               }}
             >
-              {["Crop / Location", "Quantity", "Target", "Farmers", "Status", ""].map(
-                (h) => (
-                  <span
-                    key={h}
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: "#A0A0A0",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                    }}
-                  >
-                    {h}
-                  </span>
-                ),
-              )}
+              {[
+                "Crop / Location",
+                "Quantity",
+                "Target",
+                "Farmers",
+                "Status",
+                "",
+              ].map((h) => (
+                <span
+                  key={h}
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: "#A0A0A0",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  {h}
+                </span>
+              ))}
             </div>
 
             {(unbidClusters as Cluster[]).map((cluster, idx) => (
@@ -252,7 +248,9 @@ export function OrdersContent() {
                 }}
               >
                 <div>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}>
+                  <p
+                    style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}
+                  >
                     {cluster.cropName}
                   </p>
                   <p style={{ fontSize: 12, color: "#A0A0A0" }}>
@@ -317,7 +315,11 @@ export function OrdersContent() {
               </p>
               <button
                 onClick={() => setBidState(null)}
-                style={{ background: "none", border: "none", cursor: "pointer" }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                }}
               >
                 <X size={20} color="#A0A0A0" />
               </button>
@@ -336,7 +338,9 @@ export function OrdersContent() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <label style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}>
+              <label
+                style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}
+              >
                 Your Price per {bidState.unit} (₹) *
               </label>
               <input
@@ -353,7 +357,9 @@ export function OrdersContent() {
                   height: 48,
                   padding: "0 14px",
                   fontSize: 14,
-                  border: bidError ? "1.5px solid #EF4444" : "1.5px solid transparent",
+                  border: bidError
+                    ? "1.5px solid #EF4444"
+                    : "1.5px solid transparent",
                 }}
               />
               {bidError && (
@@ -362,7 +368,9 @@ export function OrdersContent() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <label style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}>
+              <label
+                style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}
+              >
                 Note to farmers (optional)
               </label>
               <textarea
@@ -408,7 +416,9 @@ export function OrdersContent() {
                   color: "white",
                   fontSize: 14,
                   border: "none",
-                  cursor: placeBidMutation.isPending ? "not-allowed" : "pointer",
+                  cursor: placeBidMutation.isPending
+                    ? "not-allowed"
+                    : "pointer",
                   opacity: placeBidMutation.isPending ? 0.7 : 1,
                 }}
               >
@@ -420,7 +430,7 @@ export function OrdersContent() {
       )}
 
       {/* ── Won Orders ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div
           className="flex gap-1 rounded-xl p-1"
           style={{ backgroundColor: "#EDE8DF" }}
@@ -441,6 +451,40 @@ export function OrdersContent() {
               {tab.label}
             </button>
           ))}
+        </div>
+        <div className="flex items-center gap-2.5">
+          {/* Search */}
+          <div
+            className="flex items-center gap-2 rounded-xl"
+            style={{
+              backgroundColor: "#FFFFFF",
+              height: 40,
+              padding: "0 14px",
+              width: 220,
+            }}
+          >
+            <Search size={16} color="#A0A0A0" />
+            <span style={{ fontSize: 13, color: "#A0A0A0" }}>
+              Search orders...
+            </span>
+          </div>
+          {/* Export CSV */}
+          <button
+            className="flex items-center gap-1.5 rounded-lg"
+            style={{
+              backgroundColor: "#FFFFFF",
+              color: "#2C5F2D",
+              fontSize: 13,
+              fontWeight: 600,
+              height: 40,
+              padding: "0 16px",
+              border: "none",
+              cursor: "pointer",
+            }}
+          >
+            <Download size={15} color="#2C5F2D" />
+            Export CSV
+          </button>
         </div>
       </div>
 

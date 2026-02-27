@@ -64,8 +64,8 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
         'unit': _unitCtrl.text.trim(),
       });
       ref.invalidate(homeDashboardProvider);
-      final clusterId = (orderData['clusterMember'] as Map<String, dynamic>?)?
-          ['cluster']?['id'] as String?;
+      final clusterId = (orderData['clusterMember']
+          as Map<String, dynamic>?)?['cluster']?['id'] as String?;
       if (mounted) {
         if (clusterId != null) {
           context.go('/clusters/$clusterId');
@@ -143,21 +143,23 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
               // Stars
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(5, (i) => GestureDetector(
-                  onTap: () => setSheetState(() => score = i + 1),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Icon(
-                      i < score
-                          ? Icons.star_rounded
-                          : Icons.star_outline_rounded,
-                      color: i < score
-                          ? const Color(0xFFE69A28)
-                          : AppColors.textMuted,
-                      size: 42,
-                    ),
-                  ),
-                )),
+                children: List.generate(
+                    5,
+                    (i) => GestureDetector(
+                          onTap: () => setSheetState(() => score = i + 1),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: Icon(
+                              i < score
+                                  ? Icons.star_rounded
+                                  : Icons.star_outline_rounded,
+                              color: i < score
+                                  ? const Color(0xFFE69A28)
+                                  : AppColors.textMuted,
+                              size: 42,
+                            ),
+                          ),
+                        )),
               ),
               const SizedBox(height: 20),
               Text('Quick tags', style: AppTextStyles.labelSmall),
@@ -189,9 +191,8 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                       child: Text(
                         tag,
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: selected
-                              ? Colors.white
-                              : AppColors.textSecondary,
+                          color:
+                              selected ? Colors.white : AppColors.textSecondary,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -228,8 +229,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                                   : commentCtrl.text.trim(),
                             });
                             if (ctx.mounted) Navigator.pop(ctx);
-                            ref.invalidate(
-                                orderDetailProvider(widget.orderId));
+                            ref.invalidate(orderDetailProvider(widget.orderId));
                             ref.invalidate(homeDashboardProvider);
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -281,8 +281,8 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
       appBar: AppHeader(title: 'Order Details'),
       body: orderAsync.when(
         data: (order) => _buildOrderDetail(context, order),
-        loading: () =>
-            const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+        loading: () => const Center(
+            child: CircularProgressIndicator(color: AppColors.primary)),
         error: (e, _) => Center(child: Text(e.toString())),
       ),
     );
@@ -292,8 +292,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     final cluster = order.clusterMember?.cluster;
     final hasVoted = cluster?.bids.any((b) => b.currentFarmerVoted) == true;
     final hasRated = cluster?.ratings.isNotEmpty == true;
-    final existingRating =
-        hasRated ? cluster!.ratings.first : null;
+    final existingRating = hasRated ? cluster!.ratings.first : null;
 
     // Vendor resolved after voting completes (vendorId set on cluster)
     final selectedVendor = cluster?.vendor;
@@ -335,8 +334,8 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                 const SizedBox(height: 8),
                 Text(
                   '${order.cropName}  ·  ${order.quantity.toStringAsFixed(0)} ${order.unit}',
-                  style: AppTextStyles.h4
-                      .copyWith(color: AppColors.textOnPrimary),
+                  style:
+                      AppTextStyles.h4.copyWith(color: AppColors.textOnPrimary),
                 ),
                 if (displayVendor != null) ...[
                   const SizedBox(height: 4),
@@ -390,14 +389,12 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                   const SizedBox(height: 14),
                   _SummaryRow(
                     label: 'Unit Price',
-                    value:
-                        '₹${pricePerUnit.toStringAsFixed(0)}/${order.unit}',
+                    value: '₹${pricePerUnit.toStringAsFixed(0)}/${order.unit}',
                   ),
                   const SizedBox(height: 10),
                   _SummaryRow(
                     label: 'Quantity',
-                    value:
-                        '${order.quantity.toStringAsFixed(0)} ${order.unit}',
+                    value: '${order.quantity.toStringAsFixed(0)} ${order.unit}',
                   ),
                   const SizedBox(height: 10),
                   const Divider(color: Color(0xFFD4CFC8), height: 1),
@@ -408,8 +405,8 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                       Text('Your Total', style: AppTextStyles.h5),
                       Text(
                         '₹${totalPrice.toStringAsFixed(0)}',
-                        style: AppTextStyles.h5
-                            .copyWith(color: AppColors.primary),
+                        style:
+                            AppTextStyles.h5.copyWith(color: AppColors.primary),
                       ),
                     ],
                   ),
@@ -474,8 +471,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Vote submitted!', style: AppTextStyles.label),
-                        Text(
-                            'Waiting for other farmers in the cluster to vote',
+                        Text('Waiting for other farmers in the cluster to vote',
                             style: AppTextStyles.caption),
                       ],
                     ),
@@ -512,7 +508,9 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
           ],
 
           // ── Delivery Tracking ─────────────────────────────────────────
-          if ((order.status == OrderStatus.dispatched ||
+          if ((order.status == OrderStatus.processing ||
+                  order.status == OrderStatus.outForDelivery ||
+                  order.status == OrderStatus.dispatched ||
                   order.status == OrderStatus.delivered) &&
               cluster?.delivery != null) ...[
             Container(
@@ -599,8 +597,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                         child: Padding(
                           padding: const EdgeInsets.only(right: 6),
                           child: Icon(Icons.star_outline_rounded,
-                              size: 36,
-                              color: AppColors.textMuted),
+                              size: 36, color: AppColors.textMuted),
                         ),
                       ),
                     ),
@@ -617,8 +614,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                         shape: const StadiumBorder(),
                         elevation: 0,
                       ),
-                      child:
-                          Text('Rate & Review', style: AppTextStyles.button),
+                      child: Text('Rate & Review', style: AppTextStyles.button),
                     ),
                   ),
                 ],
@@ -708,8 +704,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
                       _ImpactStat(
-                        value:
-                            '₹${(totalPrice * 0.15).toStringAsFixed(0)}',
+                        value: '₹${(totalPrice * 0.15).toStringAsFixed(0)}',
                         label: 'Saved',
                       ),
                       _ImpactStat(
@@ -754,8 +749,8 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                   const SizedBox(width: 10),
                   Text(
                     'AI detected your order details. Please verify.',
-                    style:
-                        AppTextStyles.bodySmall.copyWith(color: AppColors.surface),
+                    style: AppTextStyles.bodySmall
+                        .copyWith(color: AppColors.surface),
                   ),
                 ],
               ),
@@ -851,8 +846,18 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
 
   String _formatDate(DateTime dt) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
   }
@@ -884,11 +889,26 @@ class _OrderTimeline extends StatelessWidget {
     const doneStatuses = [
       OrderStatus.paymentPending,
       OrderStatus.paid,
+      OrderStatus.processing,
+      OrderStatus.outForDelivery,
       OrderStatus.dispatched,
       OrderStatus.delivered,
     ];
     const paidStatuses = [
       OrderStatus.paid,
+      OrderStatus.processing,
+      OrderStatus.outForDelivery,
+      OrderStatus.dispatched,
+      OrderStatus.delivered,
+    ];
+    const processingStatuses = [
+      OrderStatus.processing,
+      OrderStatus.outForDelivery,
+      OrderStatus.dispatched,
+      OrderStatus.delivered,
+    ];
+    const outForDeliveryStatuses = [
+      OrderStatus.outForDelivery,
       OrderStatus.dispatched,
       OrderStatus.delivered,
     ];
@@ -901,8 +921,7 @@ class _OrderTimeline extends StatelessWidget {
     final topBid = (cluster?.bids.isNotEmpty == true)
         ? cluster!.bids.reduce((a, b) => a.votes >= b.votes ? a : b)
         : null;
-    final vendorName =
-        vendor?.businessName ?? topBid?.vendor?.businessName;
+    final vendorName = vendor?.businessName ?? topBid?.vendor?.businessName;
 
     return [
       _TimelineStep(
@@ -926,6 +945,16 @@ class _OrderTimeline extends StatelessWidget {
         active: order.status == OrderStatus.paymentPending,
       ),
       _TimelineStep(
+        label: 'Processing',
+        done: processingStatuses.contains(order.status),
+        active: order.status == OrderStatus.processing,
+      ),
+      _TimelineStep(
+        label: 'Out for Delivery',
+        done: outForDeliveryStatuses.contains(order.status),
+        active: order.status == OrderStatus.outForDelivery,
+      ),
+      _TimelineStep(
         label: 'In Transit',
         done: dispatchedStatuses.contains(order.status),
         active: order.status == OrderStatus.dispatched,
@@ -939,8 +968,18 @@ class _OrderTimeline extends StatelessWidget {
 
   static String _fmt(DateTime dt) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${dt.day} ${months[dt.month - 1]}';
   }
@@ -977,8 +1016,7 @@ class _OrderTimeline extends StatelessWidget {
                       ),
                     ),
                     child: steps[i].done
-                        ? const Icon(Icons.check,
-                            size: 14, color: Colors.white)
+                        ? const Icon(Icons.check, size: 14, color: Colors.white)
                         : steps[i].active
                             ? Center(
                                 child: Container(
@@ -1022,8 +1060,7 @@ class _OrderTimeline extends StatelessWidget {
                       ),
                       if (steps[i].sublabel.isNotEmpty) ...[
                         const SizedBox(height: 2),
-                        Text(steps[i].sublabel,
-                            style: AppTextStyles.caption),
+                        Text(steps[i].sublabel, style: AppTextStyles.caption),
                       ],
                       SizedBox(height: i < steps.length - 1 ? 18 : 0),
                     ],
@@ -1125,8 +1162,7 @@ class _VendorBidCard extends StatelessWidget {
                       style: AppTextStyles.label,
                     ),
                     if (vendor?.state != null)
-                      Text(vendor!.state!,
-                          style: AppTextStyles.caption),
+                      Text(vendor!.state!, style: AppTextStyles.caption),
                   ],
                 ),
               ),
@@ -1135,8 +1171,7 @@ class _VendorBidCard extends StatelessWidget {
                 children: [
                   Text(
                     '₹${bid.pricePerUnit.toStringAsFixed(0)}/$unit',
-                    style: AppTextStyles.h5
-                        .copyWith(color: AppColors.primary),
+                    style: AppTextStyles.h5.copyWith(color: AppColors.primary),
                   ),
                   Text('Total ₹${total.toStringAsFixed(0)}',
                       style: AppTextStyles.caption),
@@ -1212,6 +1247,14 @@ class _OrderStatusPill extends StatelessWidget {
         bg = Colors.white.withOpacity(0.3);
         label = 'Delivered';
         break;
+      case OrderStatus.processing:
+        bg = const Color(0xFF92400E).withOpacity(0.85);
+        label = 'Processing';
+        break;
+      case OrderStatus.outForDelivery:
+        bg = const Color(0xFF1D4ED8).withOpacity(0.85);
+        label = 'Out for Delivery';
+        break;
       case OrderStatus.dispatched:
         bg = const Color(0xFFE69A28).withOpacity(0.8);
         label = 'In Transit';
@@ -1240,8 +1283,8 @@ class _OrderStatusPill extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(label,
-          style:
-              AppTextStyles.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
+          style: AppTextStyles.caption
+              .copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
     );
   }
 }
@@ -1258,11 +1301,9 @@ class _SummaryRow extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label,
-            style: AppTextStyles.body
-                .copyWith(color: AppColors.textMuted)),
+            style: AppTextStyles.body.copyWith(color: AppColors.textMuted)),
         Text(value,
-            style: AppTextStyles.label
-                .copyWith(color: AppColors.primary)),
+            style: AppTextStyles.label.copyWith(color: AppColors.primary)),
       ],
     );
   }

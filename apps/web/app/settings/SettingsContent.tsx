@@ -6,6 +6,34 @@ import { z } from "zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Upload, AlertTriangle } from "lucide-react";
+
+function Toggle({ defaultChecked = true }: { defaultChecked?: boolean }) {
+  const [on, setOn] = useState(defaultChecked);
+  return (
+    <button
+      type="button"
+      onClick={() => setOn(!on)}
+      className="relative rounded-full transition-colors flex-shrink-0"
+      style={{
+        width: 44,
+        height: 24,
+        backgroundColor: on ? "#2C5F2D" : "#EDE8DF",
+        border: "none",
+        cursor: "pointer",
+        padding: 0,
+      }}
+    >
+      <span
+        className="absolute top-1 rounded-full bg-white shadow transition-all"
+        style={{
+          width: 16,
+          height: 16,
+          left: on ? 24 : 4,
+        }}
+      />
+    </button>
+  );
+}
 import { vendorApi, authApi } from "@repo/api-client";
 import type { Vendor } from "@repo/api-client";
 
@@ -406,13 +434,22 @@ export function SettingsContent() {
           </h3>
           {[
             {
-              label: "New cluster bids",
+              label: "New Order Alerts",
               sub: "When a cluster matches your gig",
+              on: true,
             },
-            { label: "Order updates", sub: "Status changes on your orders" },
-            { label: "Payment alerts", sub: "Escrow releases & payouts" },
-            { label: "Platform announcements", sub: "Updates from AgriSetu" },
-          ].map(({ label, sub }) => (
+            {
+              label: "Order Updates",
+              sub: "Status changes on your orders",
+              on: true,
+            },
+            {
+              label: "Payment Released",
+              sub: "Escrow releases & payouts",
+              on: true,
+            },
+            { label: "Promotional", sub: "Updates from AgriSetu", on: false },
+          ].map(({ label, sub, on }) => (
             <div
               key={label}
               className="flex items-center justify-between py-3"
@@ -424,22 +461,7 @@ export function SettingsContent() {
                 </p>
                 <p style={{ fontSize: 12, color: "#A0A0A0" }}>{sub}</p>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  defaultChecked
-                  className="sr-only peer"
-                />
-                <div
-                  className="relative rounded-full peer-checked:bg-[#2C5F2D] peer-focus:ring-0 transition-colors"
-                  style={{ width: 44, height: 24, backgroundColor: "#EDE8DF" }}
-                >
-                  <div
-                    className="absolute top-1 left-1 bg-white rounded-full shadow transition-all peer-checked:translate-x-5"
-                    style={{ width: 16, height: 16 }}
-                  />
-                </div>
-              </label>
+              <Toggle defaultChecked={on} />
             </div>
           ))}
         </div>

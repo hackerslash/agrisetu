@@ -12,9 +12,17 @@ interface AppLayoutProps {
   children: React.ReactNode;
   title: string;
   subtitle?: string;
+  showDatePill?: boolean;
+  topBarActions?: React.ReactNode;
 }
 
-export function AppLayout({ children, title, subtitle }: AppLayoutProps) {
+export function AppLayout({
+  children,
+  title,
+  subtitle,
+  showDatePill,
+  topBarActions,
+}: AppLayoutProps) {
   const router = useRouter();
 
   // Redirect to login if no token in localStorage
@@ -54,6 +62,8 @@ export function AppLayout({ children, title, subtitle }: AppLayoutProps) {
           title={title}
           subtitle={subtitle}
           vendorName={vendor?.businessName}
+          showDatePill={showDatePill}
+          actions={topBarActions}
         />
         <main
           className="flex-1"
