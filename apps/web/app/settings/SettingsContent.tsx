@@ -1,0 +1,584 @@
+"use client";
+
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { Upload, AlertTriangle } from "lucide-react";
+import { vendorApi, authApi } from "@repo/api-client";
+import type { Vendor } from "@repo/api-client";
+
+// ─── Schemas ──────────────────────────────────────────────────────────────────
+
+const profileSchema = z.object({
+  businessName: z.string().min(1, "Required"),
+  contactName: z.string().min(1, "Required"),
+  phone: z.string().min(10, "Valid phone required"),
+  state: z.string().optional(),
+  businessType: z.string().optional(),
+});
+type ProfileFormData = z.infer<typeof profileSchema>;
+
+const passwordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Required"),
+    newPassword: z.string().min(8, "Min. 8 characters"),
+    confirmPassword: z.string().min(1, "Required"),
+  })
+  .refine((d) => d.newPassword === d.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
+type PasswordFormData = z.infer<typeof passwordSchema>;
+
+// ─── Subcomponent: Input ──────────────────────────────────────────────────────
+
+function FormInput({
+  label,
+  error,
+  type = "text",
+  placeholder,
+  ...props
+}: {
+  label: string;
+  error?: string;
+  type?: string;
+  placeholder?: string;
+  [key: string]: unknown;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}>
+        {label}
+      </label>
+      <input
+        type={type}
+        placeholder={placeholder}
+        className="w-full outline-none"
+        style={{
+          backgroundColor: "#EDE8DF",
+          borderRadius: 14,
+          height: 52,
+          padding: "0 16px",
+          fontSize: 14,
+          color: "#1A1A1A",
+          border: error ? "1.5px solid #EF4444" : "1.5px solid transparent",
+        }}
+        {...(props as React.InputHTMLAttributes<HTMLInputElement>)}
+      />
+      {error && <p style={{ fontSize: 12, color: "#EF4444" }}>{error}</p>}
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
+export function SettingsContent() {
+  const queryClient = useQueryClient();
+  const [profileSuccess, setProfileSuccess] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [profileError, setProfileError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+
+  const { data: vendor, isLoading } = useQuery({
+    queryKey: ["vendor-profile"],
+    queryFn: () => authApi.getMe(),
+  });
+
+  const profileForm = useForm<ProfileFormData>({
+    resolver: zodResolver(profileSchema),
+    values: vendor
+      ? {
+          businessName: vendor.businessName,
+          contactName: vendor.contactName,
+          phone: vendor.phone,
+          state: vendor.state ?? "",
+          businessType: vendor.businessType ?? "",
+        }
+      : undefined,
+  });
+
+  const passwordForm = useForm<PasswordFormData>({
+    resolver: zodResolver(passwordSchema),
+  });
+
+  const updateProfileMutation = useMutation({
+    mutationFn: (data: Partial<Vendor>) => vendorApi.updateProfile(data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["vendor-profile"] });
+      void queryClient.invalidateQueries({ queryKey: ["vendor-me"] });
+      setProfileSuccess(true);
+      setTimeout(() => setProfileSuccess(false), 3000);
+    },
+  });
+
+  const changePasswordMutation = useMutation({
+    mutationFn: (data: { currentPassword: string; newPassword: string }) =>
+      vendorApi.changePassword(data),
+    onSuccess: () => {
+      passwordForm.reset();
+      setPasswordSuccess(true);
+      setTimeout(() => setPasswordSuccess(false), 3000);
+    },
+  });
+
+  async function onProfileSubmit(data: ProfileFormData) {
+    setProfileError("");
+    try {
+      await updateProfileMutation.mutateAsync(data);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
+      setProfileError(e.response?.data?.error ?? "Update failed");
+    }
+  }
+
+  async function onPasswordSubmit(data: PasswordFormData) {
+    setPasswordError("");
+    try {
+      await changePasswordMutation.mutateAsync({
+        currentPassword: data.currentPassword,
+        newPassword: data.newPassword,
+      });
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
+      setPasswordError(e.response?.data?.error ?? "Password change failed");
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center" style={{ height: 400 }}>
+        <p style={{ fontSize: 14, color: "#A0A0A0" }}>Loading settings…</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-6">
+      {/* Left column */}
+      <div className="flex-1 flex flex-col gap-5">
+        {/* Business profile */}
+        <div className="bg-white rounded-2xl" style={{ padding: 24 }}>
+          <h3
+            style={{
+              fontFamily: "Plus Jakarta Sans",
+              fontSize: 16,
+              fontWeight: 700,
+              color: "#1A1A1A",
+              marginBottom: 20,
+            }}
+          >
+            Business Profile
+          </h3>
+
+          {profileSuccess && (
+            <div
+              className="mb-4 rounded-xl p-3"
+              style={{
+                backgroundColor: "#D1FAE5",
+                color: "#065F46",
+                fontSize: 13,
+              }}
+            >
+              Profile updated successfully!
+            </div>
+          )}
+          {profileError && (
+            <div
+              className="mb-4 rounded-xl p-3"
+              style={{
+                backgroundColor: "#FEF2F2",
+                color: "#B03A2E",
+                fontSize: 13,
+              }}
+            >
+              {profileError}
+            </div>
+          )}
+
+          <form
+            onSubmit={profileForm.handleSubmit(onProfileSubmit)}
+            className="flex flex-col gap-4"
+          >
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <FormInput
+                  label="Business Name"
+                  error={profileForm.formState.errors.businessName?.message}
+                  {...profileForm.register("businessName")}
+                />
+              </div>
+              <div className="flex-1">
+                <FormInput
+                  label="Contact Person"
+                  error={profileForm.formState.errors.contactName?.message}
+                  {...profileForm.register("contactName")}
+                />
+              </div>
+            </div>
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <FormInput
+                  label="Phone"
+                  error={profileForm.formState.errors.phone?.message}
+                  {...profileForm.register("phone")}
+                />
+              </div>
+              <div className="flex-1 flex flex-col gap-1.5">
+                <label
+                  style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}
+                >
+                  State
+                </label>
+                <select
+                  {...profileForm.register("state")}
+                  className="w-full outline-none"
+                  style={{
+                    backgroundColor: "#EDE8DF",
+                    borderRadius: 14,
+                    height: 52,
+                    padding: "0 16px",
+                    fontSize: 14,
+                    color: "#1A1A1A",
+                    border: "1.5px solid transparent",
+                  }}
+                >
+                  <option value="">Select state</option>
+                  {[
+                    "Maharashtra",
+                    "Karnataka",
+                    "Uttar Pradesh",
+                    "Punjab",
+                    "Gujarat",
+                    "Rajasthan",
+                    "Madhya Pradesh",
+                    "Tamil Nadu",
+                    "Andhra Pradesh",
+                    "Telangana",
+                  ].map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label
+                style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}
+              >
+                Business Type
+              </label>
+              <select
+                {...profileForm.register("businessType")}
+                className="w-full outline-none"
+                style={{
+                  backgroundColor: "#EDE8DF",
+                  borderRadius: 14,
+                  height: 52,
+                  padding: "0 16px",
+                  fontSize: 14,
+                  color: "#1A1A1A",
+                  border: "1.5px solid transparent",
+                }}
+              >
+                <option value="">Select type</option>
+                <option value="MANUFACTURER">Manufacturer</option>
+                <option value="DISTRIBUTOR">Distributor</option>
+                <option value="RETAILER">Retailer</option>
+                <option value="WHOLESALER">Wholesaler</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label
+                style={{ fontSize: 13, fontWeight: 500, color: "#A0A0A0" }}
+              >
+                Email (read-only)
+              </label>
+              <div
+                className="flex items-center"
+                style={{
+                  backgroundColor: "#F7F5F0",
+                  borderRadius: 14,
+                  height: 52,
+                  padding: "0 16px",
+                  fontSize: 14,
+                  color: "#A0A0A0",
+                }}
+              >
+                {vendor?.email}
+              </div>
+            </div>
+            <button
+              type="submit"
+              disabled={profileForm.formState.isSubmitting}
+              className="rounded-xl font-semibold"
+              style={{
+                backgroundColor: "#2C5F2D",
+                color: "white",
+                height: 48,
+                fontSize: 14,
+                fontFamily: "Plus Jakarta Sans",
+              }}
+            >
+              {profileForm.formState.isSubmitting ? "Saving…" : "Save Changes"}
+            </button>
+          </form>
+        </div>
+
+        {/* Certifications */}
+        <div className="bg-white rounded-2xl" style={{ padding: 24 }}>
+          <h3
+            style={{
+              fontFamily: "Plus Jakarta Sans",
+              fontSize: 16,
+              fontWeight: 700,
+              color: "#1A1A1A",
+              marginBottom: 16,
+            }}
+          >
+            Documents & Certifications
+          </h3>
+          <div className="flex flex-col gap-3">
+            {(vendor?.documents ?? []).length === 0 ? (
+              <p style={{ fontSize: 13, color: "#A0A0A0" }}>
+                No documents uploaded.
+              </p>
+            ) : (
+              vendor?.documents?.map((doc) => (
+                <div
+                  key={doc.id}
+                  className="flex items-center justify-between rounded-xl"
+                  style={{ padding: "12px 16px", backgroundColor: "#F7F5F0" }}
+                >
+                  <div>
+                    <p
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: "#1A1A1A",
+                      }}
+                    >
+                      {doc.docType === "PAN"
+                        ? "PAN Card"
+                        : doc.docType === "GST"
+                          ? "GST Certificate"
+                          : "Quality Certificate"}
+                    </p>
+                    <p style={{ fontSize: 12, color: "#A0A0A0" }}>
+                      Uploaded {new Date(doc.uploadedAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <button
+                    className="flex items-center gap-1.5 rounded-lg"
+                    style={{
+                      fontSize: 12,
+                      color: "#2C5F2D",
+                      padding: "6px 12px",
+                      backgroundColor: "#D1FAE5",
+                    }}
+                  >
+                    <Upload size={13} />
+                    Re-upload
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Right column */}
+      <div className="flex flex-col gap-5" style={{ width: 360 }}>
+        {/* Notifications */}
+        <div className="bg-white rounded-2xl" style={{ padding: 24 }}>
+          <h3
+            style={{
+              fontFamily: "Plus Jakarta Sans",
+              fontSize: 16,
+              fontWeight: 700,
+              color: "#1A1A1A",
+              marginBottom: 16,
+            }}
+          >
+            Notification Preferences
+          </h3>
+          {[
+            {
+              label: "New cluster bids",
+              sub: "When a cluster matches your gig",
+            },
+            { label: "Order updates", sub: "Status changes on your orders" },
+            { label: "Payment alerts", sub: "Escrow releases & payouts" },
+            { label: "Platform announcements", sub: "Updates from AgriSetu" },
+          ].map(({ label, sub }) => (
+            <div
+              key={label}
+              className="flex items-center justify-between py-3"
+              style={{ borderBottom: "1px solid #F0EDE8" }}
+            >
+              <div>
+                <p style={{ fontSize: 14, fontWeight: 500, color: "#1A1A1A" }}>
+                  {label}
+                </p>
+                <p style={{ fontSize: 12, color: "#A0A0A0" }}>{sub}</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  defaultChecked
+                  className="sr-only peer"
+                />
+                <div
+                  className="relative rounded-full peer-checked:bg-[#2C5F2D] peer-focus:ring-0 transition-colors"
+                  style={{ width: 44, height: 24, backgroundColor: "#EDE8DF" }}
+                >
+                  <div
+                    className="absolute top-1 left-1 bg-white rounded-full shadow transition-all peer-checked:translate-x-5"
+                    style={{ width: 16, height: 16 }}
+                  />
+                </div>
+              </label>
+            </div>
+          ))}
+        </div>
+
+        {/* Security */}
+        <div className="bg-white rounded-2xl" style={{ padding: 24 }}>
+          <h3
+            style={{
+              fontFamily: "Plus Jakarta Sans",
+              fontSize: 16,
+              fontWeight: 700,
+              color: "#1A1A1A",
+              marginBottom: 16,
+            }}
+          >
+            Security
+          </h3>
+
+          {passwordSuccess && (
+            <div
+              className="mb-4 rounded-xl p-3"
+              style={{
+                backgroundColor: "#D1FAE5",
+                color: "#065F46",
+                fontSize: 13,
+              }}
+            >
+              Password changed successfully!
+            </div>
+          )}
+          {passwordError && (
+            <div
+              className="mb-4 rounded-xl p-3"
+              style={{
+                backgroundColor: "#FEF2F2",
+                color: "#B03A2E",
+                fontSize: 13,
+              }}
+            >
+              {passwordError}
+            </div>
+          )}
+
+          <form
+            onSubmit={passwordForm.handleSubmit(onPasswordSubmit)}
+            className="flex flex-col gap-4"
+          >
+            <FormInput
+              label="Current Password"
+              type="password"
+              placeholder="••••••••"
+              error={passwordForm.formState.errors.currentPassword?.message}
+              {...passwordForm.register("currentPassword")}
+            />
+            <FormInput
+              label="New Password"
+              type="password"
+              placeholder="Min. 8 characters"
+              error={passwordForm.formState.errors.newPassword?.message}
+              {...passwordForm.register("newPassword")}
+            />
+            <FormInput
+              label="Confirm New Password"
+              type="password"
+              placeholder="••••••••"
+              error={passwordForm.formState.errors.confirmPassword?.message}
+              {...passwordForm.register("confirmPassword")}
+            />
+            <button
+              type="submit"
+              disabled={changePasswordMutation.isPending}
+              className="rounded-xl font-semibold"
+              style={{
+                backgroundColor: "#2C5F2D",
+                color: "white",
+                height: 48,
+                fontSize: 14,
+              }}
+            >
+              {changePasswordMutation.isPending
+                ? "Updating…"
+                : "Change Password"}
+            </button>
+          </form>
+        </div>
+
+        {/* Danger zone */}
+        <div
+          className="rounded-2xl"
+          style={{
+            padding: 24,
+            backgroundColor: "#FEF2F2",
+            border: "1.5px solid #FCA5A5",
+          }}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle size={18} color="#B03A2E" />
+            <h3
+              style={{
+                fontFamily: "Plus Jakarta Sans",
+                fontSize: 16,
+                fontWeight: 700,
+                color: "#B03A2E",
+              }}
+            >
+              Danger Zone
+            </h3>
+          </div>
+          <p
+            style={{
+              fontSize: 13,
+              color: "#B03A2E",
+              marginBottom: 16,
+              lineHeight: 1.5,
+            }}
+          >
+            Deleting your account is permanent and cannot be undone. All your
+            gigs, bids, and order history will be removed.
+          </p>
+          <button
+            className="w-full rounded-xl font-semibold"
+            style={{
+              backgroundColor: "#B03A2E",
+              color: "white",
+              height: 48,
+              fontSize: 14,
+            }}
+            onClick={() => {
+              if (
+                window.confirm("Are you sure? This action cannot be undone.")
+              ) {
+                alert("Account deletion would be processed. (Mock)");
+              }
+            }}
+          >
+            Delete Account
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

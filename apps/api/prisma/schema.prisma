@@ -1,0 +1,231 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Farmer {
+  id             String          @id @default(cuid())
+  phone          String          @unique
+  name           String?
+  village        String?
+  district       String?
+  state          String?
+  landArea       Float?
+  cropsGrown     String[]
+  upiId          String?
+  language       String          @default("en")
+  aadhaarLinked  Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  orders         Order[]
+  clusterMembers ClusterMember[]
+  votes          VendorVote[]
+  payments       Payment[]
+  ratings        Rating[]
+}
+
+model Vendor {
+  id           String           @id @default(cuid())
+  email        String           @unique
+  password     String
+  businessName String
+  contactName  String
+  phone        String
+  gstin        String?
+  pan          String?
+  state        String?
+  businessType String?
+  isVerified   Boolean          @default(false)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  documents    VendorDocument[]
+  gigs         Gig[]
+  clusters     Cluster[]
+  bids         VendorBid[]
+  ratingsGiven Rating[]
+}
+
+model VendorDocument {
+  id         String   @id @default(cuid())
+  vendorId   String
+  docType    DocType
+  fileUrl    String
+  uploadedAt DateTime @default(now())
+  vendor     Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+}
+
+enum DocType {
+  PAN
+  GST
+  QUALITY_CERT
+}
+
+model Gig {
+  id                String      @id @default(cuid())
+  vendorId          String
+  cropName          String
+  variety           String?
+  unit              String
+  minQuantity       Float
+  pricePerUnit      Float
+  availableQuantity Float
+  description       String?
+  status            GigStatus   @default(DRAFT)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  vendor            Vendor      @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  clusters          Cluster[]
+  bids              VendorBid[]
+}
+
+enum GigStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+}
+
+model Order {
+  id           String        @id @default(cuid())
+  farmerId     String
+  cropName     String
+  quantity     Float
+  unit         String
+  deliveryDate DateTime?
+  status       OrderStatus   @default(PENDING)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  farmer       Farmer        @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  clusterMember ClusterMember?
+}
+
+enum OrderStatus {
+  PENDING
+  CLUSTERED
+  PAYMENT_PENDING
+  PAID
+  DISPATCHED
+  DELIVERED
+  REJECTED
+  FAILED
+}
+
+model Cluster {
+  id              String          @id @default(cuid())
+  cropName        String
+  unit            String
+  targetQuantity  Float
+  currentQuantity Float           @default(0)
+  status          ClusterStatus   @default(FORMING)
+  district        String?
+  state           String?
+  vendorId        String?
+  gigId           String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  vendor          Vendor?         @relation(fields: [vendorId], references: [id])
+  gig             Gig?            @relation(fields: [gigId], references: [id])
+  members         ClusterMember[]
+  bids            VendorBid[]
+  votes           VendorVote[]
+  payments        Payment[]
+  delivery        Delivery?
+  ratings         Rating[]
+}
+
+enum ClusterStatus {
+  FORMING
+  VOTING
+  PAYMENT
+  DISPATCHED
+  COMPLETED
+  FAILED
+}
+
+model ClusterMember {
+  id        String   @id @default(cuid())
+  clusterId String
+  farmerId  String
+  orderId   String   @unique
+  quantity  Float
+  hasPaid   Boolean  @default(false)
+  paidAt    DateTime?
+  cluster   Cluster  @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  farmer    Farmer   @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model VendorBid {
+  id           String       @id @default(cuid())
+  clusterId    String
+  vendorId     String
+  gigId        String?
+  pricePerUnit Float
+  totalPrice   Float
+  note         String?
+  votes        Int          @default(0)
+  createdAt    DateTime     @default(now())
+  cluster      Cluster      @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  vendor       Vendor       @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  gig          Gig?         @relation(fields: [gigId], references: [id])
+  vendorVotes  VendorVote[]
+}
+
+model VendorVote {
+  id          String    @id @default(cuid())
+  clusterId   String
+  farmerId    String
+  vendorBidId String
+  createdAt   DateTime  @default(now())
+  cluster     Cluster   @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  farmer      Farmer    @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  vendorBid   VendorBid @relation(fields: [vendorBidId], references: [id], onDelete: Cascade)
+
+  @@unique([clusterId, farmerId])
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  clusterId String
+  farmerId  String
+  amount    Float
+  upiRef    String?
+  status    PaymentStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+  cluster   Cluster       @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  farmer    Farmer        @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+model Delivery {
+  id            String    @id @default(cuid())
+  clusterId     String    @unique
+  trackingSteps Json      @default("[]")
+  confirmedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  cluster       Cluster   @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+}
+
+model Rating {
+  id        String   @id @default(cuid())
+  farmerId  String
+  vendorId  String
+  clusterId String
+  score     Int
+  tags      String[]
+  comment   String?
+  createdAt DateTime @default(now())
+  farmer    Farmer   @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  vendor    Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  cluster   Cluster  @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+}

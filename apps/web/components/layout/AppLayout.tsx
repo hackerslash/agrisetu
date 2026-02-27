@@ -1,0 +1,67 @@
+"use client";
+
+import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { getAuthToken, clearAuthToken } from "@repo/api-client";
+import { authApi } from "@repo/api-client";
+import { Sidebar } from "./Sidebar";
+import { TopBar } from "./TopBar";
+
+interface AppLayoutProps {
+  children: React.ReactNode;
+  title: string;
+  subtitle?: string;
+}
+
+export function AppLayout({ children, title, subtitle }: AppLayoutProps) {
+  const router = useRouter();
+
+  // Redirect to login if no token in localStorage
+  useEffect(() => {
+    const token = getAuthToken();
+    if (!token) {
+      router.push("/login");
+    }
+  }, [router]);
+
+  const { data: vendor, error: meError } = useQuery({
+    queryKey: ["vendor-me"],
+    queryFn: () => authApi.getMe(),
+    retry: false,
+    enabled: !!getAuthToken(),
+  });
+
+  // If the API rejects the token (401/403), clear it and redirect
+  useEffect(() => {
+    if (meError) {
+      const err = meError as { response?: { status?: number } };
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        clearAuthToken();
+        router.push("/login");
+      }
+    }
+  }, [meError, router]);
+
+  return (
+    <div className="flex" style={{ minHeight: "100vh" }}>
+      <Sidebar vendorName={vendor?.businessName} />
+      <div
+        className="flex flex-col flex-1"
+        style={{ marginLeft: 240, minHeight: "100vh" }}
+      >
+        <TopBar
+          title={title}
+          subtitle={subtitle}
+          vendorName={vendor?.businessName}
+        />
+        <main
+          className="flex-1"
+          style={{ padding: "28px 32px", backgroundColor: "#F7F5F0" }}
+        >
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}

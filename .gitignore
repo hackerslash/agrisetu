@@ -36,3 +36,36 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+
+# Flutter / Dart (apps/mobile)
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.pub-cache/
+**/.pub/
+**/flutter_export_environment.sh
+**/.metadata
+**/GeneratedPluginRegistrant.*
+**/Generated.xcconfig
+**/Flutter/ephemeral/
+
+# Android (apps/mobile/android)
+**/.gradle/
+**/local.properties
+**/.cxx/
+**/*.keystore
+**/*.jks
+**/key.properties
+
+# Claude Code local config (potentially sensitive)
+.claude/settings.local.json
+
+# Turborepo scaffold boilerplate (replaced by project-specific assets)
+apps/web/app/fonts/Geist*.woff
+apps/web/app/page.module.css
+apps/web/public/turborepo-*.svg
+apps/web/public/vercel.svg
+apps/web/public/next.svg
+apps/web/public/globe.svg
+apps/web/public/file-text.svg
+apps/web/public/window.svg
