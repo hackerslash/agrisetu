@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { Eye, Gavel, X, Search, Download } from "lucide-react";
@@ -8,6 +8,7 @@ import { vendorApi } from "@repo/api-client";
 import type { Cluster, Gig } from "@repo/api-client";
 import { StatusBadge } from "../../components/ui/StatusBadge";
 import { formatCurrency, formatDate } from "../../lib/utils";
+import { useNotifications } from "../../lib/NotificationContext";
 
 type FilterTab = "ALL" | "PAYMENT" | "DISPATCHED" | "COMPLETED" | "FAILED";
 
@@ -35,11 +36,41 @@ export function OrdersContent() {
   const [activeTab, setActiveTab] = useState<FilterTab>("ALL");
   const [bidState, setBidState] = useState<BidState | null>(null);
   const [bidError, setBidError] = useState("");
+  const { addNotification } = useNotifications();
+  const knownOrderIds = useRef<Set<string>>(new Set());
+  const seeded = useRef(false);
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ["vendor-orders"],
     queryFn: () => vendorApi.getOrders(),
+    refetchInterval: 15_000,
   });
+
+  // Detect newly accepted orders and fire notifications
+  useEffect(() => {
+    const currentOrders = orders as Cluster[];
+    if (currentOrders.length === 0 && !seeded.current) return;
+
+    if (!seeded.current) {
+      // First successful load — seed all existing order IDs silently
+      currentOrders.forEach((o) => knownOrderIds.current.add(o.id));
+      seeded.current = true;
+      return;
+    }
+
+    // Subsequent fetches — any order not yet known is a new one
+    currentOrders
+      .filter((o) => o.status === "PAYMENT")
+      .forEach((o) => {
+        if (!knownOrderIds.current.has(o.id)) {
+          knownOrderIds.current.add(o.id);
+          addNotification(
+            `Your bid on ${o.cropName} was accepted! Order #${o.id.slice(-6).toUpperCase()} is now active.`,
+            o.id,
+          );
+        }
+      });
+  }, [orders, addNotification]);
 
   // Open clusters vendor can bid on
   const { data: openClusters = [], refetch: refetchClusters } = useQuery({
@@ -207,7 +238,7 @@ export function OrdersContent() {
             <div
               className="grid items-center"
               style={{
-                gridTemplateColumns: "1.5fr 1fr 1fr 1fr 1fr 100px",
+                gridTemplateColumns: "1.5fr 1fr 1fr 0.8fr 1.4fr 100px",
                 padding: "10px 20px",
                 backgroundColor: "#F7F5F0",
                 borderBottom: "1px solid #F0EDE8",
@@ -241,7 +272,7 @@ export function OrdersContent() {
                 key={cluster.id}
                 className="grid items-center"
                 style={{
-                  gridTemplateColumns: "1.5fr 1fr 1fr 1fr 1fr 100px",
+                  gridTemplateColumns: "1.5fr 1fr 1fr 0.8fr 1.4fr 100px",
                   padding: "14px 20px",
                   backgroundColor: idx % 2 === 1 ? "#FAFAF9" : "#FFFFFF",
                   borderBottom: "1px solid #F0EDE8",
@@ -267,7 +298,9 @@ export function OrdersContent() {
                 <span style={{ fontSize: 13, color: "#1A1A1A" }}>
                   {cluster.members?.length ?? 0}
                 </span>
+                <div>
                 <StatusBadge status={cluster.status} />
+              </div>
                 <button
                   onClick={() => openBidForm(cluster)}
                   className="flex items-center gap-1.5 rounded-xl font-semibold"
@@ -494,7 +527,7 @@ export function OrdersContent() {
         <div
           className="grid items-center"
           style={{
-            gridTemplateColumns: "1.2fr 1.5fr 1fr 1fr 1fr 1fr 1fr 80px",
+            gridTemplateColumns: "1.2fr 1.5fr 1fr 0.8fr 1fr 1.4fr 1fr 80px",
             padding: "12px 20px",
             backgroundColor: "#F7F5F0",
             borderBottom: "1px solid #F0EDE8",
@@ -547,7 +580,7 @@ export function OrdersContent() {
               key={order.id}
               className="grid items-center"
               style={{
-                gridTemplateColumns: "1.2fr 1.5fr 1fr 1fr 1fr 1fr 1fr 80px",
+                gridTemplateColumns: "1.2fr 1.5fr 1fr 0.8fr 1fr 1.4fr 1fr 80px",
                 padding: "14px 20px",
                 backgroundColor: idx % 2 === 1 ? "#FAFAF9" : "#FFFFFF",
                 borderBottom: "1px solid #F0EDE8",
@@ -580,7 +613,9 @@ export function OrdersContent() {
               <span style={{ fontSize: 13, color: "#1A1A1A" }}>
                 {formatCurrency(getTotalAmount(order))}
               </span>
-              <StatusBadge status={order.status} />
+              <div>
+                <StatusBadge status={order.status} />
+              </div>
               <span style={{ fontSize: 13, color: "#A0A0A0" }}>
                 {formatDate(order.createdAt)}
               </span>

@@ -330,7 +330,7 @@ export function GigEditor({ initialData }: GigEditorProps) {
               <button
                 type="button"
                 onClick={() => setAutoSync(!autoSync)}
-                className="relative rounded-full transition-colors flex-shrink-0"
+                className="relative rounded-full transition-colors shrink-0"
                 style={{
                   width: 44,
                   height: 24,
@@ -384,24 +384,6 @@ export function GigEditor({ initialData }: GigEditorProps) {
             }}
           >
             {isSubmitting ? "Saving…" : "Save Status"}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setPublishStatus("DRAFT");
-            }}
-            className="flex items-center justify-center rounded-xl font-semibold"
-            style={{
-              backgroundColor: "#FFFFFF",
-              color: "#2C5F2D",
-              height: 44,
-              fontSize: 14,
-              fontFamily: "Plus Jakarta Sans",
-              border: "1.5px solid #A0A0A0",
-            }}
-          >
-            Save Draft
           </button>
 
           <button

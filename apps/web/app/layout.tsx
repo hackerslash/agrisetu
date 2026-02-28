@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { Providers } from "../components/Providers";
+import { RootProviders } from "../components/RootProviders";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -30,7 +31,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${plusJakartaSans.variable}`}>
       <body>
-        <Providers>{children}</Providers>
+        <RootProviders>
+          <Providers>{children}</Providers>
+        </RootProviders>
       </body>
     </html>
   );

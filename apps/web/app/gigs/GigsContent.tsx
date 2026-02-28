@@ -9,17 +9,55 @@ import type { Gig, GigStatus } from "@repo/api-client";
 import { StatusBadge } from "../../components/ui/StatusBadge";
 import { formatCurrency } from "../../lib/utils";
 
+function ActiveToggle({
+  isActive,
+  onChange,
+  disabled,
+}: {
+  isActive: boolean;
+  onChange: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onChange}
+      disabled={disabled}
+      title={isActive ? "Active — click to deactivate" : "Inactive — click to activate"}
+      className="relative rounded-full transition-colors shrink-0"
+      style={{
+        width: 40,
+        height: 22,
+        backgroundColor: isActive ? "#2C5F2D" : "#D1D5DB",
+        border: "none",
+        cursor: disabled ? "not-allowed" : "pointer",
+        padding: 0,
+        opacity: disabled ? 0.6 : 1,
+      }}
+    >
+      <span
+        className="absolute top-1 rounded-full bg-white shadow transition-all"
+        style={{
+          width: 14,
+          height: 14,
+          left: isActive ? 23 : 3,
+        }}
+      />
+    </button>
+  );
+}
+
 const TABS: { label: string; value: GigStatus | "ALL" }[] = [
   { label: "All", value: "ALL" },
   { label: "Published", value: "PUBLISHED" },
   { label: "Draft", value: "DRAFT" },
-  { label: "Closed", value: "CLOSED" },
 ];
 
 export function GigsContent() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<GigStatus | "ALL">("ALL");
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const { data: gigs = [], isLoading } = useQuery({
     queryKey: ["gigs", activeTab],
@@ -33,6 +71,26 @@ export function GigsContent() {
       void queryClient.invalidateQueries({ queryKey: ["gigs"] });
     },
   });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<Gig> }) =>
+      vendorApi.updateGig(id, data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["gigs"] });
+      setTogglingId(null);
+    },
+    onError: () => {
+      setTogglingId(null);
+    },
+  });
+
+  async function handleToggleActive(gig: Gig) {
+    if (togglingId) return;
+    const newStatus: GigStatus =
+      gig.status === "PUBLISHED" ? "DRAFT" : "PUBLISHED";
+    setTogglingId(gig.id);
+    updateMutation.mutate({ id: gig.id, data: { status: newStatus } });
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -82,7 +140,7 @@ export function GigsContent() {
         <div
           className="grid items-center"
           style={{
-            gridTemplateColumns: "2fr 1.2fr 1fr 1fr 1fr 1fr 120px",
+            gridTemplateColumns: "2fr 1fr 1fr 1fr 1.4fr 1fr 100px",
             padding: "12px 20px",
             backgroundColor: "#F7F5F0",
             borderBottom: "1px solid #F0EDE8",
@@ -94,7 +152,7 @@ export function GigsContent() {
             "Min Qty",
             "Price/Unit",
             "Status",
-            "Active Bids",
+            "Active",
             "Actions",
           ].map((h) => (
             <span
@@ -145,7 +203,7 @@ export function GigsContent() {
               key={gig.id}
               className="grid items-center"
               style={{
-                gridTemplateColumns: "2fr 1.2fr 1fr 1fr 1fr 1fr 120px",
+                gridTemplateColumns: "2fr 1fr 1fr 1fr 1.4fr 1fr 100px",
                 padding: "14px 20px",
                 backgroundColor: idx % 2 === 1 ? "#FAFAF9" : "#FFFFFF",
                 borderBottom: "1px solid #F0EDE8",
@@ -170,10 +228,14 @@ export function GigsContent() {
               <span style={{ fontSize: 13, color: "#1A1A1A" }}>
                 {formatCurrency(gig.pricePerUnit)}/{gig.unit}
               </span>
-              <StatusBadge status={gig.status} />
-              <span style={{ fontSize: 13, color: "#1A1A1A" }}>
-                {gig._count?.bids ?? 0}
-              </span>
+              <div>
+                <StatusBadge status={gig.status} />
+              </div>
+              <ActiveToggle
+                isActive={gig.status === "PUBLISHED"}
+                onChange={() => handleToggleActive(gig)}
+                disabled={togglingId === gig.id}
+              />
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => router.push(`/gigs/${gig.id}/edit`)}
