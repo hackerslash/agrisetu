@@ -187,10 +187,7 @@ export function OrderDetailContent({ id }: { id: string }) {
 
   if (isLoading) {
     return (
-      <div
-        className="flex items-center justify-center"
-        style={{ height: 300 }}
-      >
+      <div className="flex items-center justify-center" style={{ height: 300 }}>
         <p style={{ fontSize: 14, color: "#A0A0A0" }}>Loading order…</p>
       </div>
     );
@@ -280,7 +277,13 @@ export function OrderDetailContent({ id }: { id: string }) {
         <button
           onClick={() => router.push("/orders")}
           className="flex items-center justify-center rounded-xl hover:bg-white transition-colors"
-          style={{ width: 36, height: 36, border: "none", cursor: "pointer", backgroundColor: "transparent" }}
+          style={{
+            width: 36,
+            height: 36,
+            border: "none",
+            cursor: "pointer",
+            backgroundColor: "transparent",
+          }}
         >
           <ArrowLeft size={18} color="#5A5A5A" />
         </button>
@@ -306,10 +309,7 @@ export function OrderDetailContent({ id }: { id: string }) {
 
       {/* Progress stepper */}
       {!isFailed && (
-        <div
-          className="bg-white rounded-2xl"
-          style={{ padding: "20px 24px" }}
-        >
+        <div className="bg-white rounded-2xl" style={{ padding: "20px 24px" }}>
           <p
             style={{
               fontFamily: "Plus Jakarta Sans",
@@ -332,7 +332,10 @@ export function OrderDetailContent({ id }: { id: string }) {
               const Icon = step.icon;
               return (
                 <div key={step.status} className="flex items-center flex-1">
-                  <div className="flex flex-col items-center gap-1.5" style={{ minWidth: 60 }}>
+                  <div
+                    className="flex flex-col items-center gap-1.5"
+                    style={{ minWidth: 60 }}
+                  >
                     <div
                       className="flex items-center justify-center rounded-full"
                       style={{
@@ -380,7 +383,8 @@ export function OrderDetailContent({ id }: { id: string }) {
                       style={{
                         flex: 1,
                         height: 2,
-                        backgroundColor: allDone || done ? "#2C5F2D" : "#E5E7EB",
+                        backgroundColor:
+                          allDone || done ? "#2C5F2D" : "#E5E7EB",
                         marginBottom: 20,
                         marginLeft: 4,
                         marginRight: 4,
@@ -428,8 +432,12 @@ export function OrderDetailContent({ id }: { id: string }) {
                 },
               ].map(({ label, value }) => (
                 <div key={label} className="flex justify-between">
-                  <span style={{ fontSize: 13, color: "#A0A0A0" }}>{label}</span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}>
+                  <span style={{ fontSize: 13, color: "#A0A0A0" }}>
+                    {label}
+                  </span>
+                  <span
+                    style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}
+                  >
                     {value}
                   </span>
                 </div>
@@ -463,7 +471,10 @@ export function OrderDetailContent({ id }: { id: string }) {
           {/* Members */}
           {(cluster.members ?? []).length > 0 && (
             <div className="bg-white rounded-2xl" style={{ padding: 20 }}>
-              <div className="flex items-center gap-2" style={{ marginBottom: 12 }}>
+              <div
+                className="flex items-center gap-2"
+                style={{ marginBottom: 12 }}
+              >
                 <Users size={15} color="#2C5F2D" />
                 <p
                   style={{
@@ -507,7 +518,10 @@ export function OrderDetailContent({ id }: { id: string }) {
 
         {/* Right: actions */}
         <div className="flex flex-col gap-4" style={{ width: 260 }}>
-          <div className="bg-white rounded-2xl flex flex-col gap-3" style={{ padding: 20 }}>
+          <div
+            className="bg-white rounded-2xl flex flex-col gap-3"
+            style={{ padding: 20 }}
+          >
             <p
               style={{
                 fontFamily: "Plus Jakarta Sans",
@@ -609,7 +623,9 @@ export function OrderDetailContent({ id }: { id: string }) {
             <div className="flex flex-col gap-2">
               <div className="flex justify-between">
                 <span style={{ fontSize: 13, color: "#A0A0A0" }}>Total</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#2C5F2D" }}>
+                <span
+                  style={{ fontSize: 13, fontWeight: 700, color: "#2C5F2D" }}
+                >
                   {formatCurrency(totalAmount)}
                 </span>
               </div>
@@ -670,7 +686,9 @@ export function OrderDetailContent({ id }: { id: string }) {
         >
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
-              <label style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}>
+              <label
+                style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}
+              >
                 Reason <span style={{ color: "#EF4444" }}>*</span>
               </label>
               <select
@@ -698,7 +716,9 @@ export function OrderDetailContent({ id }: { id: string }) {
               </select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <label style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}>
+              <label
+                style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}
+              >
                 Additional note (optional)
               </label>
               <textarea
