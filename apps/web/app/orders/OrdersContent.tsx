@@ -126,8 +126,8 @@ export function OrdersContent() {
 
   const stats = {
     new: (orders as Cluster[]).filter((o) => o.status === "PAYMENT").length,
-    inProgress: (orders as Cluster[]).filter((o) => 
-      o.status === "PROCESSING" || o.status === "DISPATCHED"
+    inProgress: (orders as Cluster[]).filter(
+      (o) => o.status === "PROCESSING" || o.status === "DISPATCHED",
     ).length,
     completed: (orders as Cluster[]).filter((o) => o.status === "COMPLETED")
       .length,
@@ -179,9 +179,9 @@ export function OrdersContent() {
       <div className="flex gap-3">
         {[
           { label: "New Orders", value: stats.new, color: "#1A1A1A" },
-          { label: "In Progress", value: stats.inProgress, color: "#2C5F2D" },
+          { label: "Processing", value: stats.inProgress, color: "#2C5F2D" },
           {
-            label: "Completed",
+            label: "Ready for Delivery",
             value: stats.completed,
             color: "#F59E0B",
           },
@@ -304,8 +304,8 @@ export function OrdersContent() {
                   {cluster.members?.length ?? 0}
                 </span>
                 <div>
-                <StatusBadge status={cluster.status} />
-              </div>
+                  <StatusBadge status={cluster.status} />
+                </div>
                 <button
                   onClick={() => openBidForm(cluster)}
                   className="flex items-center gap-1.5 rounded-xl font-semibold"
@@ -476,14 +476,21 @@ export function OrdersContent() {
           {TABS.map((tab) => (
             <button
               key={tab.value}
-              onClick={() => setActiveTab(tab.value as FilterTab | "IN_PROGRESS")}
+              onClick={() =>
+                setActiveTab(tab.value as FilterTab | "IN_PROGRESS")
+              }
               className="rounded-lg font-medium transition-all"
               style={{
                 padding: "6px 16px",
                 fontSize: 13,
                 backgroundColor:
-                  activeTab === (tab.value as FilterTab | "IN_PROGRESS") ? "#2C5F2D" : "transparent",
-                color: activeTab === (tab.value as FilterTab | "IN_PROGRESS") ? "white" : "#A0A0A0",
+                  activeTab === (tab.value as FilterTab | "IN_PROGRESS")
+                    ? "#2C5F2D"
+                    : "transparent",
+                color:
+                  activeTab === (tab.value as FilterTab | "IN_PROGRESS")
+                    ? "white"
+                    : "#A0A0A0",
               }}
             >
               {tab.label}
