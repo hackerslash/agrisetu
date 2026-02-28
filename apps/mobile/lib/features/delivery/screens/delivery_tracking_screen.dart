@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,7 +10,12 @@ import '../../../core/models/order_model.dart';
 import '../../clusters/screens/cluster_detail_screen.dart';
 
 final deliveryProvider =
-    FutureProvider.family<Delivery, String>((ref, clusterId) async {
+    FutureProvider.autoDispose.family<Delivery, String>((ref, clusterId) async {
+  final timer = Timer.periodic(const Duration(seconds: 6), (_) {
+    ref.invalidateSelf();
+  });
+  ref.onDispose(timer.cancel);
+
   final api = ref.read(apiClientProvider);
   final data = await api.getDelivery(clusterId);
   return Delivery.fromJson(data);
@@ -59,8 +66,7 @@ class _DeliveryTrackingScreenState
       ),
       body: deliveryAsync.when(
         data: (delivery) => clusterAsync.when(
-          data: (cluster) =>
-              _buildContent(context, delivery, cluster),
+          data: (cluster) => _buildContent(context, delivery, cluster),
           loading: () => _buildContent(context, delivery, null),
           error: (_, __) => _buildContent(context, delivery, null),
         ),
@@ -109,8 +115,8 @@ class _DeliveryTrackingScreenState
                         ),
                         child: Text(
                           'Order #AGS-${delivery.id.substring(0, 8).toUpperCase()}',
-                          style: AppTextStyles.caption.copyWith(
-                              color: AppColors.surface),
+                          style: AppTextStyles.caption
+                              .copyWith(color: AppColors.surface),
                         ),
                       ),
                       const Spacer(),
@@ -134,14 +140,13 @@ class _DeliveryTrackingScreenState
                   const SizedBox(height: 12),
                   Text(
                     cluster?.cropName ?? 'Your Order',
-                    style: AppTextStyles.h3.copyWith(
-                        color: AppColors.surface),
+                    style: AppTextStyles.h3.copyWith(color: AppColors.surface),
                   ),
                   if (cluster?.vendor != null)
                     Text(
                       cluster!.vendor!.businessName,
-                      style: AppTextStyles.body.copyWith(
-                          color: AppColors.textOnPrimaryMuted),
+                      style: AppTextStyles.body
+                          .copyWith(color: AppColors.textOnPrimaryMuted),
                     ),
                   const SizedBox(height: 12),
                   if (delivery.trackingSteps.isNotEmpty) ...[
@@ -152,8 +157,8 @@ class _DeliveryTrackingScreenState
                         const SizedBox(width: 4),
                         Text(
                           'Arriving Today',
-                          style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.surface),
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: AppColors.surface),
                         ),
                       ],
                     ),
@@ -174,14 +179,10 @@ class _DeliveryTrackingScreenState
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Column(
-                children: delivery.trackingSteps
-                    .asMap()
-                    .entries
-                    .map((entry) {
+                children: delivery.trackingSteps.asMap().entries.map((entry) {
                   final i = entry.key;
                   final step = entry.value;
-                  final isLast =
-                      i == delivery.trackingSteps.length - 1;
+                  final isLast = i == delivery.trackingSteps.length - 1;
                   return _TimelineStep(
                     step: step,
                     isLast: isLast,
@@ -209,9 +210,7 @@ class _DeliveryTrackingScreenState
                         )
                       : const Icon(Icons.check_circle_outline, size: 20),
                   label: Text(
-                    _isConfirming
-                        ? 'Confirming…'
-                        : 'Confirm Delivery Received',
+                    _isConfirming ? 'Confirming…' : 'Confirm Delivery Received',
                     style: AppTextStyles.button,
                   ),
                   style: ElevatedButton.styleFrom(
@@ -255,14 +254,12 @@ class _DeliveryTrackingScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Your Impact This Order',
-                      style: AppTextStyles.h5),
+                  Text('Your Impact This Order', style: AppTextStyles.h5),
                   const SizedBox(height: 16),
                   Row(
                     children: [
                       _ImpactStat(label: 'Saved', value: '₹800'),
-                      _ImpactStat(
-                          label: 'CO₂ Saved', value: '12 kg'),
+                      _ImpactStat(label: 'CO₂ Saved', value: '12 kg'),
                       _ImpactStat(label: 'Waste', value: '0%'),
                     ],
                   ),
@@ -289,8 +286,8 @@ class _DeliveryTrackingScreenState
                     const SizedBox(width: 8),
                     Text(
                       'Raise a dispute',
-                      style: AppTextStyles.body
-                          .copyWith(color: AppColors.error),
+                      style:
+                          AppTextStyles.body.copyWith(color: AppColors.error),
                     ),
                   ],
                 ),
@@ -304,9 +301,8 @@ class _DeliveryTrackingScreenState
   }
 
   String _getStatusLabel(Delivery delivery) {
-    final inProgress = delivery.trackingSteps
-        .where((s) => s.isInProgress)
-        .firstOrNull;
+    final inProgress =
+        delivery.trackingSteps.where((s) => s.isInProgress).firstOrNull;
     if (inProgress != null) return inProgress.step;
     if (delivery.confirmedAt != null) return 'Delivered';
     return 'Processing';
@@ -407,8 +403,18 @@ class _TimelineStep extends StatelessWidget {
 
   String _formatTimestamp(DateTime dt) {
     final months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     final h = dt.hour > 12 ? dt.hour - 12 : dt.hour;
     final ampm = dt.hour >= 12 ? 'PM' : 'AM';
@@ -429,8 +435,7 @@ class _ImpactStat extends StatelessWidget {
         children: [
           Text(
             value,
-            style: AppTextStyles.h5
-                .copyWith(color: AppColors.primary),
+            style: AppTextStyles.h5.copyWith(color: AppColors.primary),
           ),
           Text(label, style: AppTextStyles.caption),
         ],

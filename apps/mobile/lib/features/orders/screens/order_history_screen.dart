@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,7 +8,12 @@ import '../../../shared/widgets/status_badge.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/models/order_model.dart';
 
-final allOrdersProvider = FutureProvider<List<Order>>((ref) async {
+final allOrdersProvider = FutureProvider.autoDispose<List<Order>>((ref) async {
+  final timer = Timer.periodic(const Duration(seconds: 8), (_) {
+    ref.invalidateSelf();
+  });
+  ref.onDispose(timer.cancel);
+
   final api = ref.read(apiClientProvider);
   final data = await api.getOrders();
   return data.map((e) => Order.fromJson(e as Map<String, dynamic>)).toList();
@@ -41,8 +48,8 @@ class OrderHistoryScreen extends ConsumerWidget {
                 ),
                 ordersAsync.maybeWhen(
                   data: (orders) => Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 5),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                     decoration: BoxDecoration(
                       color: AppColors.surface.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(20),
@@ -160,7 +167,8 @@ class _OrderCard extends StatelessWidget {
                     color: AppColors.primary.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.eco, color: AppColors.primary, size: 20),
+                  child:
+                      const Icon(Icons.eco, color: AppColors.primary, size: 20),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -181,7 +189,8 @@ class _OrderCard extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               '${order.quantity.toStringAsFixed(0)} ${order.unit}',
-              style: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
+              style:
+                  AppTextStyles.body.copyWith(color: AppColors.textSecondary),
             ),
             const SizedBox(height: 4),
             Row(

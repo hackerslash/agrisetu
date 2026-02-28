@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,8 +12,13 @@ import '../../../core/providers/auth_provider.dart';
 
 typedef ClusterQuery = ({String? cropName, String? orderId});
 
-final availableClustersProvider =
-    FutureProvider.family<List<Cluster>, ClusterQuery>((ref, query) async {
+final availableClustersProvider = FutureProvider.autoDispose
+    .family<List<Cluster>, ClusterQuery>((ref, query) async {
+  final timer = Timer.periodic(const Duration(seconds: 8), (_) {
+    ref.invalidateSelf();
+  });
+  ref.onDispose(timer.cancel);
+
   final api = ref.read(apiClientProvider);
   final clusters = query.orderId != null
       ? (await api.getOrderClusterOptions(query.orderId!))

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,13 +13,24 @@ import '../../../core/models/order_model.dart';
 
 // Providers — backed by real API endpoints
 
-final homeDashboardProvider = FutureProvider<Map<String, dynamic>>((ref) async {
+final homeDashboardProvider =
+    FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
+  final timer = Timer.periodic(const Duration(seconds: 8), (_) {
+    ref.invalidateSelf();
+  });
+  ref.onDispose(timer.cancel);
+
   final api = ref.read(apiClientProvider);
   return api.getDashboard();
 });
 
 final homeMandiPricesProvider =
-    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+    FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
+  final timer = Timer.periodic(const Duration(seconds: 30), (_) {
+    ref.invalidateSelf();
+  });
+  ref.onDispose(timer.cancel);
+
   final api = ref.read(apiClientProvider);
   final data = await api.getMandiPrices();
   final prices = data['prices'] as List<dynamic>;

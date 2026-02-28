@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,7 +10,12 @@ import '../../../core/models/order_model.dart';
 import '../../home/screens/home_screen.dart';
 
 final orderDetailProvider =
-    FutureProvider.family<Order, String>((ref, id) async {
+    FutureProvider.autoDispose.family<Order, String>((ref, id) async {
+  final timer = Timer.periodic(const Duration(seconds: 6), (_) {
+    ref.invalidateSelf();
+  });
+  ref.onDispose(timer.cancel);
+
   final api = ref.read(apiClientProvider);
   final data = await api.getOrder(id);
   return Order.fromJson(data);
