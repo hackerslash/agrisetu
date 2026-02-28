@@ -188,6 +188,7 @@ class _AvailableClustersScreenState
                               child: _ClusterCard(
                                 cluster: c,
                                 selectionMode: selectionMode,
+                                currentFarmerId: farmer?.id,
                                 isBusy:
                                     _joiningClusterId == c.id || _isCreatingNew,
                                 onPrimaryTap: () => _joinCluster(c.id),
@@ -247,12 +248,14 @@ class _AvailableClustersScreenState
 class _ClusterCard extends StatelessWidget {
   final Cluster cluster;
   final bool selectionMode;
+  final String? currentFarmerId;
   final bool isBusy;
   final VoidCallback onPrimaryTap;
 
   const _ClusterCard({
     required this.cluster,
     required this.selectionMode,
+    required this.currentFarmerId,
     required this.isBusy,
     required this.onPrimaryTap,
   });
@@ -261,6 +264,10 @@ class _ClusterCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isVoting = cluster.status == ClusterStatus.voting;
     final isPayment = cluster.status == ClusterStatus.payment;
+    final currentFarmerRows =
+        cluster.members.where((m) => m.farmerId == currentFarmerId).toList();
+    final currentFarmerPaid = currentFarmerRows.isNotEmpty &&
+        currentFarmerRows.every((m) => m.hasPaid);
 
     return GestureDetector(
       onTap:
@@ -361,7 +368,9 @@ class _ClusterCard extends StatelessWidget {
                             : isVoting
                                 ? 'Vote for Vendor'
                                 : isPayment
-                                    ? 'Pay Now'
+                                    ? (currentFarmerPaid
+                                        ? 'Waiting for Others'
+                                        : 'Pay Now')
                                     : 'View Cluster',
                         style: AppTextStyles.buttonSmall,
                       ),

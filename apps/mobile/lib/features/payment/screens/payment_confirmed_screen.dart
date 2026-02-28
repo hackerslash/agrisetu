@@ -68,8 +68,8 @@ class PaymentConfirmedScreen extends StatelessWidget {
                     const SizedBox(height: 12),
                     Text(
                       allPaid
-                          ? 'All Farmers Paid! 🎉'
-                          : 'Payment Confirmed! ✓',
+                          ? 'All Farmers Paid!'
+                          : 'Payment Confirmed!',
                       style: AppTextStyles.h3.copyWith(
                         color: allPaid ? AppColors.success : AppColors.info,
                       ),

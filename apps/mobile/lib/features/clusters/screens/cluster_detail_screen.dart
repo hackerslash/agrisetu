@@ -81,6 +81,17 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
     final canTrackDelivery = cluster.status == ClusterStatus.processing ||
         cluster.status == ClusterStatus.outForDelivery ||
         cluster.status == ClusterStatus.dispatched;
+    final myMembers =
+        (cluster.members).where((m) => m.farmerId == farmer?.id).toList();
+    final myPaymentDone =
+        myMembers.isNotEmpty && myMembers.every((m) => m.hasPaid);
+    final paidByFarmer = <String, bool>{};
+    for (final member in cluster.members) {
+      final current = paidByFarmer[member.farmerId] ?? false;
+      paidByFarmer[member.farmerId] = current || member.hasPaid;
+    }
+    final paidFarmers = paidByFarmer.values.where((paid) => paid).length;
+    final totalFarmers = paidByFarmer.length;
 
     return RefreshIndicator(
       color: AppColors.primary,
@@ -251,40 +262,96 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppColors.successLight,
+                      color: myPaymentDone
+                          ? AppColors.infoLight
+                          : AppColors.successLight,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.check_circle,
-                            color: AppColors.success, size: 20),
+                        Icon(
+                          myPaymentDone
+                              ? Icons.hourglass_top
+                              : Icons.check_circle,
+                          color: myPaymentDone
+                              ? AppColors.info
+                              : AppColors.success,
+                          size: 20,
+                        ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'Vendor selected! Proceed to payment.',
-                            style: AppTextStyles.body
-                                .copyWith(color: AppColors.success),
+                            myPaymentDone
+                                ? 'Your payment is done. Waiting for other farmers.'
+                                : 'Vendor selected! Proceed to payment.',
+                            style: AppTextStyles.body.copyWith(
+                              color: myPaymentDone
+                                  ? AppColors.info
+                                  : AppColors.success,
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton.icon(
-                      onPressed: () => context.push('/payment/${cluster.id}'),
-                      icon: const Icon(Icons.lock_outline, size: 20),
-                      label: const Text('Pay Securely'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        shape: const StadiumBorder(),
-                        elevation: 0,
-                        textStyle: AppTextStyles.button,
-                      ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.inputBackground,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.people_outline,
+                            color: AppColors.primary, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          '$paidFarmers of $totalFarmers farmers paid',
+                          style: AppTextStyles.bodySmall,
+                        ),
+                      ],
                     ),
                   ),
+                  const SizedBox(height: 16),
+                  if (!myPaymentDone)
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton.icon(
+                        onPressed: () => context.push('/payment/${cluster.id}'),
+                        icon: const Icon(Icons.lock_outline, size: 20),
+                        label: const Text('Pay Securely'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          shape: const StadiumBorder(),
+                          elevation: 0,
+                          textStyle: AppTextStyles.button,
+                        ),
+                      ),
+                    ),
+                  if (myPaymentDone)
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: OutlinedButton.icon(
+                        onPressed: null,
+                        icon: const Icon(Icons.check_circle_outline, size: 20),
+                        label: const Text('Payment Completed'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.success,
+                          side: const BorderSide(
+                            color: AppColors.success,
+                            width: 1.3,
+                          ),
+                          shape: const StadiumBorder(),
+                          textStyle: AppTextStyles.button,
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 20),
                 ],
 
