@@ -4,6 +4,7 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
+    "dev:all": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
     "dev:api": "npm run dev --workspace=apps/api",
     "dev:web": "npm run dev --workspace=apps/web",
     "dev:mobile": "cd apps/mobile && flutter run",
@@ -20,6 +21,7 @@
     "db:studio": "npm run db:studio --workspace=apps/api"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "prettier": "^3.7.4",
     "turbo": "^2.8.11",
     "typescript": "5.9.2"

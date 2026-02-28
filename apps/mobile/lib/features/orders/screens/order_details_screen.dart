@@ -1269,7 +1269,7 @@ class _OrderStatusPill extends StatelessWidget {
         break;
       case OrderStatus.paid:
         bg = Colors.white.withOpacity(0.25);
-        label = 'Paid';
+        label = 'Order Received';
         break;
       case OrderStatus.rejected:
         bg = AppColors.error.withOpacity(0.8);

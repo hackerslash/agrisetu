@@ -7,6 +7,7 @@ import { getAuthToken, clearAuthToken } from "@repo/api-client";
 import { authApi } from "@repo/api-client";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
+import { VendorOrderNotificationMonitor } from "../notifications/VendorOrderNotificationMonitor";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -53,6 +54,7 @@ export function AppLayout({
 
   return (
     <div className="flex" style={{ minHeight: "100vh" }}>
+      <VendorOrderNotificationMonitor />
       <Sidebar vendorName={vendor?.businessName} />
       <div
         className="flex flex-col flex-1"

@@ -4,6 +4,7 @@ import { Bell, Calendar, LogOut, User, ChevronDown, ShoppingBag } from "lucide-r
 import { useRouter } from "next/navigation";
 import { clearAuthToken } from "@repo/api-client";
 import { useState, useRef, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNotifications } from "../../lib/NotificationContext";
 
 interface TopBarProps {
@@ -22,6 +23,7 @@ export function TopBar({
   actions,
 }: TopBarProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { notifications, unreadCount, markAllRead } = useNotifications();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
@@ -194,6 +196,14 @@ export function TopBar({
                       }}
                       onClick={() => {
                         if (n.orderId) {
+                          void queryClient.invalidateQueries({
+                            queryKey: ["vendor-order", n.orderId],
+                            refetchType: "active",
+                          });
+                          void queryClient.invalidateQueries({
+                            queryKey: ["vendor-orders"],
+                            refetchType: "active",
+                          });
                           router.push(`/orders/${n.orderId}`);
                           setShowNotifPanel(false);
                         }
@@ -212,8 +222,18 @@ export function TopBar({
                       <div className="flex flex-col gap-0.5">
                         <p
                           style={{
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: "#2C5F2D",
+                            lineHeight: 1.3,
+                          }}
+                        >
+                          {n.title}
+                        </p>
+                        <p
+                          style={{
                             fontSize: 13,
-                            fontWeight: n.read ? 400 : 600,
+                            fontWeight: n.read ? 400 : 500,
                             color: "#1A1A1A",
                             lineHeight: 1.4,
                           }}

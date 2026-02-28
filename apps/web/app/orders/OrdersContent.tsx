@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { Eye, Gavel, X, Search, Download } from "lucide-react";
@@ -8,9 +8,9 @@ import { vendorApi } from "@repo/api-client";
 import type { Cluster, Gig } from "@repo/api-client";
 import { StatusBadge } from "../../components/ui/StatusBadge";
 import { formatCurrency, formatDate } from "../../lib/utils";
-import { useNotifications } from "../../lib/NotificationContext";
 
 type FilterTab = "ALL" | "PAYMENT" | "DISPATCHED" | "COMPLETED" | "FAILED";
+const PAGE_SIZE = 8;
 
 const TABS: { label: string; value: string }[] = [
   { label: "All", value: "ALL" },
@@ -36,41 +36,13 @@ export function OrdersContent() {
   const [activeTab, setActiveTab] = useState<FilterTab | "IN_PROGRESS">("ALL");
   const [bidState, setBidState] = useState<BidState | null>(null);
   const [bidError, setBidError] = useState("");
-  const { addNotification } = useNotifications();
-  const knownOrderIds = useRef<Set<string>>(new Set());
-  const seeded = useRef(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ["vendor-orders"],
     queryFn: () => vendorApi.getOrders(),
     refetchInterval: 15_000,
   });
-
-  // Detect newly accepted orders and fire notifications
-  useEffect(() => {
-    const currentOrders = orders as Cluster[];
-    if (currentOrders.length === 0 && !seeded.current) return;
-
-    if (!seeded.current) {
-      // First successful load — seed all existing order IDs silently
-      currentOrders.forEach((o) => knownOrderIds.current.add(o.id));
-      seeded.current = true;
-      return;
-    }
-
-    // Subsequent fetches — any order not yet known is a new one
-    currentOrders
-      .filter((o) => o.status === "PAYMENT")
-      .forEach((o) => {
-        if (!knownOrderIds.current.has(o.id)) {
-          knownOrderIds.current.add(o.id);
-          addNotification(
-            `Your bid on ${o.cropName} was accepted! Order #${o.id.slice(-6).toUpperCase()} is now active.`,
-            o.id,
-          );
-        }
-      });
-  }, [orders, addNotification]);
 
   // Open clusters vendor can bid on
   const { data: openClusters = [], refetch: refetchClusters } = useQuery({
@@ -127,6 +99,21 @@ export function OrdersContent() {
     }
     return o.status === activeTab;
   });
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const paginated = filtered.slice(pageStart, pageStart + PAGE_SIZE);
+  const from = filtered.length === 0 ? 0 : pageStart + 1;
+  const to = Math.min(pageStart + PAGE_SIZE, filtered.length);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const stats = {
     new: (orders as Cluster[]).filter((o) => o.status === "PAYMENT").length,
@@ -618,7 +605,7 @@ export function OrdersContent() {
             </p>
           </div>
         ) : (
-          filtered.map((order, idx) => {
+          paginated.map((order, idx) => {
             const deliveryProgress = getFarmerDeliveryProgress(order);
             return (
               <div
@@ -692,10 +679,63 @@ export function OrdersContent() {
           style={{ padding: "12px 20px", backgroundColor: "#F7F5F0" }}
         >
           <span style={{ fontSize: 13, color: "#A0A0A0" }}>
-            {filtered.length} order{filtered.length !== 1 ? "s" : ""}
+            Showing {from}-{to} of {filtered.length} order
+            {filtered.length !== 1 ? "s" : ""}
           </span>
+          {filtered.length > 0 && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                style={{
+                  height: 30,
+                  minWidth: 68,
+                  padding: "0 10px",
+                  borderRadius: 8,
+                  border: "1px solid #E5E7EB",
+                  backgroundColor: currentPage === 1 ? "#F3F4F6" : "#FFFFFF",
+                  color: currentPage === 1 ? "#9CA3AF" : "#1A1A1A",
+                  cursor: currentPage === 1 ? "not-allowed" : "pointer",
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                Previous
+              </button>
+              <span
+                style={{
+                  fontSize: 12,
+                  color: "#6B7280",
+                  minWidth: 72,
+                  textAlign: "center",
+                }}
+              >
+                Page {currentPage}/{totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                style={{
+                  height: 30,
+                  minWidth: 52,
+                  padding: "0 10px",
+                  borderRadius: 8,
+                  border: "1px solid #E5E7EB",
+                  backgroundColor:
+                    currentPage === totalPages ? "#F3F4F6" : "#FFFFFF",
+                  color: currentPage === totalPages ? "#9CA3AF" : "#1A1A1A",
+                  cursor: currentPage === totalPages ? "not-allowed" : "pointer",
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                Next
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
+

@@ -332,7 +332,7 @@ export async function syncClustersForPublishedGig(
 export async function checkAndTransitionPayment(clusterId: string) {
   const cluster = await prisma.cluster.findUnique({
     where: { id: clusterId },
-    select: { id: true, status: true },
+    select: { id: true },
   });
   if (!cluster) return;
 
@@ -362,22 +362,7 @@ export async function checkAndTransitionPayment(clusterId: string) {
       data: { hasPaid: true },
     });
 
-    // Move paid orders into processing stage once all unique farmers have paid.
-    await prisma.order.updateMany({
-      where: {
-        id: { in: members.map((m) => m.orderId) },
-        status: { in: [OrderStatus.PAYMENT_PENDING, OrderStatus.PAID] },
-      },
-      data: { status: OrderStatus.PROCESSING },
-    });
-
-    // Transition cluster into processing only once payment is fully complete.
-    if (cluster.status === ClusterStatus.PAYMENT) {
-      await prisma.cluster.update({
-        where: { id: clusterId },
-        data: { status: ClusterStatus.PROCESSING },
-      });
-    }
+    // Keep order/cluster in PAYMENT stage until vendor manually marks processing.
 
     // Create/update delivery tracking without auto-marking as delivered.
     await prisma.delivery.upsert({
@@ -392,8 +377,8 @@ export async function checkAndTransitionPayment(clusterId: string) {
           },
           {
             step: "Processing",
-            status: "in_progress",
-            timestamp: new Date().toISOString(),
+            status: "pending",
+            timestamp: null,
           },
           {
             step: "Dispatched",
@@ -416,8 +401,8 @@ export async function checkAndTransitionPayment(clusterId: string) {
           },
           {
             step: "Processing",
-            status: "in_progress",
-            timestamp: new Date().toISOString(),
+            status: "pending",
+            timestamp: null,
           },
           {
             step: "Dispatched",

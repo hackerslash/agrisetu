@@ -14,7 +14,7 @@ const STATUS_STYLES: Record<
   PENDING: { bg: "#FFF3CD", text: "#D97706", label: "Pending" },
   CLUSTERED: { bg: "#E0F2FE", text: "#0369A1", label: "Clustered" },
   PAYMENT_PENDING: { bg: "#FEF9C3", text: "#A16207", label: "Payment Pending" },
-  PAID: { bg: "#DBEAFE", text: "#1D4ED8", label: "Paid" },
+  PAID: { bg: "#DBEAFE", text: "#1D4ED8", label: "Order Received" },
   PROCESSING: { bg: "#FEF3C7", text: "#92400E", label: "Processing" },
   OUT_FOR_DELIVERY: {
     bg: "#F3E8FF",
@@ -27,7 +27,7 @@ const STATUS_STYLES: Record<
   FAILED: { bg: "#FEF2F2", text: "#B03A2E", label: "Failed" },
   FORMING: { bg: "#FFF3CD", text: "#D97706", label: "Forming" },
   VOTING: { bg: "#E0F2FE", text: "#0369A1", label: "Voting" },
-  PAYMENT: { bg: "#DBEAFE", text: "#1D4ED8", label: "Payment" },
+  PAYMENT: { bg: "#DBEAFE", text: "#1D4ED8", label: "Order Received" },
   COMPLETED: { bg: "#D1FAE5", text: "#065F46", label: "Completed" },
   DRAFT: { bg: "#F3F4F6", text: "#6B7280", label: "Draft" },
   PUBLISHED: { bg: "#D1FAE5", text: "#065F46", label: "Published" },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import {
@@ -136,6 +136,7 @@ export function OrderDetailContent({ id }: { id: string }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { addNotification } = useNotifications();
+  const previousStatusRef = useRef<string | null>(null);
   const [rejectState, setRejectState] = useState<RejectState>({
     open: false,
     reason: "",
@@ -148,6 +149,9 @@ export function OrderDetailContent({ id }: { id: string }) {
   const { data: order, isLoading } = useQuery({
     queryKey: ["vendor-order", id],
     queryFn: () => vendorApi.getOrderDetail(id),
+    refetchInterval: 10_000,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   const processMutation = useMutation({
@@ -182,6 +186,26 @@ export function OrderDetailContent({ id }: { id: string }) {
       void queryClient.invalidateQueries({ queryKey: ["vendor-orders"] });
     },
   });
+
+  useEffect(() => {
+    const cluster = order as Cluster | undefined;
+    if (!cluster) return;
+
+    const prev = previousStatusRef.current;
+    if (prev && prev !== "COMPLETED" && cluster.status === "COMPLETED") {
+      addNotification(
+        `Order #${id.slice(-6).toUpperCase()} has been delivered.`,
+        id,
+        {
+          title: "Order Delivered",
+          type: "order_delivered",
+          dedupeKey: `order_delivered:${id}`,
+        },
+      );
+    }
+
+    previousStatusRef.current = cluster.status;
+  }, [order, id, addNotification]);
 
   if (isLoading) {
     return (

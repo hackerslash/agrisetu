@@ -56,52 +56,88 @@ class _AgriBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    const voiceFabSize = 72.0;
+    final navHeight = 60.0 + bottomInset;
+
     return Container(
-      height: 80,
+      height: navHeight,
       decoration: BoxDecoration(
         color: AppColors.surface,
         border: const Border(top: BorderSide(color: AppColors.border)),
       ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _NavItem(
-                icon: Icons.home_outlined,
-                activeIcon: Icons.home,
-                label: 'Home',
-                isActive: currentIndex == 0,
-                onTap: () => onTap(0),
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.topCenter,
+        children: [
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                10,
+                8,
+                10,
+                bottomInset > 0 ? bottomInset + 4 : 8,
               ),
-              _NavItem(
-                icon: Icons.receipt_long_outlined,
-                activeIcon: Icons.receipt_long,
-                label: 'Orders',
-                isActive: currentIndex == 1,
-                onTap: () => onTap(1),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Center(
+                      child: _NavItem(
+                        icon: Icons.home_outlined,
+                        activeIcon: Icons.home,
+                        label: 'Home',
+                        isActive: currentIndex == 0,
+                        onTap: () => onTap(0),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: _NavItem(
+                        icon: Icons.receipt_long_outlined,
+                        activeIcon: Icons.receipt_long,
+                        label: 'Orders',
+                        isActive: currentIndex == 1,
+                        onTap: () => onTap(1),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: voiceFabSize + 20),
+                  Expanded(
+                    child: Center(
+                      child: _NavItem(
+                        icon: Icons.people_outline,
+                        activeIcon: Icons.people,
+                        label: 'Cluster',
+                        isActive: currentIndex == 3,
+                        onTap: () => onTap(3),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: _NavItem(
+                        icon: Icons.person_outline,
+                        activeIcon: Icons.person,
+                        label: 'Profile',
+                        isActive: currentIndex == 4,
+                        onTap: () => onTap(4),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              // Voice FAB center button
-              _VoiceFab(onTap: onVoiceTap),
-              _NavItem(
-                icon: Icons.people_outline,
-                activeIcon: Icons.people,
-                label: 'Cluster',
-                isActive: currentIndex == 3,
-                onTap: () => onTap(3),
-              ),
-              _NavItem(
-                icon: Icons.person_outline,
-                activeIcon: Icons.person,
-                label: 'Profile',
-                isActive: currentIndex == 4,
-                onTap: () => onTap(4),
-              ),
-            ],
+            ),
           ),
-        ),
+          Positioned(
+            top: -(voiceFabSize / 2) + 10,
+            child: _VoiceFab(
+              onTap: onVoiceTap,
+              size: voiceFabSize,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -128,7 +164,7 @@ class _NavItem extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
-        width: 56,
+        width: 58,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
@@ -136,13 +172,13 @@ class _NavItem extends StatelessWidget {
             Icon(
               isActive ? activeIcon : icon,
               color: isActive ? AppColors.primary : AppColors.textMuted,
-              size: 24,
+              size: 23,
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 3),
             Text(
               label,
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
                 color: isActive ? AppColors.primary : AppColors.textMuted,
               ),
@@ -156,8 +192,12 @@ class _NavItem extends StatelessWidget {
 
 class _VoiceFab extends StatelessWidget {
   final VoidCallback onTap;
+  final double size;
 
-  const _VoiceFab({required this.onTap});
+  const _VoiceFab({
+    required this.onTap,
+    required this.size,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -167,8 +207,8 @@ class _VoiceFab extends StatelessWidget {
         GestureDetector(
           onTap: onTap,
           child: Container(
-            width: 52,
-            height: 52,
+            width: size,
+            height: size,
             decoration: const BoxDecoration(
               color: AppColors.primary,
               shape: BoxShape.circle,
@@ -180,16 +220,11 @@ class _VoiceFab extends StatelessWidget {
                 ),
               ],
             ),
-            child: const Icon(Icons.mic, color: AppColors.surface, size: 26),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Voice',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w400,
-            color: AppColors.textMuted,
+            child: Icon(
+              Icons.mic,
+              color: AppColors.surface,
+              size: size * 0.45,
+            ),
           ),
         ),
       ],

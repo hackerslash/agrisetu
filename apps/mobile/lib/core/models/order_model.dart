@@ -46,7 +46,7 @@ enum OrderStatus {
       case OrderStatus.paymentPending:
         return 'Payment Due';
       case OrderStatus.paid:
-        return 'Paid';
+        return 'Order Received';
       case OrderStatus.processing:
         return 'Processing';
       case OrderStatus.outForDelivery:

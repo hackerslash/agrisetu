@@ -11,6 +11,8 @@ import {
 
 export interface AppNotification {
   id: string;
+  title: string;
+  type: "order_new" | "order_delivered" | "order_update" | "general";
   message: string;
   orderId?: string;
   createdAt: Date;
@@ -20,7 +22,15 @@ export interface AppNotification {
 interface NotificationContextValue {
   notifications: AppNotification[];
   unreadCount: number;
-  addNotification: (message: string, orderId?: string) => void;
+  addNotification: (
+    message: string,
+    orderId?: string,
+    meta?: {
+      title?: string;
+      type?: AppNotification["type"];
+      dedupeKey?: string;
+    },
+  ) => void;
   markAllRead: () => void;
   dismissToast: (id: string) => void;
   toasts: AppNotification[];
@@ -34,6 +44,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [toasts, setToasts] = useState<AppNotification[]>([]);
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const emittedKeys = useRef<Set<string>>(new Set());
 
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -45,10 +56,23 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const addNotification = useCallback(
-    (message: string, orderId?: string) => {
+    (
+      message: string,
+      orderId?: string,
+      meta?: {
+        title?: string;
+        type?: AppNotification["type"];
+        dedupeKey?: string;
+      },
+    ) => {
+      if (meta?.dedupeKey && emittedKeys.current.has(meta.dedupeKey)) return;
+      if (meta?.dedupeKey) emittedKeys.current.add(meta.dedupeKey);
+
       const id = `notif-${Date.now()}-${Math.random()}`;
       const notif: AppNotification = {
         id,
+        title: meta?.title ?? "Order Update",
+        type: meta?.type ?? "order_update",
         message,
         orderId,
         createdAt: new Date(),

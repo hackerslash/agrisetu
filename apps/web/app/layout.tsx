@@ -31,9 +31,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${plusJakartaSans.variable}`}>
       <body>
-        <RootProviders>
-          <Providers>{children}</Providers>
-        </RootProviders>
+        <Providers>
+          <RootProviders>{children}</RootProviders>
+        </Providers>
       </body>
     </html>
   );

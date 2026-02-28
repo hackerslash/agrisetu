@@ -90,7 +90,7 @@ class StatusBadge extends StatelessWidget {
         );
       case ClusterStatus.payment:
         return StatusBadge(
-          label: 'Payment',
+          label: 'Order Received',
           color: AppColors.primary,
           bgColor: const Color(0xFFDCF2DC),
         );
