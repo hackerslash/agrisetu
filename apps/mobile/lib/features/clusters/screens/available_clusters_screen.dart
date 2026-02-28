@@ -13,14 +13,16 @@ typedef ClusterQuery = ({String? cropName, String? orderId});
 final availableClustersProvider =
     FutureProvider.family<List<Cluster>, ClusterQuery>((ref, query) async {
   final api = ref.read(apiClientProvider);
-  if (query.orderId != null) {
-    final data = await api.getOrderClusterOptions(query.orderId!);
-    return data
-        .map((e) => Cluster.fromJson(e as Map<String, dynamic>))
-        .toList();
-  }
-  final data = await api.getClusters(crop: query.cropName);
-  return data.map((e) => Cluster.fromJson(e as Map<String, dynamic>)).toList();
+  final clusters = query.orderId != null
+      ? (await api.getOrderClusterOptions(query.orderId!))
+          .map((e) => Cluster.fromJson(e as Map<String, dynamic>))
+          .toList()
+      : (await api.getClusters(crop: query.cropName))
+          .map((e) => Cluster.fromJson(e as Map<String, dynamic>))
+          .toList();
+
+  final seen = <String>{};
+  return clusters.where((c) => seen.add(c.id)).toList();
 });
 
 class AvailableClustersScreen extends ConsumerStatefulWidget {

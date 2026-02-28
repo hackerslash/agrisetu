@@ -547,40 +547,49 @@ router.patch("/orders/:id/process", async (req, res) => {
       error(res, "Order not found", 404);
       return;
     }
-    if (cluster.status !== ClusterStatus.PAYMENT) {
-      error(res, "Order must be in PAYMENT status to mark as processing", 400);
+    if (
+      cluster.status !== ClusterStatus.PAYMENT &&
+      cluster.status !== ClusterStatus.PROCESSING
+    ) {
+      error(
+        res,
+        "Order must be in PAYMENT or PROCESSING status to mark as processing",
+        400,
+      );
       return;
     }
 
-    await prisma.cluster.update({
-      where: { id: req.params.id },
-      data: { status: ClusterStatus.PROCESSING },
-    });
+    if (cluster.status === ClusterStatus.PAYMENT) {
+      await prisma.cluster.update({
+        where: { id: req.params.id },
+        data: { status: ClusterStatus.PROCESSING },
+      });
 
-    await prisma.delivery.updateMany({
-      where: { clusterId: req.params.id },
-      data: {
-        trackingSteps: [
-          {
-            step: "Order Received",
-            status: "completed",
-            timestamp: new Date().toISOString(),
-          },
-          {
-            step: "Processing",
-            status: "in_progress",
-            timestamp: new Date().toISOString(),
-          },
-          { step: "Dispatched", status: "pending", timestamp: null },
-          { step: "Delivered", status: "pending", timestamp: null },
-        ],
-      },
-    });
+      await prisma.delivery.updateMany({
+        where: { clusterId: req.params.id },
+        data: {
+          trackingSteps: [
+            {
+              step: "Order Received",
+              status: "completed",
+              timestamp: new Date().toISOString(),
+            },
+            {
+              step: "Processing",
+              status: "in_progress",
+              timestamp: new Date().toISOString(),
+            },
+            { step: "Dispatched", status: "pending", timestamp: null },
+            { step: "Delivered", status: "pending", timestamp: null },
+          ],
+        },
+      });
 
-    await prisma.order.updateMany({
-      where: { id: { in: cluster.members.map((m) => m.orderId) } },
-      data: { status: OrderStatus.PROCESSING },
-    });
+      await prisma.order.updateMany({
+        where: { id: { in: cluster.members.map((m) => m.orderId) } },
+        data: { status: OrderStatus.PROCESSING },
+      });
+    }
 
     success(res, { processing: true });
   } catch {
@@ -890,6 +899,19 @@ router.get("/analytics", async (req, res) => {
       allRatings.length > 0
         ? allRatings.reduce((sum, r) => sum + r.score, 0) / allRatings.length
         : 0;
+    const ratingDistribution: Record<1 | 2 | 3 | 4 | 5, number> = {
+      1: 0,
+      2: 0,
+      3: 0,
+      4: 0,
+      5: 0,
+    };
+    for (const rating of allRatings) {
+      const score = Math.round(rating.score) as 1 | 2 | 3 | 4 | 5;
+      if (score >= 1 && score <= 5) {
+        ratingDistribution[score] += 1;
+      }
+    }
 
     // Revenue by day
     const revenueByDay: Record<string, number> = {};
@@ -942,6 +964,7 @@ router.get("/analytics", async (req, res) => {
       revenueChart,
       topProducts,
       ratingsCount: allRatings.length,
+      ratingDistribution,
     });
   } catch {
     error(res, "Internal server error", 500);

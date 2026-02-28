@@ -202,6 +202,7 @@ export interface AnalyticsData {
   revenueChart: { date: string; amount: number }[];
   topProducts: { crop: string; revenue: number; orders: number }[];
   ratingsCount: number;
+  ratingDistribution: Record<1 | 2 | 3 | 4 | 5, number>;
 }
 
 export interface PaymentSummary {

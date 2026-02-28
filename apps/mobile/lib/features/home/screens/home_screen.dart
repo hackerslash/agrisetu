@@ -54,9 +54,13 @@ class HomeScreen extends ConsumerWidget {
           .toList(),
     );
     final clustersAsync = dashboardAsync.whenData(
-      (d) => (d['clusters'] as List<dynamic>)
-          .map((e) => Cluster.fromJson(e as Map<String, dynamic>))
-          .toList(),
+      (d) {
+        final clusters = (d['clusters'] as List<dynamic>)
+            .map((e) => Cluster.fromJson(e as Map<String, dynamic>))
+            .toList();
+        final seen = <String>{};
+        return clusters.where((c) => seen.add(c.id)).toList();
+      },
     );
 
     return Scaffold(

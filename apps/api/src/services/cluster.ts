@@ -1,5 +1,10 @@
 import { prisma } from "../lib/prisma.js";
-import { ClusterStatus, GigStatus, OrderStatus } from "@prisma/client";
+import {
+  ClusterStatus,
+  GigStatus,
+  OrderStatus,
+  PaymentStatus,
+} from "@prisma/client";
 
 const DEFAULT_TARGET_QUANTITY = 1000;
 
@@ -325,31 +330,56 @@ export async function syncClustersForPublishedGig(
 }
 
 export async function checkAndTransitionPayment(clusterId: string) {
+  const cluster = await prisma.cluster.findUnique({
+    where: { id: clusterId },
+    select: { id: true, status: true },
+  });
+  if (!cluster) return;
+
   const members = await prisma.clusterMember.findMany({
     where: { clusterId },
   });
+  if (members.length === 0) return;
 
-  // A farmer can have multiple orders in a cluster. Treat payment completion
-  // per-farmer (not per-order-row) so repeated orders aggregate correctly.
-  const paymentByFarmer = new Map<string, boolean>();
-  for (const member of members) {
-    const paid = paymentByFarmer.get(member.farmerId) ?? false;
-    paymentByFarmer.set(member.farmerId, paid || member.hasPaid);
-  }
-
+  const uniqueFarmerIds = Array.from(new Set(members.map((m) => m.farmerId)));
+  const successfulPayments = await prisma.payment.findMany({
+    where: {
+      clusterId,
+      farmerId: { in: uniqueFarmerIds },
+      status: PaymentStatus.SUCCESS,
+    },
+    select: { farmerId: true },
+  });
+  const paidFarmerIds = new Set(successfulPayments.map((p) => p.farmerId));
   const allPaid =
-    paymentByFarmer.size > 0 &&
-    Array.from(paymentByFarmer.values()).every((paid) => paid);
+    uniqueFarmerIds.length > 0 &&
+    uniqueFarmerIds.every((farmerId) => paidFarmerIds.has(farmerId));
 
   if (allPaid) {
-    // After all payments are completed, update orders to PAID status.
-    // Keep cluster in PAYMENT status so vendor can manually process it.
-    await prisma.order.updateMany({
-      where: { id: { in: members.map((m) => m.orderId) } },
-      data: { status: OrderStatus.PAID },
+    // Keep member payment flags consistent for every order row.
+    await prisma.clusterMember.updateMany({
+      where: { clusterId, farmerId: { in: uniqueFarmerIds } },
+      data: { hasPaid: true },
     });
 
-    // Create a delivery record but initialize with pending status.
+    // Move paid orders into processing stage once all unique farmers have paid.
+    await prisma.order.updateMany({
+      where: {
+        id: { in: members.map((m) => m.orderId) },
+        status: { in: [OrderStatus.PAYMENT_PENDING, OrderStatus.PAID] },
+      },
+      data: { status: OrderStatus.PROCESSING },
+    });
+
+    // Transition cluster into processing only once payment is fully complete.
+    if (cluster.status === ClusterStatus.PAYMENT) {
+      await prisma.cluster.update({
+        where: { id: clusterId },
+        data: { status: ClusterStatus.PROCESSING },
+      });
+    }
+
+    // Create/update delivery tracking without auto-marking as delivered.
     await prisma.delivery.upsert({
       where: { clusterId },
       create: {
@@ -362,8 +392,8 @@ export async function checkAndTransitionPayment(clusterId: string) {
           },
           {
             step: "Processing",
-            status: "pending",
-            timestamp: null,
+            status: "in_progress",
+            timestamp: new Date().toISOString(),
           },
           {
             step: "Dispatched",
@@ -377,7 +407,30 @@ export async function checkAndTransitionPayment(clusterId: string) {
           },
         ],
       },
-      update: {},
+      update: {
+        trackingSteps: [
+          {
+            step: "Order Received",
+            status: "completed",
+            timestamp: new Date().toISOString(),
+          },
+          {
+            step: "Processing",
+            status: "in_progress",
+            timestamp: new Date().toISOString(),
+          },
+          {
+            step: "Dispatched",
+            status: "pending",
+            timestamp: null,
+          },
+          {
+            step: "Delivered",
+            status: "pending",
+            timestamp: null,
+          },
+        ],
+      },
     });
   }
 }

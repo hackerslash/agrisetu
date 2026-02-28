@@ -27,6 +27,9 @@ export function AnalyticsContent() {
     queryKey: ["analytics", period],
     queryFn: () => vendorApi.getAnalytics(period),
   });
+  const ratingDistribution =
+    analytics?.ratingDistribution ?? ({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } as const);
+  const totalRatings = analytics?.ratingsCount ?? 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -362,11 +365,27 @@ export function AnalyticsContent() {
                   <div
                     className="h-full rounded-full"
                     style={{
-                      width: "20%",
+                      width: `${
+                        totalRatings > 0
+                          ? (ratingDistribution[star as 1 | 2 | 3 | 4 | 5] /
+                              totalRatings) *
+                            100
+                          : 0
+                      }%`,
                       backgroundColor: "#D97706",
                     }}
                   />
                 </div>
+                <span
+                  style={{
+                    fontSize: 12,
+                    color: "#5A5A5A",
+                    width: 20,
+                    textAlign: "right",
+                  }}
+                >
+                  {ratingDistribution[star as 1 | 2 | 3 | 4 | 5]}
+                </span>
               </div>
             ))}
           </div>

@@ -32,13 +32,26 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/landing',
     redirect: (context, state) {
       final authVal = authState.valueOrNull;
-      final isLoading = authState.isLoading || authVal == null;
+      final isLoading = authState.isLoading;
       final isAuth = authVal?.isAuthenticated ?? false;
       final needsProfile = authVal?.needsProfile ?? false;
 
       final loc = state.matchedLocation;
 
+      // Root location can appear on web reload and otherwise renders blank shell.
+      if (loc == '/') {
+        if (isLoading) return '/landing';
+        if (!isAuth || authVal == null || authState.hasError) return '/landing';
+        return needsProfile ? '/onboarding' : '/home';
+      }
+
       if (isLoading) return null;
+
+      // Failed auth state should recover to landing.
+      if (authState.hasError || authVal == null) {
+        if (loc == '/landing' || loc == '/login' || loc == '/otp') return null;
+        return '/landing';
+      }
 
       // Not authenticated → auth screens
       if (!isAuth) {
@@ -47,7 +60,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       // Needs profile → onboarding
-      if (needsProfile && loc != '/onboarding') return '/onboarding';
+      if (needsProfile && loc != '/onboarding' && loc != '/profile/edit') {
+        return '/onboarding';
+      }
       if (!needsProfile && loc == '/onboarding') return '/home';
 
       // Already authed → skip auth screens
@@ -71,6 +86,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           }),
       GoRoute(
           path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
+      GoRoute(
+        path: '/profile/edit',
+        builder: (_, __) => const OnboardingScreen(isEditMode: true),
+      ),
       ShellRoute(
         navigatorKey: _shellNavigatorKey,
         builder: (context, state, child) => MainScaffold(child: child),

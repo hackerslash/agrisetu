@@ -5,7 +5,9 @@ import '../../../shared/theme/app_theme.dart';
 import '../../../core/providers/auth_provider.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
-  const OnboardingScreen({super.key});
+  final bool isEditMode;
+
+  const OnboardingScreen({super.key, this.isEditMode = false});
 
   @override
   ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -23,10 +25,19 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final List<String> _cropsGrown = [];
   bool _isLoading = false;
   String? _error;
+  bool _prefilled = false;
 
   final _cropOptions = [
-    'Wheat', 'Rice', 'Maize', 'Cotton', 'Sugarcane',
-    'Tomato', 'Onion', 'Potato', 'Soybean', 'Groundnut',
+    'Wheat',
+    'Rice',
+    'Maize',
+    'Cotton',
+    'Sugarcane',
+    'Tomato',
+    'Onion',
+    'Potato',
+    'Soybean',
+    'Groundnut',
   ];
 
   @override
@@ -59,7 +70,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         'upiId': _upiCtrl.text.trim().isNotEmpty ? _upiCtrl.text.trim() : null,
         'language': _selectedLanguage,
       });
-      if (mounted) context.go('/home');
+      if (!mounted) return;
+      if (widget.isEditMode && context.canPop()) {
+        context.pop();
+      } else if (widget.isEditMode) {
+        context.go('/profile');
+      } else {
+        context.go('/home');
+      }
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
@@ -111,7 +129,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+              borderSide:
+                  const BorderSide(color: AppColors.primary, width: 1.5),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
@@ -127,7 +146,22 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(currentFarmerProvider);
+    final farmer = ref.watch(currentFarmerProvider);
+
+    if (!_prefilled && farmer != null) {
+      _prefilled = true;
+      _nameCtrl.text = farmer.name ?? '';
+      _villageCtrl.text = farmer.village ?? '';
+      _districtCtrl.text = farmer.district ?? '';
+      _stateCtrl.text = farmer.state ?? '';
+      _landAreaCtrl.text =
+          farmer.landArea != null ? farmer.landArea!.toString() : '';
+      _upiCtrl.text = farmer.upiId ?? '';
+      _selectedLanguage = farmer.language;
+      _cropsGrown
+        ..clear()
+        ..addAll(farmer.cropsGrown);
+    }
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -159,18 +193,23 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                           const SizedBox(width: 8),
                           Text(
                             'AgriSetu',
-                            style: AppTextStyles.h5.copyWith(
-                                color: AppColors.surface),
+                            style: AppTextStyles.h5
+                                .copyWith(color: AppColors.surface),
                           ),
                         ],
                       ),
                       const Spacer(),
                       Text(
-                        'Complete your profile',
-                        style: AppTextStyles.h2.copyWith(color: AppColors.surface),
+                        widget.isEditMode
+                            ? 'Edit your profile'
+                            : 'Complete your profile',
+                        style:
+                            AppTextStyles.h2.copyWith(color: AppColors.surface),
                       ),
                       Text(
-                        'Help us personalise your experience',
+                        widget.isEditMode
+                            ? 'Update your details and preferences'
+                            : 'Help us personalise your experience',
                         style: AppTextStyles.bodySmall.copyWith(
                           color: AppColors.textOnPrimaryMuted,
                         ),
@@ -180,10 +219,21 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 ),
               ),
             ),
-            leading: const SizedBox.shrink(),
-            automaticallyImplyLeading: false,
+            leading: widget.isEditMode
+                ? IconButton(
+                    icon:
+                        const Icon(Icons.arrow_back, color: AppColors.surface),
+                    onPressed: () {
+                      if (context.canPop()) {
+                        context.pop();
+                      } else {
+                        context.go('/profile');
+                      }
+                    },
+                  )
+                : const SizedBox.shrink(),
+            automaticallyImplyLeading: widget.isEditMode,
           ),
-
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(24),
@@ -207,8 +257,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                           Expanded(
                             child: Text(
                               'Name, location & language are required to match you with the right cluster.',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                  color: AppColors.primary),
+                              style: AppTextStyles.bodySmall
+                                  .copyWith(color: AppColors.primary),
                             ),
                           ),
                         ],
@@ -305,7 +355,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                       label: 'Land Area (acres)',
                       controller: _landAreaCtrl,
                       hint: 'e.g., 5.5',
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
                       optional: true,
                     ),
                     const SizedBox(height: 16),
@@ -419,19 +470,25 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                           color: AppColors.surface,
                         ),
                       )
-                    : Text('Continue →', style: AppTextStyles.button),
+                    : Text(
+                        widget.isEditMode ? 'Save Changes' : 'Continue →',
+                        style: AppTextStyles.button,
+                      ),
               ),
             ),
-            const SizedBox(height: 8),
-            GestureDetector(
-              onTap: () => context.go('/home'),
-              child: Center(
-                child: Text(
-                  'Skip for now',
-                  style: AppTextStyles.label.copyWith(color: AppColors.textMuted),
+            if (!widget.isEditMode) ...[
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: () => context.go('/home'),
+                child: Center(
+                  child: Text(
+                    'Skip for now',
+                    style: AppTextStyles.label
+                        .copyWith(color: AppColors.textMuted),
+                  ),
                 ),
               ),
-            ),
+            ],
           ],
         ),
       ),

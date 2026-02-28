@@ -27,10 +27,6 @@ router.get("/profile", async (req, res) => {
     }
     success(res, farmer);
   } catch (e) {
-    if (e instanceof Error && e.message === "Cluster not available for joining") {
-      error(res, e.message, 400);
-      return;
-    }
     error(res, "Internal server error", 500);
   }
 });
@@ -351,6 +347,7 @@ router.get("/clusters", async (req, res) => {
         members: true,
         bids: { include: { vendor: true } },
       },
+      distinct: ["id"],
       orderBy: { createdAt: "desc" },
     });
     success(res, clusters);
@@ -958,6 +955,7 @@ router.get("/dashboard", async (req, res) => {
           bids: { include: { vendor: true } },
           vendor: true,
         },
+        distinct: ["id"],
         orderBy: { createdAt: "desc" },
         take: 3,
       }),

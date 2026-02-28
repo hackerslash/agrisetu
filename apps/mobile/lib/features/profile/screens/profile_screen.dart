@@ -1,19 +1,69 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/models/farmer_model.dart';
+import '../../../core/utils/avatar_picker.dart';
 import '../../home/screens/home_screen.dart' show homeDashboardProvider;
 
-class ProfileScreen extends ConsumerWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  String? _avatarDataUrl;
+  String? _loadedForFarmerId;
+
+  String _avatarStorageKey(String farmerId) => 'agrisetu_avatar_$farmerId';
+
+  Future<void> _loadAvatar(String farmerId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getString(_avatarStorageKey(farmerId));
+    if (!mounted) return;
+    setState(() => _avatarDataUrl = stored);
+  }
+
+  Uint8List? _avatarBytes(String? dataUrl) {
+    if (dataUrl == null || dataUrl.isEmpty) return null;
+    final commaIdx = dataUrl.indexOf(',');
+    final base64Part =
+        commaIdx >= 0 ? dataUrl.substring(commaIdx + 1) : dataUrl;
+    try {
+      return base64Decode(base64Part);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _pickAvatar(Farmer farmer) async {
+    final dataUrl = await pickAvatarDataUrl();
+    if (dataUrl == null || dataUrl.isEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_avatarStorageKey(farmer.id), dataUrl);
+    if (!mounted) return;
+    setState(() => _avatarDataUrl = dataUrl);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final farmer = ref.watch(currentFarmerProvider);
     final dashboardAsync = ref.watch(homeDashboardProvider);
+
+    if (farmer?.id != null && _loadedForFarmerId != farmer!.id) {
+      _loadedForFarmerId = farmer.id;
+      _loadAvatar(farmer.id);
+    }
+
+    final avatar = _avatarBytes(_avatarDataUrl);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -33,7 +83,13 @@ class ProfileScreen extends ConsumerWidget {
                   Row(
                     children: [
                       GestureDetector(
-                        onTap: () => context.pop(),
+                        onTap: () {
+                          if (context.canPop()) {
+                            context.pop();
+                          } else {
+                            context.go('/home');
+                          }
+                        },
                         child: const Icon(Icons.arrow_back,
                             color: AppColors.surface),
                       ),
@@ -41,40 +97,83 @@ class ProfileScreen extends ConsumerWidget {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  Container(
-                    width: 72,
-                    height: 72,
-                    decoration: const BoxDecoration(
-                      color: AppColors.surface,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Text(
-                        (farmer?.name?.isNotEmpty == true)
-                            ? farmer!.name![0].toUpperCase()
-                            : 'F',
-                        style: AppTextStyles.h1
-                            .copyWith(color: AppColors.primary),
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        width: 72,
+                        height: 72,
+                        decoration: const BoxDecoration(
+                          color: AppColors.surface,
+                          shape: BoxShape.circle,
+                        ),
+                        child: ClipOval(
+                          child: avatar != null
+                              ? Image.memory(
+                                  avatar,
+                                  width: 72,
+                                  height: 72,
+                                  fit: BoxFit.cover,
+                                )
+                              : Center(
+                                  child: Text(
+                                    (farmer?.name?.isNotEmpty == true)
+                                        ? farmer!.name![0].toUpperCase()
+                                        : 'F',
+                                    style: AppTextStyles.h1
+                                        .copyWith(color: AppColors.primary),
+                                  ),
+                                ),
+                        ),
                       ),
-                    ),
+                      Positioned(
+                        right: -2,
+                        bottom: -2,
+                        child: GestureDetector(
+                          onTap:
+                              farmer == null ? null : () => _pickAvatar(farmer),
+                          child: Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: AppColors.surface,
+                                width: 2,
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.camera_alt_outlined,
+                              size: 12,
+                              color: AppColors.surface,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Tap avatar to upload',
+                    style: AppTextStyles.caption
+                        .copyWith(color: AppColors.textOnPrimaryMuted),
                   ),
                   const SizedBox(height: 12),
                   Text(
                     farmer?.name ?? 'Farmer',
-                    style:
-                        AppTextStyles.h3.copyWith(color: AppColors.surface),
+                    style: AppTextStyles.h3.copyWith(color: AppColors.surface),
                   ),
                   if (farmer?.district != null)
                     Text(
                       '${farmer!.district} District, ${farmer.state ?? ''}',
-                      style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.textOnPrimaryMuted),
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.textOnPrimaryMuted),
                     ),
                 ],
               ),
             ),
           ),
-
           SliverPadding(
             padding: const EdgeInsets.all(20),
             sliver: SliverList(
@@ -120,11 +219,9 @@ class ProfileScreen extends ConsumerWidget {
                   children: [
                     dashboardAsync.when(
                       data: (d) {
-                        final stats =
-                            d['stats'] as Map<String, dynamic>;
+                        final stats = d['stats'] as Map<String, dynamic>;
                         final totalSaved = stats['totalSaved'] as int? ?? 0;
-                        final ordersPlaced =
-                            stats['ordersPlaced'] as int? ?? 0;
+                        final ordersPlaced = stats['ordersPlaced'] as int? ?? 0;
                         final co2Saved = stats['co2Saved'] as int? ?? 0;
                         return Row(
                           children: [
@@ -137,8 +234,7 @@ class ProfileScreen extends ConsumerWidget {
                                 label: 'Orders',
                                 value: ordersPlaced.toString()),
                             _SavingsStat(
-                                label: 'CO₂ Saved',
-                                value: '${co2Saved}kg'),
+                                label: 'CO₂ Saved', value: '${co2Saved}kg'),
                           ],
                         );
                       },
@@ -149,8 +245,7 @@ class ProfileScreen extends ConsumerWidget {
                             height: 16,
                             width: 16,
                             child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: AppColors.primary),
+                                strokeWidth: 2, color: AppColors.primary),
                           ),
                         ),
                       ),
@@ -216,7 +311,7 @@ class ProfileScreen extends ConsumerWidget {
                   width: double.infinity,
                   height: 52,
                   child: ElevatedButton.icon(
-                    onPressed: () => context.push('/onboarding'),
+                    onPressed: () => context.push('/profile/edit'),
                     icon: const Icon(Icons.edit_outlined, size: 18),
                     label: const Text('Edit Profile'),
                     style: ElevatedButton.styleFrom(
@@ -361,11 +456,9 @@ class _InfoRow extends StatelessWidget {
         children: [
           Icon(icon, size: 20, color: AppColors.primary),
           const SizedBox(width: 12),
-          Expanded(
-              child: Text(label, style: AppTextStyles.body)),
+          Expanded(child: Text(label, style: AppTextStyles.body)),
           Text(value,
-              style: AppTextStyles.body
-                  .copyWith(color: AppColors.textMuted)),
+              style: AppTextStyles.body.copyWith(color: AppColors.textMuted)),
         ],
       ),
     );
@@ -398,8 +491,8 @@ class _ActionRow extends StatelessWidget {
             Expanded(child: Text(label, style: AppTextStyles.body)),
             if (value != null)
               Text(value!,
-                  style: AppTextStyles.body
-                      .copyWith(color: AppColors.textMuted)),
+                  style:
+                      AppTextStyles.body.copyWith(color: AppColors.textMuted)),
             const SizedBox(width: 4),
             const Icon(Icons.chevron_right,
                 size: 18, color: AppColors.textMuted),
