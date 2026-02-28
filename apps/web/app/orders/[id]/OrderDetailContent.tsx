@@ -116,8 +116,8 @@ const ORDER_STEPS: {
 }[] = [
   { status: "PAYMENT", label: "Order Received", icon: Clock },
   { status: "PROCESSING", label: "Processing", icon: Package },
-  { status: "OUT_FOR_DELIVERY", label: "Out for Delivery", icon: Truck },
-  { status: "DISPATCHED", label: "Shipped", icon: CheckCircle },
+  { status: "DISPATCHED", label: "Dispatched", icon: Truck },
+  { status: "COMPLETED", label: "Delivered", icon: CheckCircle },
 ];
 
 // Returns the index of the current step, or ORDER_STEPS.length if fully completed
@@ -139,7 +139,7 @@ export function OrderDetailContent({ id }: { id: string }) {
     note: "",
   });
   const [confirmAction, setConfirmAction] = useState<
-    null | "process" | "delivery" | "dispatch"
+    null | "process" | "dispatch"
   >(null);
 
   const { data: order, isLoading } = useQuery({
@@ -171,7 +171,7 @@ export function OrderDetailContent({ id }: { id: string }) {
     mutationFn: () => vendorApi.dispatchOrder(id),
     onSuccess: () => {
       setConfirmAction(null);
-      addNotification(`Order #${id.slice(-6).toUpperCase()} marked as delivered.`);
+      addNotification(`Order #${id.slice(-6).toUpperCase()} marked as dispatched.`);
       void queryClient.invalidateQueries({ queryKey: ["vendor-order", id] });
       void queryClient.invalidateQueries({ queryKey: ["vendor-orders"] });
     },
@@ -241,15 +241,9 @@ export function OrderDetailContent({ id }: { id: string }) {
         };
       case "PROCESSING":
         return {
-          label: "Mark as Out for Delivery",
-          action: () => setConfirmAction("delivery"),
-          icon: Truck,
-        };
-      case "OUT_FOR_DELIVERY":
-        return {
-          label: "Mark as Delivered",
+          label: "Mark as Dispatched",
           action: () => setConfirmAction("dispatch"),
-          icon: CheckCircle,
+          icon: Truck,
         };
       default:
         return null;
@@ -262,13 +256,11 @@ export function OrderDetailContent({ id }: { id: string }) {
 
   function handleConfirmAction() {
     if (confirmAction === "process") processMutation.mutate();
-    else if (confirmAction === "delivery") outForDeliveryMutation.mutate();
     else if (confirmAction === "dispatch") dispatchMutation.mutate();
   }
 
   const isPending =
     processMutation.isPending ||
-    outForDeliveryMutation.isPending ||
     dispatchMutation.isPending;
 
   const totalAmount = (cluster.payments ?? [])
@@ -651,23 +643,17 @@ export function OrderDetailContent({ id }: { id: string }) {
           title={
             confirmAction === "process"
               ? "Mark as Processing?"
-              : confirmAction === "delivery"
-                ? "Mark as Out for Delivery?"
-                : "Mark as Delivered?"
+              : "Mark as Dispatched?"
           }
           description={
             confirmAction === "process"
               ? "This will notify farmers that their order is being processed."
-              : confirmAction === "delivery"
-                ? "This will notify farmers that their order is out for delivery."
-                : "Confirm that the order has been successfully delivered to all farmers."
+              : "This will notify farmers that their order has been dispatched."
           }
           confirmLabel={
             confirmAction === "process"
               ? "Confirm Processing"
-              : confirmAction === "delivery"
-                ? "Confirm Delivery"
-                : "Confirm Delivered"
+              : "Confirm Dispatched"
           }
           onConfirm={handleConfirmAction}
           onCancel={() => setConfirmAction(null)}

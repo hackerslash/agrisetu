@@ -441,7 +441,7 @@ router.patch("/orders/:id/accept", async (req, res) => {
             timestamp: null,
           },
           {
-            step: "Out for Delivery",
+            step: "Dispatched",
             status: "pending",
             timestamp: null,
           },
@@ -466,7 +466,7 @@ router.patch("/orders/:id/accept", async (req, res) => {
             timestamp: null,
           },
           {
-            step: "Out for Delivery",
+            step: "Dispatched",
             status: "pending",
             timestamp: null,
           },
@@ -571,7 +571,7 @@ router.patch("/orders/:id/process", async (req, res) => {
             status: "in_progress",
             timestamp: new Date().toISOString(),
           },
-          { step: "Out for Delivery", status: "pending", timestamp: null },
+          { step: "Dispatched", status: "pending", timestamp: null },
           { step: "Delivered", status: "pending", timestamp: null },
         ],
       },
@@ -649,6 +649,22 @@ router.patch("/orders/:id/out-for-delivery", async (req, res) => {
 
 router.patch("/orders/:id/dispatch", async (req, res) => {
   try {
+    const cluster = await prisma.cluster.findFirst({
+      where: { id: req.params.id, vendorId: req.user!.id },
+    });
+    if (!cluster) {
+      error(res, "Order not found", 404);
+      return;
+    }
+    if (cluster.status !== ClusterStatus.PROCESSING) {
+      error(
+        res,
+        "Order must be in PROCESSING status to mark as delivered",
+        400,
+      );
+      return;
+    }
+
     await prisma.cluster.updateMany({
       where: { id: req.params.id, vendorId: req.user!.id },
       data: { status: ClusterStatus.DISPATCHED },
@@ -670,7 +686,7 @@ router.patch("/orders/:id/dispatch", async (req, res) => {
             timestamp: new Date().toISOString(),
           },
           {
-            step: "Out for Delivery",
+            step: "Dispatched",
             status: "in_progress",
             timestamp: new Date().toISOString(),
           },
@@ -716,7 +732,7 @@ router.patch("/orders/:id/deliver", async (req, res) => {
             timestamp: new Date().toISOString(),
           },
           {
-            step: "Out for Delivery",
+            step: "Dispatched",
             status: "completed",
             timestamp: new Date().toISOString(),
           },

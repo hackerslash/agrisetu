@@ -501,7 +501,7 @@ router.post("/delivery/:clusterId/confirm", async (req, res) => {
             timestamp: new Date().toISOString(),
           },
           {
-            step: "Out for Delivery",
+            step: "Dispatched",
             status: "completed",
             timestamp: new Date().toISOString(),
           },
