@@ -314,6 +314,11 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     final hasVoted = cluster?.bids.any((b) => b.currentFarmerVoted) == true;
     final hasRated = cluster?.ratings.isNotEmpty == true;
     final existingRating = hasRated ? cluster!.ratings.first : null;
+    final hasDeliveryTracking = (order.status == OrderStatus.processing ||
+            order.status == OrderStatus.outForDelivery ||
+            order.status == OrderStatus.dispatched ||
+            order.status == OrderStatus.delivered) &&
+        cluster?.delivery != null;
 
     // Vendor resolved after voting completes (vendorId set on cluster)
     final selectedVendor = cluster?.vendor;
@@ -438,7 +443,8 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
           ],
 
           // ── Order Progress Timeline ───────────────────────────────────
-          if (order.status != OrderStatus.rejected &&
+          if (!hasDeliveryTracking &&
+              order.status != OrderStatus.rejected &&
               order.status != OrderStatus.failed) ...[
             Container(
               padding: const EdgeInsets.all(20),
@@ -529,11 +535,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
           ],
 
           // ── Delivery Tracking ─────────────────────────────────────────
-          if ((order.status == OrderStatus.processing ||
-                  order.status == OrderStatus.outForDelivery ||
-                  order.status == OrderStatus.dispatched ||
-                  order.status == OrderStatus.delivered) &&
-              cluster?.delivery != null) ...[
+          if (hasDeliveryTracking) ...[
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
