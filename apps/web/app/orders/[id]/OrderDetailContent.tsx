@@ -17,6 +17,7 @@ import { vendorApi } from "@repo/api-client";
 import type { Cluster } from "@repo/api-client";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { formatCurrency, formatDate } from "../../../lib/utils";
+import { useNotifications } from "../../../lib/NotificationContext";
 
 interface RejectState {
   open: boolean;
@@ -116,7 +117,7 @@ const ORDER_STEPS: {
   { status: "PAYMENT", label: "Order Received", icon: Clock },
   { status: "PROCESSING", label: "Processing", icon: Package },
   { status: "OUT_FOR_DELIVERY", label: "Out for Delivery", icon: Truck },
-  { status: "DISPATCHED", label: "Delivered", icon: CheckCircle },
+  { status: "DISPATCHED", label: "Shipped", icon: CheckCircle },
 ];
 
 // Returns the index of the current step, or ORDER_STEPS.length if fully completed
@@ -131,6 +132,7 @@ function getStepIndex(status: string): number {
 export function OrderDetailContent({ id }: { id: string }) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { addNotification } = useNotifications();
   const [rejectState, setRejectState] = useState<RejectState>({
     open: false,
     reason: "",
@@ -149,6 +151,7 @@ export function OrderDetailContent({ id }: { id: string }) {
     mutationFn: () => vendorApi.processOrder(id),
     onSuccess: () => {
       setConfirmAction(null);
+      addNotification(`Order #${id.slice(-6).toUpperCase()} marked as processing.`);
       void queryClient.invalidateQueries({ queryKey: ["vendor-order", id] });
       void queryClient.invalidateQueries({ queryKey: ["vendor-orders"] });
     },
@@ -158,6 +161,7 @@ export function OrderDetailContent({ id }: { id: string }) {
     mutationFn: () => vendorApi.outForDeliveryOrder(id),
     onSuccess: () => {
       setConfirmAction(null);
+      addNotification(`Order #${id.slice(-6).toUpperCase()} marked as out for delivery.`);
       void queryClient.invalidateQueries({ queryKey: ["vendor-order", id] });
       void queryClient.invalidateQueries({ queryKey: ["vendor-orders"] });
     },
@@ -167,6 +171,7 @@ export function OrderDetailContent({ id }: { id: string }) {
     mutationFn: () => vendorApi.dispatchOrder(id),
     onSuccess: () => {
       setConfirmAction(null);
+      addNotification(`Order #${id.slice(-6).toUpperCase()} marked as delivered.`);
       void queryClient.invalidateQueries({ queryKey: ["vendor-order", id] });
       void queryClient.invalidateQueries({ queryKey: ["vendor-orders"] });
     },
@@ -222,9 +227,9 @@ export function OrderDetailContent({ id }: { id: string }) {
   const currentStepIdx = getStepIndex(cluster.status);
   const isFailed =
     cluster.status === "FAILED" || cluster.status === ("REJECTED" as string);
-  // Fully completed = status is COMPLETED (past last ORDER_STEP) or DISPATCHED (last step reached)
+  // Fully completed = status is COMPLETED (past last ORDER_STEP) - farmer confirms delivery
   const isCompleted =
-    cluster.status === "COMPLETED" || cluster.status === "DISPATCHED";
+    cluster.status === "COMPLETED";
 
   function getNextAction() {
     switch (cluster.status) {

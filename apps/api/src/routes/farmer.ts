@@ -484,9 +484,34 @@ router.get("/delivery/:clusterId", async (req, res) => {
 
 router.post("/delivery/:clusterId/confirm", async (req, res) => {
   try {
-    const delivery = await prisma.delivery.update({
+    // Update delivery tracking to show all steps as completed
+    await prisma.delivery.update({
       where: { clusterId: req.params.clusterId },
-      data: { confirmedAt: new Date() },
+      data: {
+        confirmedAt: new Date(),
+        trackingSteps: [
+          {
+            step: "Order Received",
+            status: "completed",
+            timestamp: new Date().toISOString(),
+          },
+          {
+            step: "Processing",
+            status: "completed",
+            timestamp: new Date().toISOString(),
+          },
+          {
+            step: "Out for Delivery",
+            status: "completed",
+            timestamp: new Date().toISOString(),
+          },
+          {
+            step: "Delivered",
+            status: "completed",
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      },
     });
 
     await prisma.cluster.update({
@@ -503,7 +528,10 @@ router.post("/delivery/:clusterId/confirm", async (req, res) => {
       data: { status: OrderStatus.DELIVERED },
     });
 
-    success(res, delivery);
+    const updatedDelivery = await prisma.delivery.findUnique({
+      where: { clusterId: req.params.clusterId },
+    });
+    success(res, updatedDelivery);
   } catch {
     error(res, "Internal server error", 500);
   }

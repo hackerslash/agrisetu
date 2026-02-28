@@ -424,6 +424,61 @@ router.patch("/orders/:id/accept", async (req, res) => {
       error(res, "Order not found", 404);
       return;
     }
+    
+    // Initialize delivery tracking with Order Received status
+    await prisma.delivery.upsert({
+      where: { clusterId: req.params.id },
+      update: {
+        trackingSteps: [
+          {
+            step: "Order Received",
+            status: "completed",
+            timestamp: new Date().toISOString(),
+          },
+          {
+            step: "Processing",
+            status: "pending",
+            timestamp: null,
+          },
+          {
+            step: "Out for Delivery",
+            status: "pending",
+            timestamp: null,
+          },
+          {
+            step: "Delivered",
+            status: "pending",
+            timestamp: null,
+          },
+        ],
+      },
+      create: {
+        clusterId: req.params.id,
+        trackingSteps: [
+          {
+            step: "Order Received",
+            status: "completed",
+            timestamp: new Date().toISOString(),
+          },
+          {
+            step: "Processing",
+            status: "pending",
+            timestamp: null,
+          },
+          {
+            step: "Out for Delivery",
+            status: "pending",
+            timestamp: null,
+          },
+          {
+            step: "Delivered",
+            status: "pending",
+            timestamp: null,
+          },
+        ],
+      },
+    });
+    
     success(res, { accepted: true });
   } catch {
     error(res, "Internal server error", 500);
@@ -516,7 +571,6 @@ router.patch("/orders/:id/process", async (req, res) => {
             status: "in_progress",
             timestamp: new Date().toISOString(),
           },
-          { step: "Ready for Delivery", status: "pending", timestamp: null },
           { step: "Out for Delivery", status: "pending", timestamp: null },
           { step: "Delivered", status: "pending", timestamp: null },
         ],
@@ -573,11 +627,6 @@ router.patch("/orders/:id/out-for-delivery", async (req, res) => {
             timestamp: new Date().toISOString(),
           },
           {
-            step: "Ready for Delivery",
-            status: "completed",
-            timestamp: new Date().toISOString(),
-          },
-          {
             step: "Out for Delivery",
             status: "in_progress",
             timestamp: new Date().toISOString(),
@@ -605,28 +654,23 @@ router.patch("/orders/:id/dispatch", async (req, res) => {
       data: { status: ClusterStatus.DISPATCHED },
     });
 
-    // Update delivery tracking
+    // Update delivery tracking to match UI expectations
     await prisma.delivery.updateMany({
       where: { clusterId: req.params.id },
       data: {
         trackingSteps: [
           {
-            step: "Order Placed",
+            step: "Order Received",
             status: "completed",
             timestamp: new Date().toISOString(),
           },
           {
-            step: "Payment Collected",
+            step: "Processing",
             status: "completed",
             timestamp: new Date().toISOString(),
           },
           {
-            step: "Preparing Dispatch",
-            status: "completed",
-            timestamp: new Date().toISOString(),
-          },
-          {
-            step: "In Transit",
+            step: "Out for Delivery",
             status: "in_progress",
             timestamp: new Date().toISOString(),
           },
@@ -662,22 +706,17 @@ router.patch("/orders/:id/deliver", async (req, res) => {
         confirmedAt: new Date(),
         trackingSteps: [
           {
-            step: "Order Placed",
+            step: "Order Received",
             status: "completed",
             timestamp: new Date().toISOString(),
           },
           {
-            step: "Payment Collected",
+            step: "Processing",
             status: "completed",
             timestamp: new Date().toISOString(),
           },
           {
-            step: "Preparing Dispatch",
-            status: "completed",
-            timestamp: new Date().toISOString(),
-          },
-          {
-            step: "In Transit",
+            step: "Out for Delivery",
             status: "completed",
             timestamp: new Date().toISOString(),
           },
