@@ -162,7 +162,9 @@ export function PaymentsContent() {
                 >
                   {formatCurrency(row.totalAmount)}
                 </span>
-                <StatusBadge status={row.status} />
+                <div>
+                  <StatusBadge status={row.status} />
+                </div>
                 <span style={{ fontSize: 13, color: "#1A1A1A" }}>
                   {row.memberCount} farmers
                 </span>
