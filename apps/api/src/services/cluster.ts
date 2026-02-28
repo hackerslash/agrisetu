@@ -225,40 +225,31 @@ export async function checkAndTransitionPayment(clusterId: string) {
   const allPaid = members.length > 0 && members.every((m) => m.hasPaid);
 
   if (allPaid) {
-    await prisma.cluster.update({
-      where: { id: clusterId },
-      data: { status: ClusterStatus.DISPATCHED },
-    });
-
-    // Update all member orders to DISPATCHED
+    // After all payments are completed, update orders to PAID status
+    // Keep cluster in PAYMENT status so vendor can manually process it
     await prisma.order.updateMany({
       where: { id: { in: members.map((m) => m.orderId) } },
-      data: { status: OrderStatus.DISPATCHED },
+      data: { status: OrderStatus.PAID },
     });
 
-    // Create a delivery record
+    // Create a delivery record but initialize with pending status
     await prisma.delivery.upsert({
       where: { clusterId },
       create: {
         clusterId,
         trackingSteps: [
           {
-            step: "Order Placed",
+            step: "Order Received",
             status: "completed",
             timestamp: new Date().toISOString(),
           },
           {
-            step: "Payment Collected",
-            status: "completed",
-            timestamp: new Date().toISOString(),
+            step: "Processing",
+            status: "pending",
+            timestamp: null,
           },
           {
-            step: "Preparing Dispatch",
-            status: "in_progress",
-            timestamp: new Date().toISOString(),
-          },
-          {
-            step: "In Transit",
+            step: "Dispatched",
             status: "pending",
             timestamp: null,
           },

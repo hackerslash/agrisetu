@@ -12,10 +12,10 @@ import { useNotifications } from "../../lib/NotificationContext";
 
 type FilterTab = "ALL" | "PAYMENT" | "DISPATCHED" | "COMPLETED" | "FAILED";
 
-const TABS: { label: string; value: FilterTab }[] = [
+const TABS: { label: string; value: string }[] = [
   { label: "All", value: "ALL" },
   { label: "New", value: "PAYMENT" },
-  { label: "In Progress", value: "DISPATCHED" },
+  { label: "In Progress", value: "IN_PROGRESS" },
   { label: "Completed", value: "COMPLETED" },
   { label: "Rejected", value: "FAILED" },
 ];
@@ -33,7 +33,7 @@ interface BidState {
 export function OrdersContent() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<FilterTab>("ALL");
+  const [activeTab, setActiveTab] = useState<FilterTab | "IN_PROGRESS">("ALL");
   const [bidState, setBidState] = useState<BidState | null>(null);
   const [bidError, setBidError] = useState("");
   const { addNotification } = useNotifications();
@@ -117,13 +117,18 @@ export function OrdersContent() {
 
   const filtered = (orders as Cluster[]).filter((o) => {
     if (activeTab === "ALL") return true;
+    if (activeTab === "IN_PROGRESS") {
+      // For "In Progress" tab, show orders that are PROCESSING or DISPATCHED
+      return o.status === "PROCESSING" || o.status === "DISPATCHED";
+    }
     return o.status === activeTab;
   });
 
   const stats = {
     new: (orders as Cluster[]).filter((o) => o.status === "PAYMENT").length,
-    inProgress: (orders as Cluster[]).filter((o) => o.status === "DISPATCHED")
-      .length,
+    inProgress: (orders as Cluster[]).filter(
+      (o) => o.status === "PROCESSING" || o.status === "DISPATCHED",
+    ).length,
     completed: (orders as Cluster[]).filter((o) => o.status === "COMPLETED")
       .length,
   };
@@ -299,8 +304,8 @@ export function OrdersContent() {
                   {cluster.members?.length ?? 0}
                 </span>
                 <div>
-                <StatusBadge status={cluster.status} />
-              </div>
+                  <StatusBadge status={cluster.status} />
+                </div>
                 <button
                   onClick={() => openBidForm(cluster)}
                   className="flex items-center gap-1.5 rounded-xl font-semibold"
@@ -471,14 +476,21 @@ export function OrdersContent() {
           {TABS.map((tab) => (
             <button
               key={tab.value}
-              onClick={() => setActiveTab(tab.value)}
+              onClick={() =>
+                setActiveTab(tab.value as FilterTab | "IN_PROGRESS")
+              }
               className="rounded-lg font-medium transition-all"
               style={{
                 padding: "6px 16px",
                 fontSize: 13,
                 backgroundColor:
-                  activeTab === tab.value ? "#2C5F2D" : "transparent",
-                color: activeTab === tab.value ? "white" : "#A0A0A0",
+                  activeTab === (tab.value as FilterTab | "IN_PROGRESS")
+                    ? "#2C5F2D"
+                    : "transparent",
+                color:
+                  activeTab === (tab.value as FilterTab | "IN_PROGRESS")
+                    ? "white"
+                    : "#A0A0A0",
               }}
             >
               {tab.label}
