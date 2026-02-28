@@ -719,7 +719,15 @@ router.patch("/orders/:id/deliver", async (req, res) => {
   try {
     const cluster = await prisma.cluster.findFirst({
       where: { id: req.params.id, vendorId: req.user!.id },
-      include: { members: true },
+      include: {
+        members: {
+          include: {
+            order: {
+              select: { status: true },
+            },
+          },
+        },
+      },
     });
     if (!cluster) {
       error(res, "Order not found", 404);
@@ -737,14 +745,45 @@ router.patch("/orders/:id/deliver", async (req, res) => {
       return;
     }
 
+    const deliveryByFarmer = new Map<
+      string,
+      { totalOrders: number; deliveredOrders: number }
+    >();
+    for (const member of cluster.members) {
+      const state = deliveryByFarmer.get(member.farmerId) ?? {
+        totalOrders: 0,
+        deliveredOrders: 0,
+      };
+      state.totalOrders += 1;
+      if (member.order?.status === OrderStatus.DELIVERED) {
+        state.deliveredOrders += 1;
+      }
+      deliveryByFarmer.set(member.farmerId, state);
+    }
+    const allFarmersDelivered =
+      deliveryByFarmer.size > 0 &&
+      Array.from(deliveryByFarmer.values()).every(
+        (v) => v.totalOrders > 0 && v.deliveredOrders === v.totalOrders,
+      );
+
+    if (!allFarmersDelivered) {
+      error(
+        res,
+        "All farmers must confirm delivery before marking the cluster as delivered",
+        400,
+      );
+      return;
+    }
+
     await prisma.cluster.update({
       where: { id: req.params.id },
       data: { status: ClusterStatus.COMPLETED },
     });
 
-    await prisma.delivery.updateMany({
+    await prisma.delivery.upsert({
       where: { clusterId: req.params.id },
-      data: {
+      create: {
+        clusterId: req.params.id,
         confirmedAt: new Date(),
         trackingSteps: [
           {
@@ -769,11 +808,31 @@ router.patch("/orders/:id/deliver", async (req, res) => {
           },
         ],
       },
-    });
-
-    await prisma.order.updateMany({
-      where: { id: { in: cluster.members.map((m) => m.orderId) } },
-      data: { status: OrderStatus.DELIVERED },
+      update: {
+        confirmedAt: new Date(),
+        trackingSteps: [
+          {
+            step: "Order Received",
+            status: "completed",
+            timestamp: new Date().toISOString(),
+          },
+          {
+            step: "Processing",
+            status: "completed",
+            timestamp: new Date().toISOString(),
+          },
+          {
+            step: "Dispatched",
+            status: "completed",
+            timestamp: new Date().toISOString(),
+          },
+          {
+            step: "Delivered",
+            status: "completed",
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      },
     });
 
     success(res, { delivered: true });

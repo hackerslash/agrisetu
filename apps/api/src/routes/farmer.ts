@@ -728,7 +728,8 @@ router.post("/delivery/:clusterId/confirm", async (req, res) => {
     }
     if (
       cluster.status !== ClusterStatus.DISPATCHED &&
-      cluster.status !== ClusterStatus.OUT_FOR_DELIVERY
+      cluster.status !== ClusterStatus.OUT_FOR_DELIVERY &&
+      cluster.status !== ClusterStatus.COMPLETED
     ) {
       error(
         res,
@@ -738,54 +739,199 @@ router.post("/delivery/:clusterId/confirm", async (req, res) => {
       return;
     }
 
-    // Update delivery tracking to show all steps as completed
-    await prisma.delivery.update({
+    const memberRows = await prisma.clusterMember.findMany({
       where: { clusterId: req.params.clusterId },
-      data: {
-        confirmedAt: new Date(),
-        trackingSteps: [
-          {
-            step: "Order Received",
-            status: "completed",
-            timestamp: new Date().toISOString(),
-          },
-          {
-            step: "Processing",
-            status: "completed",
-            timestamp: new Date().toISOString(),
-          },
-          {
-            step: "Dispatched",
-            status: "completed",
-            timestamp: new Date().toISOString(),
-          },
-          {
-            step: "Delivered",
-            status: "completed",
-            timestamp: new Date().toISOString(),
-          },
-        ],
+      include: {
+        order: {
+          select: { id: true, status: true },
+        },
       },
     });
 
-    await prisma.cluster.update({
-      where: { id: req.params.clusterId },
-      data: { status: ClusterStatus.COMPLETED },
-    });
+    const myMembers = memberRows.filter((m) => m.farmerId === req.user!.id);
+    if (myMembers.length === 0) {
+      error(res, "You are not a member of this cluster", 403);
+      return;
+    }
 
-    // Update all member orders to DELIVERED
-    const members = await prisma.clusterMember.findMany({
-      where: { clusterId: req.params.clusterId },
-    });
+    // Mark only current farmer's orders as delivered.
     await prisma.order.updateMany({
-      where: { id: { in: members.map((m) => m.orderId) } },
+      where: {
+        id: { in: myMembers.map((m) => m.orderId) },
+        status: {
+          notIn: [OrderStatus.DELIVERED, OrderStatus.REJECTED, OrderStatus.FAILED],
+        },
+      },
       data: { status: OrderStatus.DELIVERED },
     });
+
+    const updatedMembers = await prisma.clusterMember.findMany({
+      where: { clusterId: req.params.clusterId },
+      include: {
+        order: {
+          select: { status: true },
+        },
+      },
+    });
+
+    const farmerDelivery = new Map<
+      string,
+      { totalOrders: number; deliveredOrders: number }
+    >();
+    for (const member of updatedMembers) {
+      const existing = farmerDelivery.get(member.farmerId) ?? {
+        totalOrders: 0,
+        deliveredOrders: 0,
+      };
+      existing.totalOrders += 1;
+      if (member.order?.status === OrderStatus.DELIVERED) {
+        existing.deliveredOrders += 1;
+      }
+      farmerDelivery.set(member.farmerId, existing);
+    }
+
+    const totalFarmers = farmerDelivery.size;
+    const deliveredFarmers = Array.from(farmerDelivery.values()).filter(
+      (f) => f.totalOrders > 0 && f.deliveredOrders === f.totalOrders,
+    ).length;
+    const allFarmersDelivered =
+      totalFarmers > 0 && deliveredFarmers === totalFarmers;
+
+    const nowIso = new Date().toISOString();
+
+    if (allFarmersDelivered) {
+      await prisma.cluster.update({
+        where: { id: req.params.clusterId },
+        data: { status: ClusterStatus.COMPLETED },
+      });
+
+      await prisma.delivery.upsert({
+        where: { clusterId: req.params.clusterId },
+        create: {
+          clusterId: req.params.clusterId,
+          confirmedAt: new Date(),
+          trackingSteps: [
+            {
+              step: "Order Received",
+              status: "completed",
+              timestamp: nowIso,
+            },
+            {
+              step: "Processing",
+              status: "completed",
+              timestamp: nowIso,
+            },
+            {
+              step: "Dispatched",
+              status: "completed",
+              timestamp: nowIso,
+            },
+            {
+              step: "Delivered",
+              status: "completed",
+              timestamp: nowIso,
+            },
+          ],
+        },
+        update: {
+          confirmedAt: new Date(),
+          trackingSteps: [
+            {
+              step: "Order Received",
+              status: "completed",
+              timestamp: nowIso,
+            },
+            {
+              step: "Processing",
+              status: "completed",
+              timestamp: nowIso,
+            },
+            {
+              step: "Dispatched",
+              status: "completed",
+              timestamp: nowIso,
+            },
+            {
+              step: "Delivered",
+              status: "completed",
+              timestamp: nowIso,
+            },
+          ],
+        },
+      });
+    } else {
+      if (cluster.status === ClusterStatus.COMPLETED) {
+        await prisma.cluster.update({
+          where: { id: req.params.clusterId },
+          data: { status: ClusterStatus.DISPATCHED },
+        });
+      }
+
+      await prisma.delivery.upsert({
+        where: { clusterId: req.params.clusterId },
+        create: {
+          clusterId: req.params.clusterId,
+          confirmedAt: null,
+          trackingSteps: [
+            {
+              step: "Order Received",
+              status: "completed",
+              timestamp: nowIso,
+            },
+            {
+              step: "Processing",
+              status: "completed",
+              timestamp: nowIso,
+            },
+            {
+              step: "Dispatched",
+              status: "completed",
+              timestamp: nowIso,
+            },
+            {
+              step: "Delivered",
+              status: deliveredFarmers > 0 ? "in_progress" : "pending",
+              timestamp: deliveredFarmers > 0 ? nowIso : null,
+            },
+          ],
+        },
+        update: {
+          confirmedAt: null,
+          trackingSteps: [
+            {
+              step: "Order Received",
+              status: "completed",
+              timestamp: nowIso,
+            },
+            {
+              step: "Processing",
+              status: "completed",
+              timestamp: nowIso,
+            },
+            {
+              step: "Dispatched",
+              status: "completed",
+              timestamp: nowIso,
+            },
+            {
+              step: "Delivered",
+              status: deliveredFarmers > 0 ? "in_progress" : "pending",
+              timestamp: deliveredFarmers > 0 ? nowIso : null,
+            },
+          ],
+        },
+      });
+    }
 
     const updatedDelivery = await prisma.delivery.findUnique({
       where: { clusterId: req.params.clusterId },
     });
-    success(res, updatedDelivery);
+    success(res, {
+      delivery: updatedDelivery,
+      allFarmersDelivered,
+      deliveredFarmers,
+      totalFarmers,
+    });
   } catch {
     error(res, "Internal server error", 500);
   }

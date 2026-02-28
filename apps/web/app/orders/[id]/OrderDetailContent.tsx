@@ -261,20 +261,44 @@ export function OrderDetailContent({ id }: { id: string }) {
     .filter((p) => p.status === "SUCCESS")
     .reduce((sum, p) => sum + p.amount, 0);
 
-  const uniqueMembers = Array.from(
+  const farmerDeliverySummary = Array.from(
     (cluster.members ?? []).reduce(
       (acc, member) => {
         const existing = acc.get(member.farmerId);
         if (existing) {
           existing.quantity += member.quantity;
+          existing.totalOrders += 1;
+          if (member.order?.status === "DELIVERED") {
+            existing.deliveredOrders += 1;
+          }
           return acc;
         }
-        acc.set(member.farmerId, { ...member });
+
+        acc.set(member.farmerId, {
+          farmerId: member.farmerId,
+          farmerName: member.farmer?.name ?? member.farmer?.phone ?? "Farmer",
+          quantity: member.quantity,
+          totalOrders: 1,
+          deliveredOrders: member.order?.status === "DELIVERED" ? 1 : 0,
+        });
         return acc;
       },
-      new Map<string, NonNullable<typeof cluster.members>[number]>(),
+      new Map<
+        string,
+        {
+          farmerId: string;
+          farmerName: string;
+          quantity: number;
+          totalOrders: number;
+          deliveredOrders: number;
+        }
+      >(),
     ).values(),
   );
+  const deliveredFarmers = farmerDeliverySummary.filter(
+    (f) => f.totalOrders > 0 && f.deliveredOrders === f.totalOrders,
+  ).length;
+  const totalFarmers = farmerDeliverySummary.length;
 
   return (
     <div className="flex flex-col gap-5">
@@ -490,13 +514,18 @@ export function OrderDetailContent({ id }: { id: string }) {
                     color: "#1A1A1A",
                   }}
                 >
-                  Farmers ({uniqueMembers.length})
+                  Farmers ({deliveredFarmers}/{totalFarmers} delivered)
                 </p>
               </div>
               <div className="flex flex-col gap-2">
-                {uniqueMembers.slice(0, 5).map((m) => (
+                {farmerDeliverySummary.slice(0, 5).map((m) => {
+                  const isDelivered =
+                    m.totalOrders > 0 && m.deliveredOrders === m.totalOrders;
+                  const isPartial =
+                    m.deliveredOrders > 0 && m.deliveredOrders < m.totalOrders;
+                  return (
                   <div
-                    key={m.id}
+                    key={m.farmerId}
                     className="flex justify-between items-center"
                     style={{
                       padding: "8px 12px",
@@ -504,17 +533,37 @@ export function OrderDetailContent({ id }: { id: string }) {
                       borderRadius: 10,
                     }}
                   >
-                    <span style={{ fontSize: 13, color: "#1A1A1A" }}>
-                      {m.farmer?.name ?? m.farmer?.phone ?? "Farmer"}
-                    </span>
-                    <span style={{ fontSize: 13, color: "#5A5A5A" }}>
-                      {m.quantity} {cluster.unit}
+                    <div className="flex flex-col">
+                      <span style={{ fontSize: 13, color: "#1A1A1A" }}>
+                        {m.farmerName}
+                      </span>
+                      <span style={{ fontSize: 12, color: "#5A5A5A" }}>
+                        {m.quantity} {cluster.unit}
+                      </span>
+                    </div>
+                    <span
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: isDelivered
+                          ? "#065F46"
+                          : isPartial
+                            ? "#92400E"
+                            : "#6B7280",
+                      }}
+                    >
+                      {isDelivered
+                        ? "Delivered"
+                        : isPartial
+                          ? `Partial (${m.deliveredOrders}/${m.totalOrders})`
+                          : "Pending"}
                     </span>
                   </div>
-                ))}
-                {uniqueMembers.length > 5 && (
+                );
+                })}
+                {farmerDeliverySummary.length > 5 && (
                   <p style={{ fontSize: 12, color: "#A0A0A0", paddingLeft: 4 }}>
-                    +{uniqueMembers.length - 5} more farmers
+                    +{farmerDeliverySummary.length - 5} more farmers
                   </p>
                 )}
               </div>
@@ -573,6 +622,21 @@ export function OrderDetailContent({ id }: { id: string }) {
                 </p>
               </div>
             )}
+
+            {!isFailed &&
+              !isCompleted &&
+              (cluster.status === "DISPATCHED" ||
+                cluster.status === "OUT_FOR_DELIVERY") && (
+                <div
+                  className="rounded-xl"
+                  style={{ backgroundColor: "#FEF3C7", padding: "12px 14px" }}
+                >
+                  <p style={{ fontSize: 13, color: "#92400E", lineHeight: 1.5 }}>
+                    {deliveredFarmers} of {totalFarmers} farmers confirmed
+                    delivery.
+                  </p>
+                </div>
+              )}
 
             {nextAction && (
               <button

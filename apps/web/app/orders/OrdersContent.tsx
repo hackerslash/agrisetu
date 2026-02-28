@@ -150,6 +150,26 @@ export function OrdersContent() {
     return new Set((cluster.members ?? []).map((m) => m.farmerId)).size;
   }
 
+  function getFarmerDeliveryProgress(cluster: Cluster) {
+    const byFarmer = new Map<string, { totalOrders: number; deliveredOrders: number }>();
+    for (const member of cluster.members ?? []) {
+      const state = byFarmer.get(member.farmerId) ?? {
+        totalOrders: 0,
+        deliveredOrders: 0,
+      };
+      state.totalOrders += 1;
+      if (member.order?.status === "DELIVERED") {
+        state.deliveredOrders += 1;
+      }
+      byFarmer.set(member.farmerId, state);
+    }
+    const total = byFarmer.size;
+    const delivered = Array.from(byFarmer.values()).filter(
+      (s) => s.totalOrders > 0 && s.deliveredOrders === s.totalOrders,
+    ).length;
+    return { delivered, total };
+  }
+
   function openBidForm(cluster: Cluster) {
     // Find matching gig for this cluster
     const matchingGig = (gigs as Gig[]).find(
@@ -598,60 +618,72 @@ export function OrdersContent() {
             </p>
           </div>
         ) : (
-          filtered.map((order, idx) => (
-            <div
-              key={order.id}
-              className="grid items-center"
-              style={{
-                gridTemplateColumns: "1.2fr 1.5fr 1fr 0.8fr 1fr 1.4fr 1fr 80px",
-                padding: "14px 20px",
-                backgroundColor: idx % 2 === 1 ? "#FAFAF9" : "#FFFFFF",
-                borderBottom: "1px solid #F0EDE8",
-              }}
-            >
-              <span
+          filtered.map((order, idx) => {
+            const deliveryProgress = getFarmerDeliveryProgress(order);
+            return (
+              <div
+                key={order.id}
+                className="grid items-center"
                 style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: "#2C5F2D",
-                  fontFamily: "monospace",
+                  gridTemplateColumns: "1.2fr 1.5fr 1fr 0.8fr 1fr 1.4fr 1fr 80px",
+                  padding: "14px 20px",
+                  backgroundColor: idx % 2 === 1 ? "#FAFAF9" : "#FFFFFF",
+                  borderBottom: "1px solid #F0EDE8",
                 }}
               >
-                #{order.id.slice(-6).toUpperCase()}
-              </span>
-              <div>
-                <p style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}>
-                  {order.cropName}
-                </p>
-                <p style={{ fontSize: 12, color: "#A0A0A0" }}>
-                  {order.district ?? "Cluster"}
-                </p>
+                <span
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: "#2C5F2D",
+                    fontFamily: "monospace",
+                  }}
+                >
+                  #{order.id.slice(-6).toUpperCase()}
+                </span>
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}>
+                    {order.cropName}
+                  </p>
+                  <p style={{ fontSize: 12, color: "#A0A0A0" }}>
+                    {order.district ?? "Cluster"}
+                  </p>
+                </div>
+                <span style={{ fontSize: 13, color: "#1A1A1A" }}>
+                  {order.currentQuantity} {order.unit}
+                </span>
+                <div className="flex flex-col">
+                  <span style={{ fontSize: 13, color: "#1A1A1A" }}>
+                    {getUniqueFarmerCount(order)}
+                  </span>
+                  {(order.status === "DISPATCHED" ||
+                    order.status === "OUT_FOR_DELIVERY" ||
+                    order.status === "COMPLETED") && (
+                    <span style={{ fontSize: 11, color: "#A0A0A0" }}>
+                      {deliveryProgress.delivered}/{deliveryProgress.total} delivered
+                    </span>
+                  )}
+                </div>
+                <span style={{ fontSize: 13, color: "#1A1A1A" }}>
+                  {formatCurrency(getTotalAmount(order))}
+                </span>
+                <div>
+                  <StatusBadge status={order.status} />
+                </div>
+                <span style={{ fontSize: 13, color: "#A0A0A0" }}>
+                  {formatDate(order.createdAt)}
+                </span>
+                <button
+                  onClick={() => router.push(`/orders/${order.id}`)}
+                  className="flex items-center gap-1 rounded-lg font-medium hover:bg-[#F7F5F0] transition-colors"
+                  style={{ padding: "6px 10px", fontSize: 13, color: "#2C5F2D" }}
+                >
+                  <Eye size={14} />
+                  View
+                </button>
               </div>
-              <span style={{ fontSize: 13, color: "#1A1A1A" }}>
-                {order.currentQuantity} {order.unit}
-              </span>
-              <span style={{ fontSize: 13, color: "#1A1A1A" }}>
-                {getUniqueFarmerCount(order)}
-              </span>
-              <span style={{ fontSize: 13, color: "#1A1A1A" }}>
-                {formatCurrency(getTotalAmount(order))}
-              </span>
-              <div>
-                <StatusBadge status={order.status} />
-              </div>
-              <span style={{ fontSize: 13, color: "#A0A0A0" }}>
-                {formatDate(order.createdAt)}
-              </span>
-              <button
-                onClick={() => router.push(`/orders/${order.id}`)}
-                className="flex items-center gap-1 rounded-lg font-medium hover:bg-[#F7F5F0] transition-colors"
-                style={{ padding: "6px 10px", fontSize: 13, color: "#2C5F2D" }}
-              >
-                <Eye size={14} />
-                View
-              </button>
-            </div>
-          ))
+            );
+          })
         )}
 
         {/* Footer */}
