@@ -17,9 +17,9 @@ const STATUS_STYLES: Record<
   PAID: { bg: "#DBEAFE", text: "#1D4ED8", label: "Paid" },
   PROCESSING: { bg: "#FEF3C7", text: "#92400E", label: "Processing" },
   OUT_FOR_DELIVERY: {
-    bg: "#DBEAFE",
-    text: "#1D4ED8",
-    label: "Out for Delivery",
+    bg: "#F3E8FF",
+    text: "#7E22CE",
+    label: "Dispatched",
   },
   DISPATCHED: { bg: "#F3E8FF", text: "#7E22CE", label: "Dispatched" },
   DELIVERED: { bg: "#D1FAE5", text: "#065F46", label: "Delivered" },

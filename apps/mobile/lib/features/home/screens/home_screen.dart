@@ -143,8 +143,7 @@ class HomeScreen extends ConsumerWidget {
                         final stats =
                             dashboard['stats'] as Map<String, dynamic>;
                         final totalSaved = stats['totalSaved'] as int? ?? 0;
-                        final ordersPlaced =
-                            stats['ordersPlaced'] as int? ?? 0;
+                        final ordersPlaced = stats['ordersPlaced'] as int? ?? 0;
                         final delivered = stats['delivered'] as int? ?? 0;
                         final co2Saved = stats['co2Saved'] as int? ?? 0;
                         return Row(
@@ -219,7 +218,8 @@ class HomeScreen extends ConsumerWidget {
                       return Column(
                         children: [
                           _SectionHeader(
-                            title: '🌾 Your Cluster · ${myCluster.district ?? 'District'}',
+                            title:
+                                '🌾 Your Cluster · ${myCluster.district ?? 'District'}',
                             linkText: 'View →',
                             onTap: () =>
                                 context.push('/clusters/${myCluster.id}'),
@@ -257,7 +257,9 @@ class HomeScreen extends ConsumerWidget {
                         children: [
                           Text('Recent Activity', style: AppTextStyles.h5),
                           const SizedBox(height: 12),
-                          ...orders.take(3).map((order) => _ActivityItem(order: order)),
+                          ...orders
+                              .take(3)
+                              .map((order) => _ActivityItem(order: order)),
                         ],
                       );
                     },
@@ -372,7 +374,7 @@ class _ActiveOrderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cluster = order.clusterMember?.cluster;
-    final statusSteps = ['Ordered', 'Clustered', 'Payment', 'In Transit'];
+    final statusSteps = ['Ordered', 'Clustered', 'Payment', 'Dispatched'];
     final stepIndex = () {
       switch (order.status) {
         case OrderStatus.pending:
@@ -382,10 +384,15 @@ class _ActiveOrderCard extends StatelessWidget {
         case OrderStatus.paymentPending:
         case OrderStatus.paid:
           return 2;
+        case OrderStatus.processing:
+          return 2;
+        case OrderStatus.outForDelivery:
         case OrderStatus.dispatched:
           return 3;
-        default:
+        case OrderStatus.delivered:
           return 3;
+        default:
+          return 0;
       }
     }();
 
@@ -435,7 +442,8 @@ class _ActiveOrderCard extends StatelessWidget {
                       width: 8,
                       height: 8,
                       decoration: BoxDecoration(
-                        color: isCompleted ? AppColors.primary : AppColors.border,
+                        color:
+                            isCompleted ? AppColors.primary : AppColors.border,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -443,7 +451,9 @@ class _ActiveOrderCard extends StatelessWidget {
                       Expanded(
                         child: Container(
                           height: 2,
-                          color: i < stepIndex ? AppColors.primary : AppColors.border,
+                          color: i < stepIndex
+                              ? AppColors.primary
+                              : AppColors.border,
                         ),
                       ),
                   ],
@@ -483,8 +493,8 @@ class _ActiveOrderCard extends StatelessWidget {
                 GestureDetector(
                   onTap: () => context.push('/clusters/${cluster.id}'),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: AppColors.inputBackground,
                       borderRadius: BorderRadius.circular(20),
@@ -556,7 +566,8 @@ class _ClusterCard extends StatelessWidget {
                   color: AppColors.primary.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.people, color: AppColors.primary, size: 18),
+                child: const Icon(Icons.people,
+                    color: AppColors.primary, size: 18),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -665,7 +676,8 @@ class _MandiPricesCard extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: Text(p['name'] as String, style: AppTextStyles.label),
+                    child:
+                        Text(p['name'] as String, style: AppTextStyles.label),
                   ),
                   Text(
                     '₹${p['price']}/${p['unit']}',
@@ -673,7 +685,8 @@ class _MandiPricesCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: isFlat
                           ? AppColors.inputBackground
@@ -737,7 +750,8 @@ class _ActivityItem extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  order.status == OrderStatus.dispatched
+                  order.status == OrderStatus.dispatched ||
+                          order.status == OrderStatus.outForDelivery
                       ? 'Order Dispatched'
                       : order.status == OrderStatus.clustered
                           ? 'Joined Cluster'

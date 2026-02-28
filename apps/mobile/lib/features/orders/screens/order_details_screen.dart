@@ -58,20 +58,43 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     setState(() => _isCreating = true);
     try {
       final api = ref.read(apiClientProvider);
-      final orderData = await api.createOrder({
+      final createRes = await api.createOrder({
         'cropName': _cropCtrl.text.trim(),
         'quantity': double.parse(_quantityCtrl.text),
         'unit': _unitCtrl.text.trim(),
       });
-      ref.invalidate(homeDashboardProvider);
-      final clusterId = (orderData['clusterMember']
-          as Map<String, dynamic>?)?['cluster']?['id'] as String?;
-      if (mounted) {
-        if (clusterId != null) {
-          context.go('/clusters/$clusterId');
-        } else {
-          context.go('/clusters', extra: _cropCtrl.text.trim());
+
+      final orderData = (createRes['order'] is Map<String, dynamic>)
+          ? createRes['order'] as Map<String, dynamic>
+          : createRes;
+      final orderId = orderData['id'] as String?;
+      if (orderId == null) {
+        throw FormatException('Order creation failed: missing order ID');
+      }
+
+      final options = await api.getOrderClusterOptions(orderId);
+      if (options.isEmpty) {
+        final assigned =
+            await api.assignOrderToCluster(orderId, createNew: true);
+        ref.invalidate(homeDashboardProvider);
+        final clusterId = (assigned['clusterMember']
+            as Map<String, dynamic>?)?['cluster']?['id'] as String?;
+        if (mounted) {
+          if (clusterId != null) {
+            context.go('/clusters/$clusterId');
+          } else {
+            context.go('/clusters');
+          }
         }
+        return;
+      }
+
+      ref.invalidate(homeDashboardProvider);
+      if (mounted) {
+        context.go('/clusters', extra: {
+          'orderId': orderId,
+          'cropName': orderData['cropName'] as String? ?? _cropCtrl.text.trim(),
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -228,16 +251,14 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                                   ? null
                                   : commentCtrl.text.trim(),
                             });
+                            if (!context.mounted) return;
                             if (ctx.mounted) Navigator.pop(ctx);
                             ref.invalidate(orderDetailProvider(widget.orderId));
                             ref.invalidate(homeDashboardProvider);
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content:
-                                        Text('Thank you for your rating!')),
-                              );
-                            }
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text('Thank you for your rating!')),
+                            );
                           } catch (e) {
                             setSheetState(() => submitting = false);
                             if (ctx.mounted) {
@@ -843,24 +864,6 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
       ),
     );
   }
-
-  String _formatDate(DateTime dt) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
-  }
 }
 
 // ─── Order Timeline ─────────────────────────────────────────────────────────
@@ -907,12 +910,8 @@ class _OrderTimeline extends StatelessWidget {
       OrderStatus.dispatched,
       OrderStatus.delivered,
     ];
-    const outForDeliveryStatuses = [
-      OrderStatus.outForDelivery,
-      OrderStatus.dispatched,
-      OrderStatus.delivered,
-    ];
     const dispatchedStatuses = [
+      OrderStatus.outForDelivery,
       OrderStatus.dispatched,
       OrderStatus.delivered,
     ];
@@ -950,14 +949,10 @@ class _OrderTimeline extends StatelessWidget {
         active: order.status == OrderStatus.processing,
       ),
       _TimelineStep(
-        label: 'Out for Delivery',
-        done: outForDeliveryStatuses.contains(order.status),
-        active: order.status == OrderStatus.outForDelivery,
-      ),
-      _TimelineStep(
-        label: 'In Transit',
+        label: 'Dispatched',
         done: dispatchedStatuses.contains(order.status),
-        active: order.status == OrderStatus.dispatched,
+        active: order.status == OrderStatus.outForDelivery ||
+            order.status == OrderStatus.dispatched,
       ),
       _TimelineStep(
         label: 'Delivered',
@@ -1253,11 +1248,11 @@ class _OrderStatusPill extends StatelessWidget {
         break;
       case OrderStatus.outForDelivery:
         bg = const Color(0xFF1D4ED8).withOpacity(0.85);
-        label = 'Out for Delivery';
+        label = 'Dispatched';
         break;
       case OrderStatus.dispatched:
         bg = const Color(0xFFE69A28).withOpacity(0.8);
-        label = 'In Transit';
+        label = 'Dispatched';
         break;
       case OrderStatus.paymentPending:
         bg = AppColors.warning.withOpacity(0.8);

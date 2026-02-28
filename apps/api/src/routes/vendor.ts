@@ -609,7 +609,7 @@ router.patch("/orders/:id/out-for-delivery", async (req, res) => {
 
     await prisma.cluster.update({
       where: { id: req.params.id },
-      data: { status: ClusterStatus.OUT_FOR_DELIVERY },
+      data: { status: ClusterStatus.DISPATCHED },
     });
 
     await prisma.delivery.updateMany({
@@ -626,11 +626,7 @@ router.patch("/orders/:id/out-for-delivery", async (req, res) => {
             status: "completed",
             timestamp: new Date().toISOString(),
           },
-          {
-            step: "Out for Delivery",
-            status: "in_progress",
-            timestamp: new Date().toISOString(),
-          },
+          { step: "Dispatched", status: "in_progress", timestamp: new Date().toISOString() },
           { step: "Delivered", status: "pending", timestamp: null },
         ],
       },
@@ -638,10 +634,10 @@ router.patch("/orders/:id/out-for-delivery", async (req, res) => {
 
     await prisma.order.updateMany({
       where: { id: { in: cluster.members.map((m) => m.orderId) } },
-      data: { status: OrderStatus.OUT_FOR_DELIVERY },
+      data: { status: OrderStatus.DISPATCHED },
     });
 
-    success(res, { outForDelivery: true });
+    success(res, { dispatched: true });
   } catch {
     error(res, "Internal server error", 500);
   }
@@ -651,15 +647,19 @@ router.patch("/orders/:id/dispatch", async (req, res) => {
   try {
     const cluster = await prisma.cluster.findFirst({
       where: { id: req.params.id, vendorId: req.user!.id },
+      include: { members: true },
     });
     if (!cluster) {
       error(res, "Order not found", 404);
       return;
     }
-    if (cluster.status !== ClusterStatus.PROCESSING) {
+    if (
+      cluster.status !== ClusterStatus.PROCESSING &&
+      cluster.status !== ClusterStatus.OUT_FOR_DELIVERY
+    ) {
       error(
         res,
-        "Order must be in PROCESSING status to mark as delivered",
+        "Order must be in PROCESSING status to mark as dispatched",
         400,
       );
       return;
@@ -695,11 +695,8 @@ router.patch("/orders/:id/dispatch", async (req, res) => {
       },
     });
 
-    const members = await prisma.clusterMember.findMany({
-      where: { clusterId: req.params.id },
-    });
     await prisma.order.updateMany({
-      where: { id: { in: members.map((m) => m.orderId) } },
+      where: { id: { in: cluster.members.map((m) => m.orderId) } },
       data: { status: OrderStatus.DISPATCHED },
     });
 
@@ -711,8 +708,28 @@ router.patch("/orders/:id/dispatch", async (req, res) => {
 
 router.patch("/orders/:id/deliver", async (req, res) => {
   try {
-    await prisma.cluster.updateMany({
+    const cluster = await prisma.cluster.findFirst({
       where: { id: req.params.id, vendorId: req.user!.id },
+      include: { members: true },
+    });
+    if (!cluster) {
+      error(res, "Order not found", 404);
+      return;
+    }
+    if (
+      cluster.status !== ClusterStatus.DISPATCHED &&
+      cluster.status !== ClusterStatus.OUT_FOR_DELIVERY
+    ) {
+      error(
+        res,
+        "Order must be dispatched before marking as delivered",
+        400,
+      );
+      return;
+    }
+
+    await prisma.cluster.update({
+      where: { id: req.params.id },
       data: { status: ClusterStatus.COMPLETED },
     });
 
@@ -745,11 +762,8 @@ router.patch("/orders/:id/deliver", async (req, res) => {
       },
     });
 
-    const members = await prisma.clusterMember.findMany({
-      where: { clusterId: req.params.id },
-    });
     await prisma.order.updateMany({
-      where: { id: { in: members.map((m) => m.orderId) } },
+      where: { id: { in: cluster.members.map((m) => m.orderId) } },
       data: { status: OrderStatus.DELIVERED },
     });
 
@@ -778,6 +792,8 @@ router.get("/payments", async (req, res) => {
         .reduce((sum, p) => sum + p.amount, 0);
       const isEscrow = cluster.status !== ClusterStatus.COMPLETED;
       const isReleased = cluster.status === ClusterStatus.COMPLETED;
+      const uniqueFarmerCount = new Set(cluster.members.map((m) => m.farmerId))
+        .size;
 
       return {
         clusterId: cluster.id,
@@ -785,7 +801,7 @@ router.get("/payments", async (req, res) => {
         totalAmount,
         status: isReleased ? "released" : isEscrow ? "escrow" : "pending",
         clusterStatus: cluster.status,
-        memberCount: cluster.members.length,
+        memberCount: uniqueFarmerCount,
         payments: cluster.payments,
       };
     });
@@ -814,7 +830,10 @@ router.get("/payments/summary", async (req, res) => {
 
       if (cluster.status === ClusterStatus.COMPLETED) {
         totalReceived += paidAmount;
-      } else if (cluster.status === ClusterStatus.DISPATCHED) {
+      } else if (
+        cluster.status === ClusterStatus.DISPATCHED ||
+        cluster.status === ClusterStatus.OUT_FOR_DELIVERY
+      ) {
         pendingRelease += paidAmount;
         inEscrow += paidAmount;
       } else {

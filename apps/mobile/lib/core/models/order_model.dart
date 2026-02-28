@@ -50,9 +50,9 @@ enum OrderStatus {
       case OrderStatus.processing:
         return 'Processing';
       case OrderStatus.outForDelivery:
-        return 'Out for Delivery';
+        return 'Dispatched';
       case OrderStatus.dispatched:
-        return 'In Transit';
+        return 'Dispatched';
       case OrderStatus.delivered:
         return 'Delivered';
       case OrderStatus.rejected:
@@ -189,9 +189,9 @@ enum ClusterStatus {
       case ClusterStatus.processing:
         return 'Processing';
       case ClusterStatus.outForDelivery:
-        return 'Out for Delivery';
+        return 'Dispatched';
       case ClusterStatus.dispatched:
-        return 'In Transit';
+        return 'Dispatched';
       case ClusterStatus.completed:
         return 'Completed';
       case ClusterStatus.failed:
@@ -240,7 +240,7 @@ class Cluster {
   double get fillPercent => targetQuantity > 0
       ? (currentQuantity / targetQuantity).clamp(0.0, 1.0)
       : 0;
-  int get membersCount => members.length;
+  int get membersCount => members.map((m) => m.farmerId).toSet().length;
 
   factory Cluster.fromJson(Map<String, dynamic> json) {
     return Cluster(

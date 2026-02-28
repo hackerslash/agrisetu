@@ -3,6 +3,21 @@ import { ClusterStatus, GigStatus, OrderStatus } from "@prisma/client";
 
 const DEFAULT_TARGET_QUANTITY = 1000;
 
+function normalizeUnit(unit: string) {
+  return unit.toLowerCase().trim();
+}
+
+async function findBestMatchingGig(cropName: string, unit: string) {
+  return prisma.gig.findFirst({
+    where: {
+      cropName: { equals: cropName, mode: "insensitive" },
+      unit: { equals: unit, mode: "insensitive" },
+      status: GigStatus.PUBLISHED,
+    },
+    orderBy: { minQuantity: "asc" },
+  });
+}
+
 /**
  * When a cluster transitions to VOTING, auto-create bids for every vendor
  * that has a matching PUBLISHED gig. This means farmers see vendor options
@@ -27,7 +42,14 @@ async function autoCreateBidsForVotingCluster(
     const existing = await prisma.vendorBid.findFirst({
       where: { clusterId, vendorId: gig.vendorId },
     });
-    if (existing) continue;
+    if (existing) {
+      // Keep total in sync as quantity changes while still in voting phase
+      await prisma.vendorBid.update({
+        where: { id: existing.id },
+        data: { totalPrice: existing.pricePerUnit * currentQuantity },
+      });
+      continue;
+    }
 
     await prisma.vendorBid.create({
       data: {
@@ -41,6 +63,204 @@ async function autoCreateBidsForVotingCluster(
   }
 }
 
+async function syncBidTotals(clusterId: string, currentQuantity: number) {
+  const bids = await prisma.vendorBid.findMany({
+    where: { clusterId },
+    select: { id: true, pricePerUnit: true },
+  });
+
+  await Promise.all(
+    bids.map((bid) =>
+      prisma.vendorBid.update({
+        where: { id: bid.id },
+        data: { totalPrice: bid.pricePerUnit * currentQuantity },
+      }),
+    ),
+  );
+}
+
+export async function findJoinableClusters(
+  cropName: string,
+  unit: string,
+  district?: string,
+) {
+  const normalizedUnit = normalizeUnit(unit);
+
+  return prisma.cluster.findMany({
+    where: {
+      cropName: { equals: cropName, mode: "insensitive" },
+      unit: { equals: normalizedUnit, mode: "insensitive" },
+      status: { in: [ClusterStatus.FORMING, ClusterStatus.VOTING] },
+      ...(district ? { district } : {}),
+    },
+    include: {
+      members: { include: { farmer: true, order: true } },
+      bids: { include: { vendor: true, vendorVotes: true } },
+      delivery: true,
+      vendor: true,
+      ratings: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+async function createClusterForOrder(
+  cropName: string,
+  unit: string,
+  district?: string,
+  state?: string,
+) {
+  const normalizedUnit = normalizeUnit(unit);
+  const matchingGig = await findBestMatchingGig(cropName, normalizedUnit);
+  const targetQuantity = matchingGig?.minQuantity ?? DEFAULT_TARGET_QUANTITY;
+
+  return prisma.cluster.create({
+    data: {
+      cropName,
+      unit: normalizedUnit,
+      targetQuantity,
+      currentQuantity: 0,
+      status: ClusterStatus.FORMING,
+      district: district ?? null,
+      state: state ?? null,
+      gigId: matchingGig?.id ?? null,
+    },
+  });
+}
+
+export async function assignOrderToCluster(params: {
+  clusterId: string;
+  farmerId: string;
+  orderId: string;
+  quantity: number;
+}) {
+  const { clusterId, farmerId, orderId, quantity } = params;
+
+  const cluster = await prisma.cluster.findUnique({
+    where: { id: clusterId },
+  });
+
+  if (
+    !cluster ||
+    (cluster.status !== ClusterStatus.FORMING &&
+      cluster.status !== ClusterStatus.VOTING)
+  ) {
+    throw new Error("Cluster not available for joining");
+  }
+
+  await prisma.clusterMember.create({
+    data: {
+      clusterId,
+      farmerId,
+      orderId,
+      quantity,
+    },
+  });
+
+  const updated = await prisma.cluster.update({
+    where: { id: clusterId },
+    data: { currentQuantity: { increment: quantity } },
+  });
+
+  await prisma.order.update({
+    where: { id: orderId },
+    data: { status: OrderStatus.CLUSTERED },
+  });
+
+  if (updated.status === ClusterStatus.VOTING) {
+    await autoCreateBidsForVotingCluster(
+      updated.id,
+      updated.cropName,
+      updated.unit,
+      updated.currentQuantity,
+    );
+    await syncBidTotals(updated.id, updated.currentQuantity);
+  } else if (updated.currentQuantity >= updated.targetQuantity) {
+    await prisma.cluster.update({
+      where: { id: updated.id },
+      data: { status: ClusterStatus.VOTING },
+    });
+    await autoCreateBidsForVotingCluster(
+      updated.id,
+      updated.cropName,
+      updated.unit,
+      updated.currentQuantity,
+    );
+  }
+
+  return prisma.cluster.findUnique({
+    where: { id: updated.id },
+    include: {
+      members: { include: { farmer: true, order: true } },
+      bids: { include: { vendor: true, vendorVotes: true } },
+      delivery: true,
+      vendor: true,
+      ratings: true,
+    },
+  });
+}
+
+export async function createNewClusterAndAssignOrder(params: {
+  farmerId: string;
+  orderId: string;
+  cropName: string;
+  quantity: number;
+  unit: string;
+  district?: string;
+  state?: string;
+}) {
+  const cluster = await createClusterForOrder(
+    params.cropName,
+    params.unit,
+    params.district,
+    params.state,
+  );
+
+  return assignOrderToCluster({
+    clusterId: cluster.id,
+    farmerId: params.farmerId,
+    orderId: params.orderId,
+    quantity: params.quantity,
+  });
+}
+
+/**
+ * Legacy helper retained for compatibility. This prefers existing joinable
+ * clusters and falls back to creating a new one.
+ */
+export async function autoAssignCluster(
+  farmerId: string,
+  orderId: string,
+  cropName: string,
+  quantity: number,
+  unit: string,
+  district?: string,
+  state?: string,
+) {
+  const normalizedUnit = normalizeUnit(unit);
+  const joinable = await findJoinableClusters(cropName, normalizedUnit, district);
+  const chosen = joinable[0];
+
+  if (chosen) {
+    return assignOrderToCluster({
+      clusterId: chosen.id,
+      farmerId,
+      orderId,
+      quantity,
+    });
+  }
+
+  return createNewClusterAndAssignOrder({
+    farmerId,
+    orderId,
+    cropName,
+    quantity,
+    unit: normalizedUnit,
+    district,
+    state,
+  });
+}
+
 /**
  * When a gig is published, find matching FORMING clusters that still have the
  * default (or higher) targetQuantity and lower it to the gig's minQuantity.
@@ -52,7 +272,7 @@ export async function syncClustersForPublishedGig(
   unit: string,
   minQuantity: number,
 ) {
-  unit = unit.toLowerCase().trim();
+  unit = normalizeUnit(unit);
 
   // Fix FORMING clusters whose targetQuantity is too high
   const formingClusters = await prisma.cluster.findMany({
@@ -104,135 +324,32 @@ export async function syncClustersForPublishedGig(
   }
 }
 
-export async function autoAssignCluster(
-  farmerId: string,
-  orderId: string,
-  cropName: string,
-  quantity: number,
-  unit: string,
-  district?: string,
-  state?: string,
-) {
-  // Normalize unit to lowercase so "Kg" and "kg" are treated the same
-  unit = unit.toLowerCase().trim();
-
-  // Look for an existing FORMING cluster with the same crop in same district
-  const existing = await prisma.cluster.findFirst({
-    where: {
-      cropName: { equals: cropName, mode: "insensitive" },
-      unit: { equals: unit, mode: "insensitive" },
-      status: ClusterStatus.FORMING,
-      ...(district ? { district } : {}),
-    },
-    orderBy: { createdAt: "asc" },
-  });
-
-  let cluster = existing;
-
-  if (!cluster) {
-    // Find matching published gig to use its minQuantity as targetQuantity
-    const matchingGig = await prisma.gig.findFirst({
-      where: {
-        cropName: { equals: cropName, mode: "insensitive" },
-        unit: { equals: unit, mode: "insensitive" },
-        status: GigStatus.PUBLISHED,
-      },
-      orderBy: { minQuantity: "asc" },
-    });
-
-    const targetQuantity = matchingGig?.minQuantity ?? DEFAULT_TARGET_QUANTITY;
-
-    cluster = await prisma.cluster.create({
-      data: {
-        cropName,
-        unit,
-        targetQuantity,
-        currentQuantity: 0,
-        status: ClusterStatus.FORMING,
-        district: district ?? null,
-        state: state ?? null,
-        gigId: matchingGig?.id ?? null,
-      },
-    });
-  } else if (cluster.targetQuantity >= DEFAULT_TARGET_QUANTITY) {
-    // Cluster was created before a matching gig existed — check again now
-    const matchingGig = await prisma.gig.findFirst({
-      where: {
-        cropName: { equals: cropName, mode: "insensitive" },
-        unit: { equals: unit, mode: "insensitive" },
-        status: GigStatus.PUBLISHED,
-      },
-      orderBy: { minQuantity: "asc" },
-    });
-    if (matchingGig && matchingGig.minQuantity < cluster.targetQuantity) {
-      cluster = await prisma.cluster.update({
-        where: { id: cluster.id },
-        data: {
-          targetQuantity: matchingGig.minQuantity,
-          gigId: cluster.gigId ?? matchingGig.id,
-        },
-      });
-    }
-  }
-
-  // Add farmer to cluster
-  await prisma.clusterMember.create({
-    data: {
-      clusterId: cluster.id,
-      farmerId,
-      orderId,
-      quantity,
-    },
-  });
-
-  // Update currentQuantity
-  const updated = await prisma.cluster.update({
-    where: { id: cluster.id },
-    data: { currentQuantity: { increment: quantity } },
-  });
-
-  // Update order status to CLUSTERED
-  await prisma.order.update({
-    where: { id: orderId },
-    data: { status: OrderStatus.CLUSTERED },
-  });
-
-  // Check if we should transition to VOTING
-  if (
-    updated.status === ClusterStatus.FORMING &&
-    updated.currentQuantity >= updated.targetQuantity
-  ) {
-    await prisma.cluster.update({
-      where: { id: cluster.id },
-      data: { status: ClusterStatus.VOTING },
-    });
-    await autoCreateBidsForVotingCluster(
-      cluster.id,
-      updated.cropName,
-      updated.unit,
-      updated.currentQuantity,
-    );
-  }
-
-  return updated;
-}
-
 export async function checkAndTransitionPayment(clusterId: string) {
   const members = await prisma.clusterMember.findMany({
     where: { clusterId },
   });
 
-  const allPaid = members.length > 0 && members.every((m) => m.hasPaid);
+  // A farmer can have multiple orders in a cluster. Treat payment completion
+  // per-farmer (not per-order-row) so repeated orders aggregate correctly.
+  const paymentByFarmer = new Map<string, boolean>();
+  for (const member of members) {
+    const paid = paymentByFarmer.get(member.farmerId) ?? false;
+    paymentByFarmer.set(member.farmerId, paid || member.hasPaid);
+  }
+
+  const allPaid =
+    paymentByFarmer.size > 0 &&
+    Array.from(paymentByFarmer.values()).every((paid) => paid);
 
   if (allPaid) {
-    // After all payments are completed, update orders to PAID status
-    // Keep cluster in PAYMENT status so vendor can manually process it
+    // After all payments are completed, update orders to PAID status.
+    // Keep cluster in PAYMENT status so vendor can manually process it.
     await prisma.order.updateMany({
       where: { id: { in: members.map((m) => m.orderId) } },
       data: { status: OrderStatus.PAID },
     });
 
-    // Create a delivery record but initialize with pending status
+    // Create a delivery record but initialize with pending status.
     await prisma.delivery.upsert({
       where: { clusterId },
       create: {

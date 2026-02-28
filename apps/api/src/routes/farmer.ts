@@ -4,8 +4,10 @@ import { prisma } from "../lib/prisma.js";
 import { authenticate, requireFarmer } from "../middleware/auth.js";
 import { success, error } from "../lib/response.js";
 import {
-  autoAssignCluster,
+  assignOrderToCluster,
   checkAndTransitionPayment,
+  createNewClusterAndAssignOrder,
+  findJoinableClusters,
 } from "../services/cluster.js";
 import { ClusterStatus, OrderStatus, PaymentStatus } from "@prisma/client";
 
@@ -24,7 +26,11 @@ router.get("/profile", async (req, res) => {
       return;
     }
     success(res, farmer);
-  } catch {
+  } catch (e) {
+    if (e instanceof Error && e.message === "Cluster not available for joining") {
+      error(res, e.message, 400);
+      return;
+    }
     error(res, "Internal server error", 500);
   }
 });
@@ -91,26 +97,20 @@ router.post("/orders", async (req, res) => {
         deliveryDate: parsed.data.deliveryDate
           ? new Date(parsed.data.deliveryDate)
           : null,
-      },
-    });
+        },
+      });
 
-    // Auto-assign to cluster
-    await autoAssignCluster(
-      req.user!.id,
-      order.id,
+    const availableClusters = await findJoinableClusters(
       parsed.data.cropName,
-      parsed.data.quantity,
       parsed.data.unit,
       farmer.district ?? undefined,
-      farmer.state ?? undefined,
     );
 
-    const updatedOrder = await prisma.order.findUnique({
-      where: { id: order.id },
-      include: { clusterMember: { include: { cluster: true } } },
-    });
-
-    success(res, updatedOrder, 201);
+    success(
+      res,
+      { ...order, availableClusters },
+      201,
+    );
   } catch {
     error(res, "Internal server error", 500);
   }
@@ -125,6 +125,173 @@ router.get("/orders", async (req, res) => {
     });
     success(res, orders);
   } catch {
+    error(res, "Internal server error", 500);
+  }
+});
+
+router.get("/orders/:id/cluster-options", async (req, res) => {
+  try {
+    const order = await prisma.order.findFirst({
+      where: { id: req.params.id, farmerId: req.user!.id },
+      select: {
+        id: true,
+        cropName: true,
+        unit: true,
+        status: true,
+      },
+    });
+    if (!order) {
+      error(res, "Order not found", 404);
+      return;
+    }
+    if (order.status !== OrderStatus.PENDING) {
+      error(res, "Cluster selection is only available for pending orders", 400);
+      return;
+    }
+
+    const farmer = await prisma.farmer.findUnique({
+      where: { id: req.user!.id },
+      select: { district: true },
+    });
+
+    const clusters = await findJoinableClusters(
+      order.cropName,
+      order.unit,
+      farmer?.district ?? undefined,
+    );
+    success(res, clusters);
+  } catch {
+    error(res, "Internal server error", 500);
+  }
+});
+
+const assignClusterSchema = z
+  .object({
+    clusterId: z.string().optional(),
+    createNew: z.boolean().optional(),
+  })
+  .refine((v) => Boolean(v.clusterId) || Boolean(v.createNew), {
+    message: "Either clusterId or createNew must be provided",
+  })
+  .refine((v) => !(v.clusterId && v.createNew), {
+    message: "Provide either clusterId or createNew, not both",
+  });
+
+router.post("/orders/:id/assign-cluster", async (req, res) => {
+  const parsed = assignClusterSchema.safeParse(req.body);
+  if (!parsed.success) {
+    error(res, "Invalid request", 422, parsed.error.flatten());
+    return;
+  }
+
+  try {
+    const order = await prisma.order.findFirst({
+      where: { id: req.params.id, farmerId: req.user!.id },
+      select: {
+        id: true,
+        cropName: true,
+        quantity: true,
+        unit: true,
+        status: true,
+      },
+    });
+
+    if (!order) {
+      error(res, "Order not found", 404);
+      return;
+    }
+    if (order.status !== OrderStatus.PENDING) {
+      error(res, "Order is already assigned to a cluster", 400);
+      return;
+    }
+
+    const farmer = await prisma.farmer.findUnique({
+      where: { id: req.user!.id },
+      select: { district: true, state: true },
+    });
+    if (!farmer) {
+      error(res, "Farmer profile not found", 404);
+      return;
+    }
+
+    if (parsed.data.clusterId) {
+      const cluster = await prisma.cluster.findUnique({
+        where: { id: parsed.data.clusterId },
+        select: {
+          id: true,
+          cropName: true,
+          unit: true,
+          district: true,
+          status: true,
+        },
+      });
+
+      if (
+        !cluster ||
+        (cluster.status !== ClusterStatus.FORMING &&
+          cluster.status !== ClusterStatus.VOTING)
+      ) {
+        error(res, "Selected cluster is not available", 400);
+        return;
+      }
+
+      const sameCrop =
+        cluster.cropName.toLowerCase() === order.cropName.toLowerCase();
+      const sameUnit = cluster.unit.toLowerCase() === order.unit.toLowerCase();
+      const sameDistrict =
+        !farmer.district || !cluster.district || farmer.district === cluster.district;
+
+      if (!sameCrop || !sameUnit || !sameDistrict) {
+        error(res, "Selected cluster does not match this order", 400);
+        return;
+      }
+
+      await assignOrderToCluster({
+        clusterId: cluster.id,
+        farmerId: req.user!.id,
+        orderId: order.id,
+        quantity: order.quantity,
+      });
+    } else {
+      await createNewClusterAndAssignOrder({
+        farmerId: req.user!.id,
+        orderId: order.id,
+        cropName: order.cropName,
+        quantity: order.quantity,
+        unit: order.unit,
+        district: farmer.district ?? undefined,
+        state: farmer.state ?? undefined,
+      });
+    }
+
+    const updatedOrder = await prisma.order.findUnique({
+      where: { id: order.id },
+      include: {
+        clusterMember: {
+          include: {
+            cluster: {
+              include: {
+                members: { include: { farmer: true, order: true } },
+                bids: { include: { vendor: true, vendorVotes: true } },
+                delivery: true,
+                vendor: true,
+                ratings: {
+                  where: { farmerId: req.user!.id },
+                  take: 1,
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    success(res, updatedOrder);
+  } catch (e) {
+    if (e instanceof Error && e.message === "Cluster not available for joining") {
+      error(res, e.message, 400);
+      return;
+    }
     error(res, "Internal server error", 500);
   }
 });
@@ -203,26 +370,66 @@ router.post("/clusters/:id/join", async (req, res) => {
     return;
   }
   try {
+    const order = await prisma.order.findFirst({
+      where: { id: parsed.data.orderId, farmerId: req.user!.id },
+      select: {
+        id: true,
+        cropName: true,
+        quantity: true,
+        unit: true,
+        status: true,
+      },
+    });
+    if (!order) {
+      error(res, "Order not found", 404);
+      return;
+    }
+    if (order.status !== OrderStatus.PENDING) {
+      error(res, "Order is already assigned to a cluster", 400);
+      return;
+    }
+
+    const farmer = await prisma.farmer.findUnique({
+      where: { id: req.user!.id },
+      select: { district: true },
+    });
+
     const cluster = await prisma.cluster.findUnique({
       where: { id: req.params.id },
+      select: {
+        id: true,
+        cropName: true,
+        unit: true,
+        district: true,
+        status: true,
+      },
     });
-    if (!cluster || cluster.status !== ClusterStatus.FORMING) {
+    if (
+      !cluster ||
+      (cluster.status !== ClusterStatus.FORMING &&
+        cluster.status !== ClusterStatus.VOTING)
+    ) {
       error(res, "Cluster not available for joining", 400);
       return;
     }
-    const member = await prisma.clusterMember.create({
-      data: {
-        clusterId: req.params.id,
-        farmerId: req.user!.id,
-        orderId: parsed.data.orderId,
-        quantity: parsed.data.quantity,
-      },
+
+    const sameCrop = cluster.cropName.toLowerCase() === order.cropName.toLowerCase();
+    const sameUnit = cluster.unit.toLowerCase() === order.unit.toLowerCase();
+    const sameDistrict =
+      !farmer?.district || !cluster.district || farmer.district === cluster.district;
+    if (!sameCrop || !sameUnit || !sameDistrict) {
+      error(res, "Cluster does not match this order", 400);
+      return;
+    }
+
+    const assignedCluster = await assignOrderToCluster({
+      clusterId: req.params.id,
+      farmerId: req.user!.id,
+      orderId: order.id,
+      quantity: order.quantity,
     });
-    await prisma.cluster.update({
-      where: { id: req.params.id },
-      data: { currentQuantity: { increment: parsed.data.quantity } },
-    });
-    success(res, member, 201);
+
+    success(res, assignedCluster, 201);
   } catch {
     error(res, "Internal server error", 500);
   }
@@ -307,12 +514,14 @@ router.post("/clusters/:id/vote", async (req, res) => {
     // Transition cluster to PAYMENT only once ALL members have voted
     const members = await prisma.clusterMember.findMany({
       where: { clusterId: req.params.id },
+      select: { farmerId: true, orderId: true },
     });
     const totalVotes = await prisma.vendorVote.count({
       where: { clusterId: req.params.id },
     });
+    const uniqueFarmerCount = new Set(members.map((m) => m.farmerId)).size;
 
-    if (totalVotes >= members.length) {
+    if (totalVotes >= uniqueFarmerCount) {
       // All members voted — find the winning bid (most votes)
       const winningBid = await prisma.vendorBid.findFirst({
         where: { clusterId: req.params.id },
@@ -355,14 +564,18 @@ router.post("/payments/initiate", async (req, res) => {
     return;
   }
   try {
-    const member = await prisma.clusterMember.findFirst({
+    const members = await prisma.clusterMember.findMany({
       where: {
         clusterId: parsed.data.clusterId,
         farmerId: req.user!.id,
       },
     });
-    if (!member) {
+    if (members.length === 0) {
       error(res, "You are not a member of this cluster", 400);
+      return;
+    }
+    if (members.every((m) => m.hasPaid)) {
+      error(res, "Payment already completed for this cluster", 400);
       return;
     }
 
@@ -376,20 +589,39 @@ router.post("/payments/initiate", async (req, res) => {
       error(res, "Cluster not found", 404);
       return;
     }
+    if (cluster.status !== ClusterStatus.PAYMENT) {
+      error(res, "Cluster is not ready for payment", 400);
+      return;
+    }
 
     const pricePerUnit = cluster.bids[0]?.pricePerUnit ?? 0;
-    const amount = member.quantity * pricePerUnit;
+    const totalQuantity = members.reduce((sum, m) => sum + m.quantity, 0);
+    const amount = totalQuantity * pricePerUnit;
     const upiRef = `UPI_MOCK_${Date.now()}`;
-
-    await prisma.payment.create({
-      data: {
+    const existingPending = await prisma.payment.findFirst({
+      where: {
         clusterId: parsed.data.clusterId,
         farmerId: req.user!.id,
-        amount,
-        upiRef,
         status: PaymentStatus.PENDING,
       },
+      orderBy: { createdAt: "desc" },
     });
+    if (existingPending) {
+      await prisma.payment.update({
+        where: { id: existingPending.id },
+        data: { amount, upiRef },
+      });
+    } else {
+      await prisma.payment.create({
+        data: {
+          clusterId: parsed.data.clusterId,
+          farmerId: req.user!.id,
+          amount,
+          upiRef,
+          status: PaymentStatus.PENDING,
+        },
+      });
+    }
 
     success(res, { upiRef, amount, clusterId: parsed.data.clusterId });
   } catch {
@@ -421,6 +653,10 @@ router.post("/payments/confirm", async (req, res) => {
       },
       data: { status: PaymentStatus.SUCCESS },
     });
+    if (payment.count === 0) {
+      error(res, "Payment not found", 404);
+      return;
+    }
 
     // Mark member as paid
     await prisma.clusterMember.updateMany({
@@ -431,13 +667,14 @@ router.post("/payments/confirm", async (req, res) => {
       data: { hasPaid: true, paidAt: new Date() },
     });
 
-    // Update order status
-    const member = await prisma.clusterMember.findFirst({
+    // Update all this farmer's orders in the cluster to PAID.
+    const members = await prisma.clusterMember.findMany({
       where: { clusterId: parsed.data.clusterId, farmerId: req.user!.id },
+      select: { orderId: true },
     });
-    if (member) {
-      await prisma.order.update({
-        where: { id: member.orderId },
+    if (members.length > 0) {
+      await prisma.order.updateMany({
+        where: { id: { in: members.map((m) => m.orderId) } },
         data: { status: OrderStatus.PAID },
       });
     }
@@ -484,6 +721,26 @@ router.get("/delivery/:clusterId", async (req, res) => {
 
 router.post("/delivery/:clusterId/confirm", async (req, res) => {
   try {
+    const cluster = await prisma.cluster.findUnique({
+      where: { id: req.params.clusterId },
+      select: { status: true },
+    });
+    if (!cluster) {
+      error(res, "Cluster not found", 404);
+      return;
+    }
+    if (
+      cluster.status !== ClusterStatus.DISPATCHED &&
+      cluster.status !== ClusterStatus.OUT_FOR_DELIVERY
+    ) {
+      error(
+        res,
+        "Delivery can only be confirmed after the order is dispatched",
+        400,
+      );
+      return;
+    }
+
     // Update delivery tracking to show all steps as completed
     await prisma.delivery.update({
       where: { clusterId: req.params.clusterId },

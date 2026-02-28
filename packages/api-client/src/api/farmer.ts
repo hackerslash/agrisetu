@@ -74,6 +74,24 @@ export async function farmerGetOrder(orderId: string): Promise<Order> {
   return res.data.data as Order;
 }
 
+export async function farmerGetOrderClusterOptions(
+  orderId: string,
+): Promise<Cluster[]> {
+  const res = await getApiClient().get(`/farmer/orders/${orderId}/cluster-options`);
+  return res.data.data as Cluster[];
+}
+
+export async function farmerAssignOrderCluster(
+  orderId: string,
+  data: { clusterId?: string; createNew?: boolean },
+): Promise<Order> {
+  const res = await getApiClient().post(
+    `/farmer/orders/${orderId}/assign-cluster`,
+    data,
+  );
+  return res.data.data as Order;
+}
+
 // ─── Clusters ─────────────────────────────────────────────────────────────────
 
 export async function farmerGetClusters(): Promise<Cluster[]> {

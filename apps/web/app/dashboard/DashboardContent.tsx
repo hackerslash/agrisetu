@@ -51,7 +51,10 @@ export function DashboardContent() {
 
   // Urgent orders = PAYMENT status (awaiting dispatch)
   const urgentOrders = (orders as Cluster[]).filter(
-    (o) => o.status === "PAYMENT" || o.status === "DISPATCHED",
+    (o) =>
+      o.status === "PAYMENT" ||
+      o.status === "OUT_FOR_DELIVERY" ||
+      o.status === "DISPATCHED",
   );
 
   // Clusters vendor hasn't bid on yet (no bids entry in response)

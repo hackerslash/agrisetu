@@ -118,8 +118,12 @@ export function OrdersContent() {
   const filtered = (orders as Cluster[]).filter((o) => {
     if (activeTab === "ALL") return true;
     if (activeTab === "IN_PROGRESS") {
-      // For "In Progress" tab, show orders that are PROCESSING or DISPATCHED
-      return o.status === "PROCESSING" || o.status === "DISPATCHED";
+      // For "In Progress" tab, show orders currently being prepared/shipped.
+      return (
+        o.status === "PROCESSING" ||
+        o.status === "OUT_FOR_DELIVERY" ||
+        o.status === "DISPATCHED"
+      );
     }
     return o.status === activeTab;
   });
@@ -127,7 +131,10 @@ export function OrdersContent() {
   const stats = {
     new: (orders as Cluster[]).filter((o) => o.status === "PAYMENT").length,
     inProgress: (orders as Cluster[]).filter(
-      (o) => o.status === "PROCESSING" || o.status === "DISPATCHED",
+      (o) =>
+        o.status === "PROCESSING" ||
+        o.status === "OUT_FOR_DELIVERY" ||
+        o.status === "DISPATCHED",
     ).length,
     completed: (orders as Cluster[]).filter((o) => o.status === "COMPLETED")
       .length,
@@ -137,6 +144,10 @@ export function OrdersContent() {
     return (cluster.payments ?? [])
       .filter((p) => p.status === "SUCCESS")
       .reduce((sum, p) => sum + p.amount, 0);
+  }
+
+  function getUniqueFarmerCount(cluster: Cluster) {
+    return new Set((cluster.members ?? []).map((m) => m.farmerId)).size;
   }
 
   function openBidForm(cluster: Cluster) {
@@ -301,7 +312,7 @@ export function OrdersContent() {
                   {cluster.targetQuantity} {cluster.unit}
                 </span>
                 <span style={{ fontSize: 13, color: "#1A1A1A" }}>
-                  {cluster.members?.length ?? 0}
+                  {getUniqueFarmerCount(cluster)}
                 </span>
                 <div>
                   <StatusBadge status={cluster.status} />
@@ -620,7 +631,7 @@ export function OrdersContent() {
                 {order.currentQuantity} {order.unit}
               </span>
               <span style={{ fontSize: 13, color: "#1A1A1A" }}>
-                {order.members?.length ?? 0}
+                {getUniqueFarmerCount(order)}
               </span>
               <span style={{ fontSize: 13, color: "#1A1A1A" }}>
                 {formatCurrency(getTotalAmount(order))}

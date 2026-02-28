@@ -48,13 +48,13 @@ class StatusBadge extends StatelessWidget {
         );
       case OrderStatus.outForDelivery:
         return StatusBadge(
-          label: status.displayLabel,
+          label: 'Dispatched',
           color: const Color(0xFF1D4ED8),
           bgColor: const Color(0xFFDBEAFE),
         );
       case OrderStatus.dispatched:
         return StatusBadge(
-          label: 'In Transit',
+          label: 'Dispatched',
           color: AppColors.info,
           bgColor: AppColors.infoLight,
         );
@@ -102,13 +102,13 @@ class StatusBadge extends StatelessWidget {
         );
       case ClusterStatus.outForDelivery:
         return StatusBadge(
-          label: status.displayLabel,
+          label: 'Dispatched',
           color: const Color(0xFF1D4ED8),
           bgColor: const Color(0xFFDBEAFE),
         );
       case ClusterStatus.dispatched:
         return StatusBadge(
-          label: 'In Transit',
+          label: 'Dispatched',
           color: AppColors.info,
           bgColor: AppColors.infoLight,
         );

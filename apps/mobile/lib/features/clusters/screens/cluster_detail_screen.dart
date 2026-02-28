@@ -75,11 +75,12 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
     );
   }
 
-  Widget _buildContent(
-      BuildContext context, Cluster cluster, farmer) {
+  Widget _buildContent(BuildContext context, Cluster cluster, farmer) {
     final isVoting = cluster.status == ClusterStatus.voting;
     final isPayment = cluster.status == ClusterStatus.payment;
-    final isDispatched = cluster.status == ClusterStatus.dispatched;
+    final canTrackDelivery = cluster.status == ClusterStatus.processing ||
+        cluster.status == ClusterStatus.outForDelivery ||
+        cluster.status == ClusterStatus.dispatched;
 
     return RefreshIndicator(
       color: AppColors.primary,
@@ -109,7 +110,6 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
               background: _MapSection(cluster: cluster),
             ),
           ),
-
           SliverPadding(
             padding: const EdgeInsets.all(20),
             sliver: SliverList(
@@ -182,13 +182,12 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
                         children: [
                           _StatsBox(
                               label: 'NEEDED',
-                              value: cluster.targetQuantity
-                                  .toStringAsFixed(0)),
+                              value: cluster.targetQuantity.toStringAsFixed(0)),
                           const SizedBox(width: 8),
                           _StatsBox(
                               label: 'FILLED',
-                              value: cluster.currentQuantity
-                                  .toStringAsFixed(0)),
+                              value:
+                                  cluster.currentQuantity.toStringAsFixed(0)),
                           const SizedBox(width: 8),
                           _StatsBox(
                               label: 'STILL NEEDED',
@@ -275,8 +274,7 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
                     width: double.infinity,
                     height: 52,
                     child: ElevatedButton.icon(
-                      onPressed: () =>
-                          context.push('/payment/${cluster.id}'),
+                      onPressed: () => context.push('/payment/${cluster.id}'),
                       icon: const Icon(Icons.lock_outline, size: 20),
                       label: const Text('Pay Securely'),
                       style: ElevatedButton.styleFrom(
@@ -290,15 +288,13 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
                   const SizedBox(height: 20),
                 ],
 
-                if (isDispatched) ...[
+                if (canTrackDelivery) ...[
                   SizedBox(
                     width: double.infinity,
                     height: 52,
                     child: ElevatedButton.icon(
-                      onPressed: () =>
-                          context.push('/delivery/${cluster.id}'),
-                      icon: const Icon(Icons.local_shipping_outlined,
-                          size: 20),
+                      onPressed: () => context.push('/delivery/${cluster.id}'),
+                      icon: const Icon(Icons.local_shipping_outlined, size: 20),
                       label: const Text('Track Delivery'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
@@ -312,7 +308,9 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
                 ],
 
                 // Not voting yet – locked
-                if (!isVoting && !isPayment && !isDispatched &&
+                if (!isVoting &&
+                    !isPayment &&
+                    !canTrackDelivery &&
                     cluster.status != ClusterStatus.completed &&
                     cluster.status != ClusterStatus.failed)
                   Container(
@@ -398,7 +396,8 @@ class _MapSection extends StatelessWidget {
                   shape: BoxShape.circle,
                   border: Border.all(color: AppColors.surface, width: 2),
                 ),
-                child: const Icon(Icons.person, color: AppColors.surface, size: 16),
+                child: const Icon(Icons.person,
+                    color: AppColors.surface, size: 16),
               ),
             ),
           ),
@@ -517,8 +516,7 @@ class _VendorBidCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: AppColors.primary.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
@@ -534,8 +532,8 @@ class _VendorBidCard extends StatelessWidget {
               const SizedBox(width: 8),
               if (isRecommended)
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: AppColors.successLight,
                     borderRadius: BorderRadius.circular(8),
@@ -560,7 +558,8 @@ class _VendorBidCard extends StatelessWidget {
                   color: AppColors.primary.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.store, color: AppColors.primary, size: 22),
+                child:
+                    const Icon(Icons.store, color: AppColors.primary, size: 22),
               ),
               const SizedBox(width: 12),
               Expanded(

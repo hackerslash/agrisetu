@@ -57,22 +57,27 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(path: '/landing', builder: (_, __) => const LandingScreen()),
-      GoRoute(path: '/login', builder: (_, state) {
-        final phone = state.extra as String?;
-        return PhoneLoginScreen(initialPhone: phone);
-      }),
-      GoRoute(path: '/otp', builder: (_, state) {
-        final phone = state.extra as String? ?? '';
-        return OtpVerifyScreen(phone: phone);
-      }),
-      GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
-
+      GoRoute(
+          path: '/login',
+          builder: (_, state) {
+            final phone = state.extra as String?;
+            return PhoneLoginScreen(initialPhone: phone);
+          }),
+      GoRoute(
+          path: '/otp',
+          builder: (_, state) {
+            final phone = state.extra as String? ?? '';
+            return OtpVerifyScreen(phone: phone);
+          }),
+      GoRoute(
+          path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
       ShellRoute(
         navigatorKey: _shellNavigatorKey,
         builder: (context, state, child) => MainScaffold(child: child),
         routes: [
           GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
-          GoRoute(path: '/orders', builder: (_, __) => const OrderHistoryScreen()),
+          GoRoute(
+              path: '/orders', builder: (_, __) => const OrderHistoryScreen()),
           GoRoute(
             path: '/orders/:id',
             builder: (_, state) {
@@ -86,7 +91,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/clusters',
             builder: (_, state) {
-              final cropName = state.extra as String?;
+              final extra = state.extra;
+              if (extra is Map<String, dynamic>) {
+                return AvailableClustersScreen(
+                  cropName: extra['cropName'] as String?,
+                  orderId: extra['orderId'] as String?,
+                );
+              }
+              final cropName = extra as String?;
               return AvailableClustersScreen(cropName: cropName);
             },
           ),
@@ -96,7 +108,9 @@ final routerProvider = Provider<GoRouter>((ref) {
               clusterId: state.pathParameters['id']!,
             ),
           ),
-          GoRoute(path: '/clusters-empty', builder: (_, __) => const ClusterEmptyScreen()),
+          GoRoute(
+              path: '/clusters-empty',
+              builder: (_, __) => const ClusterEmptyScreen()),
           GoRoute(
             path: '/payment/:clusterId',
             builder: (_, state) => PaymentScreen(

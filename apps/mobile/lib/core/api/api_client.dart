@@ -65,7 +65,9 @@ class ApiClient {
       return data['data'];
     }
     throw ApiException(
-      data is Map ? (data['error'] as String? ?? 'Unknown error') : 'Unknown error',
+      data is Map
+          ? (data['error'] as String? ?? 'Unknown error')
+          : 'Unknown error',
       statusCode: response.statusCode,
     );
   }
@@ -76,7 +78,8 @@ class ApiClient {
       return const ApiException('Connection timed out. Please try again.');
     }
     if (e.type == DioExceptionType.connectionError) {
-      return const ApiException('No internet connection. Please check your network.');
+      return const ApiException(
+          'No internet connection. Please check your network.');
     }
     final data = e.response?.data;
     final message = data is Map
@@ -89,7 +92,8 @@ class ApiClient {
 
   Future<Map<String, dynamic>> farmerRequestOtp(String phone) async {
     try {
-      final res = await _dio.post('/auth/farmer/request-otp', data: {'phone': phone});
+      final res =
+          await _dio.post('/auth/farmer/request-otp', data: {'phone': phone});
       return _handleResponse(res) as Map<String, dynamic>;
     } on DioException catch (e) {
       throw _handleError(e);
@@ -98,7 +102,8 @@ class ApiClient {
 
   Future<Map<String, dynamic>> farmerVerifyOtp(String phone, String otp) async {
     try {
-      final res = await _dio.post('/auth/farmer/verify-otp', data: {'phone': phone, 'otp': otp});
+      final res = await _dio
+          .post('/auth/farmer/verify-otp', data: {'phone': phone, 'otp': otp});
       final data = _handleResponse(res) as Map<String, dynamic>;
       if (data['token'] != null) {
         await setToken(data['token'] as String);
@@ -118,7 +123,8 @@ class ApiClient {
     }
   }
 
-  Future<Map<String, dynamic>> farmerUpdateProfile(Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>> farmerUpdateProfile(
+      Map<String, dynamic> data) async {
     try {
       final res = await _dio.post('/auth/farmer/profile', data: data);
       return _handleResponse(res) as Map<String, dynamic>;
@@ -132,6 +138,39 @@ class ApiClient {
   Future<Map<String, dynamic>> createOrder(Map<String, dynamic> data) async {
     try {
       final res = await _dio.post('/farmer/orders', data: data);
+      return _handleResponse(res) as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<List<dynamic>> getOrderClusterOptions(String orderId) async {
+    try {
+      final res = await _dio.get('/farmer/orders/$orderId/cluster-options');
+      return _handleResponse(res) as List<dynamic>;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> assignOrderToCluster(
+    String orderId, {
+    String? clusterId,
+    bool createNew = false,
+  }) async {
+    try {
+      final payload = <String, dynamic>{};
+      if (clusterId != null) {
+        payload['clusterId'] = clusterId;
+      }
+      if (createNew) {
+        payload['createNew'] = true;
+      }
+
+      final res = await _dio.post(
+        '/farmer/orders/$orderId/assign-cluster',
+        data: payload,
+      );
       return _handleResponse(res) as Map<String, dynamic>;
     } on DioException catch (e) {
       throw _handleError(e);

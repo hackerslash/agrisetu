@@ -122,6 +122,9 @@ const ORDER_STEPS: {
 
 // Returns the index of the current step, or ORDER_STEPS.length if fully completed
 function getStepIndex(status: string): number {
+  if (status === "OUT_FOR_DELIVERY") {
+    return ORDER_STEPS.findIndex((s) => s.status === "DISPATCHED");
+  }
   const idx = ORDER_STEPS.findIndex((s) => s.status === status);
   if (idx !== -1) return idx;
   // COMPLETED = past the last step (fully done)
@@ -152,16 +155,6 @@ export function OrderDetailContent({ id }: { id: string }) {
     onSuccess: () => {
       setConfirmAction(null);
       addNotification(`Order #${id.slice(-6).toUpperCase()} marked as processing.`);
-      void queryClient.invalidateQueries({ queryKey: ["vendor-order", id] });
-      void queryClient.invalidateQueries({ queryKey: ["vendor-orders"] });
-    },
-  });
-
-  const outForDeliveryMutation = useMutation({
-    mutationFn: () => vendorApi.outForDeliveryOrder(id),
-    onSuccess: () => {
-      setConfirmAction(null);
-      addNotification(`Order #${id.slice(-6).toUpperCase()} marked as out for delivery.`);
       void queryClient.invalidateQueries({ queryKey: ["vendor-order", id] });
       void queryClient.invalidateQueries({ queryKey: ["vendor-orders"] });
     },
@@ -240,6 +233,7 @@ export function OrderDetailContent({ id }: { id: string }) {
           icon: Package,
         };
       case "PROCESSING":
+      case "OUT_FOR_DELIVERY":
         return {
           label: "Mark as Dispatched",
           action: () => setConfirmAction("dispatch"),
@@ -266,6 +260,21 @@ export function OrderDetailContent({ id }: { id: string }) {
   const totalAmount = (cluster.payments ?? [])
     .filter((p) => p.status === "SUCCESS")
     .reduce((sum, p) => sum + p.amount, 0);
+
+  const uniqueMembers = Array.from(
+    (cluster.members ?? []).reduce(
+      (acc, member) => {
+        const existing = acc.get(member.farmerId);
+        if (existing) {
+          existing.quantity += member.quantity;
+          return acc;
+        }
+        acc.set(member.farmerId, { ...member });
+        return acc;
+      },
+      new Map<string, NonNullable<typeof cluster.members>[number]>(),
+    ).values(),
+  );
 
   return (
     <div className="flex flex-col gap-5">
@@ -481,11 +490,11 @@ export function OrderDetailContent({ id }: { id: string }) {
                     color: "#1A1A1A",
                   }}
                 >
-                  Farmers ({cluster.members?.length ?? 0})
+                  Farmers ({uniqueMembers.length})
                 </p>
               </div>
               <div className="flex flex-col gap-2">
-                {cluster.members?.slice(0, 5).map((m) => (
+                {uniqueMembers.slice(0, 5).map((m) => (
                   <div
                     key={m.id}
                     className="flex justify-between items-center"
@@ -503,9 +512,9 @@ export function OrderDetailContent({ id }: { id: string }) {
                     </span>
                   </div>
                 ))}
-                {(cluster.members?.length ?? 0) > 5 && (
+                {uniqueMembers.length > 5 && (
                   <p style={{ fontSize: 12, color: "#A0A0A0", paddingLeft: 4 }}>
-                    +{(cluster.members?.length ?? 0) - 5} more farmers
+                    +{uniqueMembers.length - 5} more farmers
                   </p>
                 )}
               </div>
