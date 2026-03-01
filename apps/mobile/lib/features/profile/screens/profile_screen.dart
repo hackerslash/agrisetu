@@ -1,10 +1,7 @@
-import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/models/farmer_model.dart';
@@ -19,51 +16,36 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  String? _avatarDataUrl;
-  String? _loadedForFarmerId;
+  bool _isUploadingAvatar = false;
 
-  String _avatarStorageKey(String farmerId) => 'agrisetu_avatar_$farmerId';
-
-  Future<void> _loadAvatar(String farmerId) async {
-    final prefs = await SharedPreferences.getInstance();
-    final stored = prefs.getString(_avatarStorageKey(farmerId));
-    if (!mounted) return;
-    setState(() => _avatarDataUrl = stored);
-  }
-
-  Uint8List? _avatarBytes(String? dataUrl) {
-    if (dataUrl == null || dataUrl.isEmpty) return null;
-    final commaIdx = dataUrl.indexOf(',');
-    final base64Part =
-        commaIdx >= 0 ? dataUrl.substring(commaIdx + 1) : dataUrl;
-    try {
-      return base64Decode(base64Part);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<void> _pickAvatar(Farmer farmer) async {
+  Future<void> _pickAvatar() async {
     final dataUrl = await pickAvatarDataUrl();
     if (dataUrl == null || dataUrl.isEmpty) return;
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_avatarStorageKey(farmer.id), dataUrl);
-    if (!mounted) return;
-    setState(() => _avatarDataUrl = dataUrl);
+    setState(() => _isUploadingAvatar = true);
+    try {
+      await ref.read(authProvider.notifier).uploadAvatarDataUrl(dataUrl);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Avatar updated')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isUploadingAvatar = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final farmer = ref.watch(currentFarmerProvider);
     final dashboardAsync = ref.watch(homeDashboardProvider);
-
-    if (farmer?.id != null && _loadedForFarmerId != farmer!.id) {
-      _loadedForFarmerId = farmer.id;
-      _loadAvatar(farmer.id);
-    }
-
-    final avatar = _avatarBytes(_avatarDataUrl);
+    final avatarUrl = farmer?.avatarUrl;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -108,30 +90,43 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           shape: BoxShape.circle,
                         ),
                         child: ClipOval(
-                          child: avatar != null
-                              ? Image.memory(
-                                  avatar,
+                          child: avatarUrl != null && avatarUrl.isNotEmpty
+                              ? Image.network(
+                                  avatarUrl,
                                   width: 72,
                                   height: 72,
                                   fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) =>
+                                      _buildAvatarFallback(farmer),
                                 )
-                              : Center(
-                                  child: Text(
-                                    (farmer?.name?.isNotEmpty == true)
-                                        ? farmer!.name![0].toUpperCase()
-                                        : 'F',
-                                    style: AppTextStyles.h1
-                                        .copyWith(color: AppColors.primary),
-                                  ),
-                                ),
+                              : _buildAvatarFallback(farmer),
                         ),
                       ),
+                      if (_isUploadingAvatar)
+                        const Positioned.fill(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: Color(0x66000000),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.surface,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       Positioned(
                         right: -2,
                         bottom: -2,
                         child: GestureDetector(
                           onTap:
-                              farmer == null ? null : () => _pickAvatar(farmer),
+                              farmer == null ? null : _pickAvatar,
                           child: Container(
                             width: 24,
                             height: 24,
@@ -348,6 +343,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAvatarFallback(Farmer? farmer) {
+    return Center(
+      child: Text(
+        (farmer?.name?.isNotEmpty == true)
+            ? farmer!.name![0].toUpperCase()
+            : 'F',
+        style: AppTextStyles.h1.copyWith(color: AppColors.primary),
       ),
     );
   }

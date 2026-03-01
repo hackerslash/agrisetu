@@ -1,6 +1,8 @@
 import { getApiClient } from "../client";
 import type {
+  DocType,
   Vendor,
+  VendorDocument,
   Gig,
   Cluster,
   VendorBid,
@@ -26,6 +28,20 @@ export async function changePassword(data: {
   newPassword: string;
 }): Promise<void> {
   await getApiClient().patch("/vendor/profile/password", data);
+}
+
+export async function uploadDocument(
+  docType: DocType,
+  file: File,
+): Promise<VendorDocument> {
+  const formData = new FormData();
+  formData.append("docType", docType);
+  formData.append("file", file);
+
+  const res = await getApiClient().post("/vendor/documents/upload", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return res.data.data as VendorDocument;
 }
 
 // ─── Gigs ─────────────────────────────────────────────────────────────────────

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { authApi } from "@repo/api-client";
+import { authApi, vendorApi } from "@repo/api-client";
 
 // ─── Step 1 Schema ────────────────────────────────────────────────────────────
 
@@ -49,12 +49,11 @@ type Step2Data = z.infer<typeof step2Schema>;
 
 // ─── Step 3 Schema ────────────────────────────────────────────────────────────
 
-const step3Schema = z.object({
-  panUrl: z.string().min(1, "PAN document is required"),
-  gstUrl: z.string().min(1, "GST document is required"),
-  qualityUrl: z.string().optional(),
-});
-type Step3Data = z.infer<typeof step3Schema>;
+type Step3Data = {
+  panFile?: FileList;
+  gstFile?: FileList;
+  qualityFile?: FileList;
+};
 
 // ─── Progress Bar ─────────────────────────────────────────────────────────────
 
@@ -128,7 +127,7 @@ export function RegisterWizard() {
     resolver: zodResolver(step1Schema),
   });
   const form2 = useForm<Step2Data>({ resolver: zodResolver(step2Schema) });
-  const form3 = useForm<Step3Data>({ resolver: zodResolver(step3Schema) });
+  const form3 = useForm<Step3Data>();
 
   async function onStep1(data: Step1Data) {
     setApiError("");
@@ -186,15 +185,27 @@ export function RegisterWizard() {
 
   async function onStep3(data: Step3Data) {
     setApiError("");
+    form3.clearErrors();
+
+    let hasErrors = false;
+    if (!data.panFile || data.panFile.length === 0) {
+      form3.setError("panFile", { message: "PAN document is required" });
+      hasErrors = true;
+    }
+    if (!data.gstFile || data.gstFile.length === 0) {
+      form3.setError("gstFile", { message: "GST document is required" });
+      hasErrors = true;
+    }
+    if (hasErrors) return;
+
     try {
-      const docs = [
-        { docType: "PAN" as const, fileUrl: data.panUrl },
-        { docType: "GST" as const, fileUrl: data.gstUrl },
-        ...(data.qualityUrl
-          ? [{ docType: "QUALITY_CERT" as const, fileUrl: data.qualityUrl }]
-          : []),
-      ];
-      await authApi.registerStep3({ documents: docs });
+      await vendorApi.uploadDocument("PAN", data.panFile![0]!);
+      await vendorApi.uploadDocument("GST", data.gstFile![0]!);
+
+      if (data.qualityFile && data.qualityFile.length > 0) {
+        await vendorApi.uploadDocument("QUALITY_CERT", data.qualityFile[0]!);
+      }
+
       router.push("/dashboard");
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: string } } };
@@ -496,25 +507,28 @@ export function RegisterWizard() {
           className="flex flex-col gap-4"
         >
           <p style={{ fontSize: 13, color: "#A0A0A0" }}>
-            Upload document URLs or base64 strings for verification.
+            Upload your verification files (PDF/JPG/PNG/WEBP).
           </p>
           <FormInput
-            label="PAN Document (URL or base64)"
-            placeholder="https://... or data:image/..."
-            error={form3.formState.errors.panUrl?.message}
-            {...form3.register("panUrl")}
+            label="PAN Card Document"
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,.webp"
+            error={form3.formState.errors.panFile?.message}
+            {...form3.register("panFile")}
           />
           <FormInput
-            label="GST Certificate (URL or base64)"
-            placeholder="https://... or data:image/..."
-            error={form3.formState.errors.gstUrl?.message}
-            {...form3.register("gstUrl")}
+            label="GST Certificate"
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,.webp"
+            error={form3.formState.errors.gstFile?.message}
+            {...form3.register("gstFile")}
           />
           <FormInput
             label="Quality Certificate (optional)"
-            placeholder="https://... or data:image/..."
-            error={form3.formState.errors.qualityUrl?.message}
-            {...form3.register("qualityUrl")}
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,.webp"
+            error={form3.formState.errors.qualityFile?.message}
+            {...form3.register("qualityFile")}
           />
           <div className="flex gap-3">
             <button

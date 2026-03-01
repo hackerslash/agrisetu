@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -87,6 +88,36 @@ class ApiClient {
         ? (data['error'] as String? ?? 'Server error')
         : 'Server error';
     return ApiException(message, statusCode: e.response?.statusCode);
+  }
+
+  ({String mimeType, List<int> bytes}) _decodeBase64DataUrl(String dataUrl) {
+    final match =
+        RegExp(r'^data:([^;]+);base64,(.+)$', dotAll: true).firstMatch(dataUrl);
+    if (match == null) {
+      throw const ApiException('Invalid avatar format.');
+    }
+
+    final mimeType = match.group(1)!.trim().toLowerCase();
+    final rawBase64 = match.group(2)!;
+    try {
+      return (mimeType: mimeType, bytes: base64Decode(rawBase64));
+    } catch (_) {
+      throw const ApiException('Invalid avatar image data.');
+    }
+  }
+
+  String _avatarExtensionForMime(String mimeType) {
+    switch (mimeType) {
+      case 'image/png':
+        return 'png';
+      case 'image/webp':
+        return 'webp';
+      case 'image/jpeg':
+      case 'image/jpg':
+        return 'jpg';
+      default:
+        throw const ApiException('Only JPG, PNG, and WEBP avatars are supported.');
+    }
   }
 
   // ─── Auth ───────────────────────────────────────────────────────────────────
@@ -389,6 +420,28 @@ class ApiClient {
   Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> data) async {
     try {
       final res = await _dio.patch('/farmer/profile', data: data);
+      return _handleResponse(res) as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> uploadFarmerAvatarDataUrl(String dataUrl) async {
+    try {
+      final decoded = _decodeBase64DataUrl(dataUrl);
+      final extension = _avatarExtensionForMime(decoded.mimeType);
+      final formData = FormData();
+      formData.files.add(
+        MapEntry(
+          'avatar',
+          MultipartFile.fromBytes(
+            decoded.bytes,
+            filename: 'farmer_avatar.$extension',
+          ),
+        ),
+      );
+
+      final res = await _dio.post('/farmer/profile/avatar', data: formData);
       return _handleResponse(res) as Map<String, dynamic>;
     } on DioException catch (e) {
       throw _handleError(e);

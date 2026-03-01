@@ -2,6 +2,7 @@ class Farmer {
   final String id;
   final String phone;
   final String? name;
+  final String? avatarUrl;
   final String? village;
   final String? district;
   final String? state;
@@ -19,6 +20,7 @@ class Farmer {
     required this.id,
     required this.phone,
     this.name,
+    this.avatarUrl,
     this.village,
     this.district,
     this.state,
@@ -57,6 +59,7 @@ class Farmer {
       id: json['id'] as String,
       phone: json['phone'] as String,
       name: json['name'] as String?,
+      avatarUrl: json['avatarUrl'] as String?,
       village: json['village'] as String?,
       district: json['district'] as String?,
       state: json['state'] as String?,
@@ -76,6 +79,7 @@ class Farmer {
         'id': id,
         'phone': phone,
         'name': name,
+        'avatarUrl': avatarUrl,
         'village': village,
         'district': district,
         'state': state,
@@ -92,6 +96,7 @@ class Farmer {
 
   Farmer copyWith({
     String? name,
+    String? avatarUrl,
     String? village,
     String? district,
     String? state,
@@ -108,6 +113,7 @@ class Farmer {
       id: id,
       phone: phone,
       name: name ?? this.name,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
       village: village ?? this.village,
       district: district ?? this.district,
       state: state ?? this.state,

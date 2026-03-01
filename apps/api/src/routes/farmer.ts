@@ -22,6 +22,11 @@ import {
   type GigContext,
 } from "../services/ai-order-parser.js";
 import { transcribeAudioBuffer } from "../services/transcribe.js";
+import {
+  deleteFarmerAvatarIfManaged,
+  uploadFarmerAvatar,
+  withFarmerAvatarForClient,
+} from "../services/farmer-avatar.js";
 
 const router = Router();
 router.use(authenticate, requireFarmer);
@@ -29,6 +34,10 @@ const FARMER_CLUSTER_RADIUS_KM = 50;
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 12 * 1024 * 1024 },
+});
+const avatarUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
 });
 
 function isGigServiceableForFarmer(params: {
@@ -153,7 +162,7 @@ router.get("/profile", async (req, res) => {
       error(res, "Farmer not found", 404);
       return;
     }
-    success(res, farmer);
+    success(res, await withFarmerAvatarForClient(farmer));
   } catch (e) {
     error(res, "Internal server error", 500);
   }
@@ -185,11 +194,67 @@ router.patch("/profile", async (req, res) => {
       where: { id: req.user!.id },
       data: parsed.data,
     });
-    success(res, farmer);
+    success(res, await withFarmerAvatarForClient(farmer));
   } catch {
     error(res, "Internal server error", 500);
   }
 });
+
+router.post(
+  "/profile/avatar",
+  avatarUpload.single("avatar"),
+  async (req, res) => {
+    const avatar = req.file;
+    if (!avatar) {
+      error(res, "Avatar file is required", 422);
+      return;
+    }
+
+    const mimeType = avatar.mimetype?.toLowerCase();
+    if (
+      mimeType !== "image/jpeg" &&
+      mimeType !== "image/jpg" &&
+      mimeType !== "image/png" &&
+      mimeType !== "image/webp"
+    ) {
+      error(res, "Only JPG, PNG, and WEBP avatars are supported", 422);
+      return;
+    }
+
+    try {
+      const existing = await prisma.farmer.findUnique({
+        where: { id: req.user!.id },
+        select: { avatarUrl: true },
+      });
+      if (!existing) {
+        error(res, "Farmer profile not found", 404);
+        return;
+      }
+
+      const uploaded = await uploadFarmerAvatar({
+        farmerId: req.user!.id,
+        avatarBuffer: avatar.buffer,
+        fileName: avatar.originalname,
+        mimeType: avatar.mimetype,
+      });
+
+      const farmer = await prisma.farmer.update({
+        where: { id: req.user!.id },
+        data: { avatarUrl: uploaded.avatarUrl },
+      });
+
+      if (existing.avatarUrl && existing.avatarUrl !== uploaded.avatarUrl) {
+        await deleteFarmerAvatarIfManaged(existing.avatarUrl).catch(() => null);
+      }
+
+      success(res, await withFarmerAvatarForClient(farmer));
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Unable to upload profile avatar";
+      error(res, message, 500);
+    }
+  },
+);
 
 const voiceOrderSchema = z.object({
   transcript: z.string().trim().min(2).max(1000).optional(),

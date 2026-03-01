@@ -148,12 +148,15 @@ class HomeScreen extends ConsumerWidget {
                               color: AppColors.surface.withOpacity(0.2),
                               shape: BoxShape.circle,
                             ),
-                            child: const Center(
-                              child: Icon(
-                                Icons.person_outline,
-                                size: 24,
-                                color: AppColors.surface,
-                              ),
+                            child: ClipOval(
+                              child: (farmer?.avatarUrl ?? '').isNotEmpty
+                                  ? Image.network(
+                                      farmer!.avatarUrl!,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) =>
+                                          const _HomeAvatarFallback(),
+                                    )
+                                  : const _HomeAvatarFallback(),
                             ),
                           ),
                         ),
@@ -817,6 +820,21 @@ class _ClusterFarmerAvatar extends StatelessWidget {
           size: 13,
           color: AppColors.surface,
         ),
+      ),
+    );
+  }
+}
+
+class _HomeAvatarFallback extends StatelessWidget {
+  const _HomeAvatarFallback();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Icon(
+        Icons.person_outline,
+        size: 24,
+        color: AppColors.surface,
       ),
     );
   }

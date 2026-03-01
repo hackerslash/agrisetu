@@ -9,6 +9,8 @@ import {
   requireVendor,
 } from "../middleware/auth.js";
 import { success, error } from "../lib/response.js";
+import { withFarmerAvatarForClient } from "../services/farmer-avatar.js";
+import { withVendorDocumentsForClient } from "../services/vendor-documents.js";
 
 const router = Router();
 
@@ -51,7 +53,8 @@ router.post("/farmer/verify-otp", async (req, res) => {
       farmer = await prisma.farmer.create({ data: { phone } });
     }
     const token = signToken({ id: farmer.id, role: "farmer" });
-    success(res, { token, farmer, isNewUser: !farmer.name });
+    const farmerForClient = await withFarmerAvatarForClient(farmer);
+    success(res, { token, farmer: farmerForClient, isNewUser: !farmer.name });
   } catch (err) {
     error(res, "Internal server error", 500);
   }
@@ -81,7 +84,7 @@ router.get("/farmer/me", authenticate, requireFarmer, async (req, res) => {
       error(res, "Farmer not found", 404);
       return;
     }
-    success(res, farmer);
+    success(res, await withFarmerAvatarForClient(farmer));
   } catch {
     error(res, "Internal server error", 500);
   }
@@ -102,7 +105,7 @@ router.post(
         where: { id: req.user!.id },
         data: parsed.data,
       });
-      success(res, farmer);
+      success(res, await withFarmerAvatarForClient(farmer));
     } catch {
       error(res, "Internal server error", 500);
     }
@@ -215,14 +218,36 @@ router.post("/vendor/register/step3", authenticate, async (req, res) => {
     return;
   }
   try {
-    const docs = await prisma.$transaction(
-      parsed.data.documents.map((doc) =>
-        prisma.vendorDocument.create({
+    const docs = await prisma.$transaction(async (tx) => {
+      const upserted = [] as Array<{
+        id: string;
+        vendorId: string;
+        docType: "PAN" | "GST" | "QUALITY_CERT";
+        fileUrl: string;
+        uploadedAt: Date;
+      }>;
+
+      for (const doc of parsed.data.documents) {
+        await tx.vendorDocument.deleteMany({
+          where: { vendorId: req.user!.id, docType: doc.docType },
+        });
+        const created = await tx.vendorDocument.create({
           data: { vendorId: req.user!.id, ...doc },
-        }),
-      ),
+        });
+        upserted.push(created);
+      }
+
+      return upserted;
+    });
+
+    const docsForClient = await Promise.all(
+      docs.map((doc) => withVendorDocumentsForClient({ documents: [doc] })),
     );
-    success(res, { documents: docs }, 201);
+
+    const normalizedDocs = docsForClient
+      .map((v) => v.documents?.[0])
+      .filter(Boolean);
+    success(res, { documents: normalizedDocs }, 201);
   } catch {
     error(res, "Internal server error", 500);
   }
@@ -287,7 +312,7 @@ router.get("/vendor/me", authenticate, async (req, res) => {
       error(res, "Vendor not found", 404);
       return;
     }
-    success(res, vendor);
+    success(res, await withVendorDocumentsForClient(vendor));
   } catch {
     error(res, "Internal server error", 500);
   }

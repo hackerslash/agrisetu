@@ -1,4 +1,5 @@
 import { Router } from "express";
+import multer from "multer";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { authenticate, requireVendor } from "../middleware/auth.js";
@@ -14,9 +15,19 @@ import {
   PaymentStatus,
 } from "@prisma/client";
 import { isValidCoordinate } from "../lib/geo.js";
+import {
+  deleteVendorDocumentIfManaged,
+  uploadVendorDocumentBuffer,
+  withVendorDocumentForClient,
+  withVendorDocumentsForClient,
+} from "../services/vendor-documents.js";
 
 const router = Router();
 router.use(authenticate, requireVendor);
+const vendorDocUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 12 * 1024 * 1024 },
+});
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
 
@@ -47,7 +58,7 @@ router.get("/profile", async (req, res) => {
       error(res, "Vendor not found", 404);
       return;
     }
-    success(res, vendor);
+    success(res, await withVendorDocumentsForClient(vendor));
   } catch {
     error(res, "Internal server error", 500);
   }
@@ -134,6 +145,88 @@ router.patch("/profile/password", async (req, res) => {
     error(res, "Internal server error", 500);
   }
 });
+
+const uploadDocumentSchema = z.object({
+  docType: z.enum(["PAN", "GST", "QUALITY_CERT"]),
+});
+
+router.post(
+  "/documents/upload",
+  vendorDocUpload.single("file"),
+  async (req, res) => {
+    const file = req.file;
+    if (!file) {
+      error(res, "Document file is required", 422);
+      return;
+    }
+
+    const parsed = uploadDocumentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      error(res, "Invalid request", 422, parsed.error.flatten());
+      return;
+    }
+
+    const mimeType = file.mimetype?.toLowerCase();
+    if (
+      mimeType !== "application/pdf" &&
+      mimeType !== "image/jpeg" &&
+      mimeType !== "image/jpg" &&
+      mimeType !== "image/png" &&
+      mimeType !== "image/webp"
+    ) {
+      error(res, "Only PDF, JPG, PNG, and WEBP files are supported", 422);
+      return;
+    }
+
+    try {
+      const uploaded = await uploadVendorDocumentBuffer({
+        vendorId: req.user!.id,
+        docType: parsed.data.docType,
+        fileBuffer: file.buffer,
+        fileName: file.originalname,
+        mimeType: file.mimetype,
+      });
+
+      const existingDocs = await prisma.vendorDocument.findMany({
+        where: {
+          vendorId: req.user!.id,
+          docType: parsed.data.docType,
+        },
+      });
+
+      const document = await prisma.$transaction(async (tx) => {
+        await tx.vendorDocument.deleteMany({
+          where: {
+            vendorId: req.user!.id,
+            docType: parsed.data.docType,
+          },
+        });
+
+        return tx.vendorDocument.create({
+          data: {
+            vendorId: req.user!.id,
+            docType: parsed.data.docType,
+            fileUrl: uploaded.fileUrl,
+          },
+        });
+      });
+
+      if (existingDocs.length > 0) {
+        await Promise.all(
+          existingDocs.map((doc) =>
+            deleteVendorDocumentIfManaged(doc.fileUrl).catch(() => null),
+          ),
+        );
+      }
+
+      success(res, await withVendorDocumentForClient(document), 201);
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Unable to upload vendor document";
+      error(res, message, 500);
+    }
+  },
+);
 
 // ─── Gigs ─────────────────────────────────────────────────────────────────────
 

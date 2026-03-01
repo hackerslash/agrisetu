@@ -35,7 +35,13 @@ function Toggle({ defaultChecked = true }: { defaultChecked?: boolean }) {
   );
 }
 import { vendorApi, authApi } from "@repo/api-client";
-import type { Vendor } from "@repo/api-client";
+import type { Vendor, DocType, VendorDocument } from "@repo/api-client";
+
+const VENDOR_DOC_CONFIG: Array<{ docType: DocType; label: string }> = [
+  { docType: "PAN", label: "PAN Card" },
+  { docType: "GST", label: "GST Certificate" },
+  { docType: "QUALITY_CERT", label: "Quality Certificate" },
+];
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -122,6 +128,11 @@ export function SettingsContent() {
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [documentError, setDocumentError] = useState("");
+  const [documentSuccess, setDocumentSuccess] = useState("");
+  const [uploadingDocType, setUploadingDocType] = useState<DocType | null>(
+    null,
+  );
   const [locating, setLocating] = useState(false);
 
   const { data: vendor, isLoading } = useQuery({
@@ -167,6 +178,15 @@ export function SettingsContent() {
       passwordForm.reset();
       setPasswordSuccess(true);
       setTimeout(() => setPasswordSuccess(false), 3000);
+    },
+  });
+
+  const uploadDocumentMutation = useMutation({
+    mutationFn: ({ docType, file }: { docType: DocType; file: File }) =>
+      vendorApi.uploadDocument(docType, file),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["vendor-profile"] });
+      void queryClient.invalidateQueries({ queryKey: ["vendor-me"] });
     },
   });
 
@@ -240,6 +260,25 @@ export function SettingsContent() {
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: string } } };
       setPasswordError(e.response?.data?.error ?? "Password change failed");
+    }
+  }
+
+  async function onDocumentSelected(docType: DocType, file?: File) {
+    if (!file) return;
+    setDocumentError("");
+    setDocumentSuccess("");
+    setUploadingDocType(docType);
+    try {
+      await uploadDocumentMutation.mutateAsync({ docType, file });
+      setDocumentSuccess(
+        `${docType === "PAN" ? "PAN Card" : docType === "GST" ? "GST Certificate" : "Quality Certificate"} uploaded successfully.`,
+      );
+      setTimeout(() => setDocumentSuccess(""), 3000);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
+      setDocumentError(e.response?.data?.error ?? "Document upload failed");
+    } finally {
+      setUploadingDocType(null);
     }
   }
 
@@ -491,15 +530,39 @@ export function SettingsContent() {
           >
             Documents & Certifications
           </h3>
+          {documentSuccess && (
+            <div
+              className="mb-4 rounded-xl p-3"
+              style={{
+                backgroundColor: "#D1FAE5",
+                color: "#065F46",
+                fontSize: 13,
+              }}
+            >
+              {documentSuccess}
+            </div>
+          )}
+          {documentError && (
+            <div
+              className="mb-4 rounded-xl p-3"
+              style={{
+                backgroundColor: "#FEF2F2",
+                color: "#B03A2E",
+                fontSize: 13,
+              }}
+            >
+              {documentError}
+            </div>
+          )}
           <div className="flex flex-col gap-3">
-            {(vendor?.documents ?? []).length === 0 ? (
-              <p style={{ fontSize: 13, color: "#A0A0A0" }}>
-                No documents uploaded.
-              </p>
-            ) : (
-              vendor?.documents?.map((doc) => (
+            {VENDOR_DOC_CONFIG.map(({ docType, label }) => {
+              const existing = (vendor?.documents ?? []).find(
+                (doc) => doc.docType === docType,
+              ) as VendorDocument | undefined;
+
+              return (
                 <div
-                  key={doc.id}
+                  key={docType}
                   className="flex items-center justify-between rounded-xl"
                   style={{ padding: "12px 16px", backgroundColor: "#F7F5F0" }}
                 >
@@ -511,31 +574,55 @@ export function SettingsContent() {
                         color: "#1A1A1A",
                       }}
                     >
-                      {doc.docType === "PAN"
-                        ? "PAN Card"
-                        : doc.docType === "GST"
-                          ? "GST Certificate"
-                          : "Quality Certificate"}
+                      {label}
                     </p>
                     <p style={{ fontSize: 12, color: "#A0A0A0" }}>
-                      Uploaded {new Date(doc.uploadedAt).toLocaleDateString()}
+                      {existing
+                        ? `Uploaded ${new Date(existing.uploadedAt).toLocaleDateString()}`
+                        : "Not uploaded yet"}
                     </p>
                   </div>
-                  <button
+                  <label
                     className="flex items-center gap-1.5 rounded-lg"
                     style={{
                       fontSize: 12,
                       color: "#2C5F2D",
                       padding: "6px 12px",
                       backgroundColor: "#D1FAE5",
+                      cursor:
+                        uploadingDocType && uploadingDocType !== docType
+                          ? "not-allowed"
+                          : "pointer",
+                      opacity:
+                        uploadingDocType && uploadingDocType !== docType
+                          ? 0.5
+                          : 1,
                     }}
                   >
                     <Upload size={13} />
-                    Re-upload
-                  </button>
+                    {uploadingDocType === docType
+                      ? "Uploading…"
+                      : existing
+                        ? "Re-upload"
+                        : "Upload"}
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp"
+                      disabled={
+                        uploadDocumentMutation.isPending &&
+                        uploadingDocType !== docType
+                      }
+                      style={{ display: "none" }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        void onDocumentSelected(docType, file);
+                        e.currentTarget.value = "";
+                      }}
+                    />
+                  </label>
                 </div>
-              ))
-            )}
+              );
+            })}
           </div>
         </div>
       </div>

@@ -81,6 +81,13 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     } catch (_) {}
   }
 
+  Future<void> uploadAvatarDataUrl(String dataUrl) async {
+    final data = await _api.uploadFarmerAvatarDataUrl(dataUrl);
+    final farmer = Farmer.fromJson(data);
+    await _cacheFarmer(farmer);
+    state = AsyncValue.data(AuthState.authenticated(farmer));
+  }
+
   Future<void> logout() async {
     await _api.clearToken();
     final prefs = await SharedPreferences.getInstance();
