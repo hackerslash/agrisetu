@@ -45,7 +45,14 @@ class OrderHistoryScreen extends ConsumerWidget {
       backgroundColor: AppColors.background,
       appBar: AppHeader(
         title: 'My Orders',
-        showBack: false,
+        showBack: true,
+        onBack: () {
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go('/home');
+          }
+        },
         trailing: headerTrailing,
       ),
       body: Column(

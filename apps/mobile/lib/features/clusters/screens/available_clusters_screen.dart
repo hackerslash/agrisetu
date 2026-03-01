@@ -120,6 +120,16 @@ class _AvailableClustersScreenState
     final query = (cropName: widget.cropName, orderId: widget.orderId);
     final clustersAsync = ref.watch(availableClustersProvider(query));
     final selectionMode = widget.orderId != null;
+    void handleBack() {
+      final orderId = widget.orderId;
+      if (context.canPop()) {
+        context.pop();
+      } else if (orderId != null) {
+        context.go('/orders/$orderId');
+      } else {
+        context.go('/orders');
+      }
+    }
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -137,7 +147,7 @@ class _AvailableClustersScreenState
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 GestureDetector(
-                  onTap: () => Navigator.maybePop(context),
+                  onTap: handleBack,
                   child: const Icon(
                     Icons.arrow_back,
                     size: 24,
@@ -145,7 +155,7 @@ class _AvailableClustersScreenState
                   ),
                 ),
                 Text(
-                  'Available Clusters',
+                  selectionMode ? 'Choose Cluster' : 'Available Clusters',
                   style: AppTextStyles.h3.copyWith(color: AppColors.surface),
                 ),
                 const SizedBox(width: 24),
@@ -301,10 +311,22 @@ class _ClusterCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isVoting = cluster.status == ClusterStatus.voting;
     final isPayment = cluster.status == ClusterStatus.payment;
+    final isTrackingPhase = cluster.status == ClusterStatus.processing ||
+        cluster.status == ClusterStatus.outForDelivery ||
+        cluster.status == ClusterStatus.dispatched;
     final currentFarmerRows =
         cluster.members.where((m) => m.farmerId == currentFarmerId).toList();
     final currentFarmerPaid = currentFarmerRows.isNotEmpty &&
         currentFarmerRows.every((m) => m.hasPaid);
+    final paidByFarmer = <String, bool>{};
+    for (final member in cluster.members) {
+      final current = paidByFarmer[member.farmerId] ?? false;
+      paidByFarmer[member.farmerId] = current || member.hasPaid;
+    }
+    final paidFarmers = paidByFarmer.values.where((paid) => paid).length;
+    final totalFarmers = paidByFarmer.length;
+    final allFarmersPaid = totalFarmers > 0 && paidFarmers == totalFarmers;
+    final canTrackDelivery = isTrackingPhase || (isPayment && allFarmersPaid);
     final locationText = _locationText(
       cluster: cluster,
       farmerLat: farmerLat,
@@ -460,7 +482,9 @@ class _ClusterCard extends StatelessWidget {
                         ? null
                         : selectionMode
                             ? onPrimaryTap
-                            : () => context.push('/clusters/${cluster.id}'),
+                            : canTrackDelivery
+                                ? () => context.push('/delivery/${cluster.id}')
+                                : () => context.push('/clusters/${cluster.id}'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       shape: RoundedRectangleBorder(
@@ -491,13 +515,15 @@ class _ClusterCard extends StatelessWidget {
                               Text(
                                 selectionMode
                                     ? 'Join This Cluster'
-                                    : isVoting
-                                        ? 'Vote for Vendor'
-                                        : isPayment
-                                            ? (currentFarmerPaid
-                                                ? 'Waiting for Others'
-                                                : 'Pay Now')
-                                            : 'View Cluster',
+                                    : canTrackDelivery
+                                        ? 'Track Delivery'
+                                        : isVoting
+                                            ? 'Vote for Vendor'
+                                            : isPayment
+                                                ? (currentFarmerPaid
+                                                    ? 'Waiting for Others'
+                                                    : 'Pay Now')
+                                                : 'View Cluster',
                                 style: AppTextStyles.h5
                                     .copyWith(color: AppColors.surface),
                               ),

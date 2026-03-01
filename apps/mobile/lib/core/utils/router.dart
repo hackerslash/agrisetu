@@ -25,18 +25,37 @@ final _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 final _shellNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shell');
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authProvider);
-
-  return GoRouter(
+  final router = GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/landing',
+    errorBuilder: (context, state) => Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Unable to open this page'),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: () => context.go('/home'),
+                child: const Text('Go to Home'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
     redirect: (context, state) {
+      final authState = ref.read(authProvider);
       final authVal = authState.valueOrNull;
       final isLoading = authState.isLoading;
       final isAuth = authVal?.isAuthenticated ?? false;
       final needsProfile = authVal?.needsProfile ?? false;
 
-      final loc = state.matchedLocation;
+      var loc = state.uri.path;
+      if (loc.length > 1 && loc.endsWith('/')) {
+        loc = loc.substring(0, loc.length - 1);
+      }
 
       // Root location can appear on web reload and otherwise renders blank shell.
       if (loc == '/') {
@@ -59,8 +78,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         return '/landing';
       }
 
-      // Needs profile → onboarding
-      if (needsProfile && loc != '/onboarding' && loc != '/profile/edit') {
+      // Needs profile → onboarding, but allow profile screens so users can
+      // edit/verify details without being bounced unexpectedly.
+      if (needsProfile &&
+          loc != '/onboarding' &&
+          loc != '/profile' &&
+          loc != '/profile/edit') {
         return '/onboarding';
       }
       if (!needsProfile && loc == '/onboarding') return '/home';
@@ -170,4 +193,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
   );
+
+  ref.listen(authProvider, (_, __) {
+    router.refresh();
+  });
+  ref.onDispose(router.dispose);
+
+  return router;
 });

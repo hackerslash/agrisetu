@@ -162,9 +162,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         'language': _selectedLanguage,
       });
       if (!mounted) return;
-      if (widget.isEditMode && context.canPop()) {
-        context.pop();
-      } else if (widget.isEditMode) {
+      if (widget.isEditMode) {
         context.go('/profile');
       } else {
         context.go('/home');
@@ -256,6 +254,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         ..clear()
         ..addAll(farmer.cropsGrown);
     }
+    final headerLeftPadding = widget.isEditMode ? 72.0 : 24.0;
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -268,7 +267,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             flexibleSpace: FlexibleSpaceBar(
               background: SafeArea(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+                  padding: EdgeInsets.fromLTRB(headerLeftPadding, 16, 24, 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

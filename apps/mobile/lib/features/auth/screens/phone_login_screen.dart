@@ -255,7 +255,13 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
 
                   Center(
                     child: GestureDetector(
-                      onTap: () => context.pop(),
+                      onTap: () {
+                        if (context.canPop()) {
+                          context.pop();
+                        } else {
+                          context.go('/landing');
+                        }
+                      },
                       child: Text(
                         'Back',
                         style: AppTextStyles.label.copyWith(

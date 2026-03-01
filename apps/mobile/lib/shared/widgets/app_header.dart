@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import '../theme/app_theme.dart';
 
 class AppHeader extends StatelessWidget implements PreferredSizeWidget {
@@ -28,6 +29,17 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     final statusBarTop = MediaQuery.paddingOf(context).top;
+    void handleBack() {
+      if (onBack != null) {
+        onBack!();
+        return;
+      }
+      if (context.canPop()) {
+        context.pop();
+        return;
+      }
+      context.go('/home');
+    }
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
@@ -55,7 +67,7 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
                             width: 40,
                             height: 40,
                           ),
-                          onPressed: onBack ?? () => Navigator.of(context).pop(),
+                          onPressed: handleBack,
                           icon: Icon(
                             Icons.arrow_back,
                             color: foregroundColor,

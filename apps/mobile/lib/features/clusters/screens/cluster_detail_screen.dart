@@ -7,8 +7,6 @@ import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/widgets/app_header.dart';
-import '../../../shared/widgets/status_badge.dart';
-import '../../../shared/widgets/progress_bar.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/models/order_model.dart';
 import '../../../core/providers/auth_provider.dart';
@@ -103,6 +101,7 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
         cluster.status == ClusterStatus.outForDelivery ||
         cluster.status == ClusterStatus.dispatched ||
         (isPayment && allFarmersPaid);
+    final showPaymentAction = isPayment && !canTrackDelivery;
 
     return RefreshIndicator(
       color: AppColors.primary,
@@ -115,7 +114,13 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
             pinned: true,
             toolbarHeight: 72,
             leading: GestureDetector(
-              onTap: () => context.pop(),
+              onTap: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go('/clusters');
+                }
+              },
               child: const Icon(Icons.arrow_back, color: AppColors.surface),
             ),
             title: Text(
@@ -180,67 +185,7 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
                 const SizedBox(height: 16),
 
                 // Progress card
-                Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: AppColors.inputBackground,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '${cluster.cropName} – Demand',
-                              style: AppTextStyles.label,
-                            ),
-                          ),
-                          StatusBadge.fromClusterStatus(cluster.status),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          _StatsBox(
-                              label: 'NEEDED',
-                              value: cluster.targetQuantity.toStringAsFixed(0)),
-                          const SizedBox(width: 8),
-                          _StatsBox(
-                              label: 'FILLED',
-                              value:
-                                  cluster.currentQuantity.toStringAsFixed(0)),
-                          const SizedBox(width: 8),
-                          _StatsBox(
-                              label: 'STILL NEEDED',
-                              value: (cluster.targetQuantity -
-                                      cluster.currentQuantity)
-                                  .clamp(0, cluster.targetQuantity)
-                                  .toStringAsFixed(0),
-                              highlight: true),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      ClusterProgressBar(value: cluster.fillPercent),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '${cluster.currentQuantity.toStringAsFixed(0)} ${cluster.unit} collected · ${(cluster.fillPercent * 100).toStringAsFixed(0)}% filled',
-                            style: AppTextStyles.caption,
-                          ),
-                          Text(
-                            '${(cluster.targetQuantity - cluster.currentQuantity).clamp(0, cluster.targetQuantity).toStringAsFixed(0)} ${cluster.unit} to go',
-                            style: AppTextStyles.caption
-                                .copyWith(color: AppColors.primary),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+                _DemandCard(cluster: cluster),
                 const SizedBox(height: 20),
 
                 // Vendor bids (voting)
@@ -270,46 +215,36 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
                 ],
 
                 // Payment action
-                if (isPayment) ...[
+                if (showPaymentAction) ...[
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: allFarmersPaid
-                          ? AppColors.successLight
-                          : myPaymentDone
-                              ? AppColors.infoLight
-                              : AppColors.successLight,
+                      color: myPaymentDone
+                          ? AppColors.infoLight
+                          : AppColors.successLight,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Row(
                       children: [
                         Icon(
-                          allFarmersPaid
-                              ? Icons.local_shipping_outlined
-                              : myPaymentDone
-                                  ? Icons.hourglass_top
-                                  : Icons.check_circle,
-                          color: allFarmersPaid
-                              ? AppColors.success
-                              : myPaymentDone
-                                  ? AppColors.info
-                                  : AppColors.success,
+                          myPaymentDone
+                              ? Icons.hourglass_top
+                              : Icons.check_circle,
+                          color: myPaymentDone
+                              ? AppColors.info
+                              : AppColors.success,
                           size: 20,
                         ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            allFarmersPaid
-                                ? 'All farmers have paid. You can track your order now.'
-                                : myPaymentDone
-                                    ? 'Your payment is done. Waiting for other farmers.'
-                                    : 'Vendor selected! Proceed to payment.',
+                            myPaymentDone
+                                ? 'Your payment is done. Waiting for other farmers.'
+                                : 'Vendor selected! Proceed to payment.',
                             style: AppTextStyles.body.copyWith(
-                              color: allFarmersPaid
-                                  ? AppColors.success
-                                  : myPaymentDone
-                                      ? AppColors.info
-                                      : AppColors.success,
+                              color: myPaymentDone
+                                  ? AppColors.info
+                                  : AppColors.success,
                             ),
                           ),
                         ),
@@ -589,45 +524,211 @@ class _MapSection extends StatelessWidget {
   }
 }
 
-class _StatsBox extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool highlight;
+class _DemandCard extends StatelessWidget {
+  static const Color _warningAccent = Color(0xFFE69A28);
 
-  const _StatsBox(
-      {required this.label, required this.value, this.highlight = false});
+  final Cluster cluster;
+
+  const _DemandCard({required this.cluster});
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-        decoration: BoxDecoration(
-          color: highlight
-              ? AppColors.primary.withOpacity(0.1)
-              : AppColors.surface,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: AppTextStyles.caption.copyWith(
-                fontSize: 9,
-                letterSpacing: 0.3,
-              ),
-            ),
-            Text(
-              value,
-              style: AppTextStyles.h5.copyWith(
-                color: highlight ? AppColors.primary : AppColors.textPrimary,
-                fontSize: 15,
-              ),
-            ),
-          ],
-        ),
+    final needed = cluster.targetQuantity.toStringAsFixed(0);
+    final filled = cluster.currentQuantity.toStringAsFixed(0);
+    final remaining = (cluster.targetQuantity - cluster.currentQuantity)
+        .clamp(0, cluster.targetQuantity)
+        .toStringAsFixed(0);
+    final percent = (cluster.fillPercent * 100).toStringAsFixed(0);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      decoration: BoxDecoration(
+        color: AppColors.inputBackground,
+        borderRadius: BorderRadius.circular(20),
       ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.spa, color: AppColors.primary, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${cluster.cropName} — Demand',
+                  style: AppTextStyles.h5.copyWith(
+                    color: AppColors.primary,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: const BoxDecoration(
+                        color: AppColors.primary,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      cluster.status.displayLabel,
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.primary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: _DemandStat(
+                  label: 'REQUIRED',
+                  value: '$needed ${cluster.unit}',
+                  valueColor: AppColors.primary,
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 44,
+                color: AppColors.primary.withOpacity(0.18),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 14),
+                  child: _DemandStat(
+                    label: 'FILLED',
+                    value: '$filled ${cluster.unit}',
+                    valueColor: AppColors.primary,
+                  ),
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 44,
+                color: AppColors.primary.withOpacity(0.18),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 14),
+                  child: _DemandStat(
+                    label: 'STILL NEEDED',
+                    value: '$remaining ${cluster.unit}',
+                    valueColor: _warningAccent,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              height: 12,
+              child: Stack(
+                children: [
+                  Container(color: const Color(0xFFC8C2B5)),
+                  FractionallySizedBox(
+                    widthFactor: cluster.fillPercent.clamp(0, 1),
+                    alignment: Alignment.centerLeft,
+                    child: Container(color: AppColors.primary),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  '$filled ${cluster.unit} collected  ·  $percent% filled',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.access_time_filled_rounded,
+                    size: 13,
+                    color: _warningAccent,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '$remaining ${cluster.unit} to go',
+                    style: AppTextStyles.caption.copyWith(
+                      color: _warningAccent,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DemandStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color valueColor;
+
+  const _DemandStat({
+    required this.label,
+    required this.value,
+    required this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTextStyles.caption.copyWith(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.2,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          value,
+          style: AppTextStyles.h2.copyWith(
+            color: valueColor,
+            fontSize: 22,
+          ),
+        ),
+      ],
     );
   }
 }

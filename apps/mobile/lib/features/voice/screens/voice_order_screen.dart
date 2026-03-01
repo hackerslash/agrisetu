@@ -60,7 +60,13 @@ class _VoiceOrderScreenState extends State<VoiceOrderScreen>
       backgroundColor: AppColors.surface,
       appBar: AppHeader(
         title: 'Voice Order',
-        onBack: () => context.pop(),
+        onBack: () {
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go('/home');
+          }
+        },
         trailing: const Icon(Icons.history, color: AppColors.surface, size: 24),
       ),
       body: SingleChildScrollView(

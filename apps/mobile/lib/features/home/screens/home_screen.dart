@@ -1,11 +1,11 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../shared/theme/app_theme.dart';
-import '../../../shared/widgets/status_badge.dart';
 import '../../../shared/widgets/progress_bar.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/api/api_client.dart';
@@ -49,7 +49,7 @@ class HomeScreen extends ConsumerWidget {
 
   String _greeting() {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good morning 🌱';
+    if (hour < 12) return 'Good morning 🌾';
     if (hour < 17) return 'Good afternoon ☀️';
     return 'Good evening 🌙';
   }
@@ -59,6 +59,11 @@ class HomeScreen extends ConsumerWidget {
     final farmer = ref.watch(currentFarmerProvider);
     final dashboardAsync = ref.watch(homeDashboardProvider);
     final pricesAsync = ref.watch(homeMandiPricesProvider);
+    final locationLabel = [
+      farmer?.village,
+      if ((farmer?.district ?? '').trim().isNotEmpty)
+        '${farmer!.district!.trim()} Dist.'
+    ].whereType<String>().where((s) => s.trim().isNotEmpty).join(', ');
 
     // Derive orders and clusters from dashboard payload
     final ordersAsync = dashboardAsync.whenData(
@@ -77,7 +82,7 @@ class HomeScreen extends ConsumerWidget {
     );
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.surface,
       body: RefreshIndicator(
         color: AppColors.primary,
         onRefresh: () async {
@@ -91,7 +96,7 @@ class HomeScreen extends ConsumerWidget {
               child: Container(
                 color: AppColors.primary,
                 padding: EdgeInsets.only(
-                  top: MediaQuery.of(context).padding.top + 16,
+                  top: MediaQuery.of(context).padding.top + 24,
                   left: 24,
                   right: 24,
                   bottom: 24,
@@ -108,7 +113,9 @@ class HomeScreen extends ConsumerWidget {
                             children: [
                               Text(
                                 _greeting(),
-                                style: AppTextStyles.body.copyWith(
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
                                   color: AppColors.textOnPrimaryMuted,
                                 ),
                               ),
@@ -116,13 +123,16 @@ class HomeScreen extends ConsumerWidget {
                               Text(
                                 farmer?.name ?? 'Farmer',
                                 style: AppTextStyles.h2.copyWith(
+                                  fontSize: 24,
                                   color: AppColors.surface,
                                 ),
                               ),
-                              if (farmer?.village != null)
+                              if (locationLabel.isNotEmpty)
                                 Text(
-                                  '${farmer!.village}, ${farmer.district ?? ''}',
-                                  style: AppTextStyles.bodySmall.copyWith(
+                                  locationLabel,
+                                  style: AppTextStyles.caption.copyWith(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
                                     color: AppColors.textOnPrimaryMuted,
                                   ),
                                 ),
@@ -132,27 +142,24 @@ class HomeScreen extends ConsumerWidget {
                         GestureDetector(
                           onTap: () => context.push('/profile'),
                           child: Container(
-                            width: 44,
-                            height: 44,
+                            width: 48,
+                            height: 48,
                             decoration: BoxDecoration(
                               color: AppColors.surface.withOpacity(0.2),
                               shape: BoxShape.circle,
                             ),
-                            child: Center(
-                              child: Text(
-                                (farmer?.name?.isNotEmpty == true)
-                                    ? farmer!.name![0].toUpperCase()
-                                    : 'F',
-                                style: AppTextStyles.h4.copyWith(
-                                  color: AppColors.surface,
-                                ),
+                            child: const Center(
+                              child: Icon(
+                                Icons.person_outline,
+                                size: 24,
+                                color: AppColors.surface,
                               ),
                             ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
 
                     // Stats row — from /farmer/dashboard
                     dashboardAsync.when(
@@ -166,7 +173,7 @@ class HomeScreen extends ConsumerWidget {
                         return Row(
                           children: [
                             _StatCard(
-                              label: 'TOTAL SAVED',
+                              label: 'TOTAL SAVINGS',
                               value:
                                   '₹${NumberFormat('#,###').format(totalSaved)}',
                               sub: 'from bulk orders',
@@ -175,13 +182,17 @@ class HomeScreen extends ConsumerWidget {
                             _StatCard(
                               label: 'ORDERS PLACED',
                               value: ordersPlaced.toString(),
-                              sub: '$delivered delivered',
+                              sub: delivered > 0
+                                  ? '$delivered delivered'
+                                  : 'this season',
                             ),
                             const SizedBox(width: 12),
                             _StatCard(
                               label: 'CO₂ SAVED',
                               value: '$co2Saved kg',
-                              sub: 'via joint ordering',
+                              sub: 'vs solo ordering',
+                              valueColor: const Color(0xFF4CAF50),
+                              valueFontSize: 18,
                             ),
                           ],
                         );
@@ -216,6 +227,7 @@ class HomeScreen extends ConsumerWidget {
                             title: 'Active Order',
                             linkText: 'View all →',
                             onTap: () => context.push('/orders'),
+                            linkColor: AppColors.textMuted,
                           ),
                           const SizedBox(height: 12),
                           _ActiveOrderCard(order: activeOrders.first),
@@ -234,15 +246,11 @@ class HomeScreen extends ConsumerWidget {
                       final myCluster = clusters.first;
                       return Column(
                         children: [
-                          _SectionHeader(
-                            title:
-                                '🌾 Your Cluster · ${myCluster.district ?? 'District'}',
-                            linkText: 'View →',
-                            onTap: () =>
+                          _ClusterCard(
+                            cluster: myCluster,
+                            onViewTap: () =>
                                 context.push('/clusters/${myCluster.id}'),
                           ),
-                          const SizedBox(height: 12),
-                          _ClusterCard(cluster: myCluster),
                           const SizedBox(height: 20),
                         ],
                       );
@@ -252,12 +260,6 @@ class HomeScreen extends ConsumerWidget {
                   ),
 
                   // Mandi Prices Today — from /farmer/mandi-prices
-                  _SectionHeader(
-                    title: '📈 Mandi Prices Today',
-                    linkText: 'Live prices',
-                    onTap: null,
-                  ),
-                  const SizedBox(height: 12),
                   pricesAsync.when(
                     data: (prices) => _MandiPricesCard(prices: prices),
                     loading: () => _shimmerCard(),
@@ -272,10 +274,14 @@ class HomeScreen extends ConsumerWidget {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Recent Activity', style: AppTextStyles.h5),
+                          Text(
+                            'Recent Activity',
+                            style: AppTextStyles.h5
+                                .copyWith(color: AppColors.primary),
+                          ),
                           const SizedBox(height: 12),
                           ...orders
-                              .take(3)
+                              .take(2)
                               .map((order) => _ActivityItem(order: order)),
                         ],
                       );
@@ -310,46 +316,64 @@ class _StatCard extends StatelessWidget {
   final String label;
   final String value;
   final String sub;
+  final Color valueColor;
+  final double valueFontSize;
 
-  const _StatCard(
-      {required this.label, required this.value, required this.sub});
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.sub,
+    this.valueColor = AppColors.surface,
+    this.valueFontSize = 22,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.surface.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: AppTextStyles.caption.copyWith(
-                color: AppColors.textOnPrimaryMuted,
-                fontSize: 9,
-                letterSpacing: 0.5,
+      child: SizedBox(
+        height: 102,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.surface.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.textOnPrimaryMuted,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              style: AppTextStyles.h5.copyWith(
-                color: AppColors.surface,
-                fontSize: 14,
+              const SizedBox(height: 3),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.h2.copyWith(
+                  color: valueColor,
+                  fontSize: valueFontSize,
+                ),
               ),
-            ),
-            Text(
-              sub,
-              style: AppTextStyles.caption.copyWith(
-                color: AppColors.textOnPrimaryMuted,
-                fontSize: 10,
+              Text(
+                sub,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.textOnPrimaryMuted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -360,22 +384,36 @@ class _SectionHeader extends StatelessWidget {
   final String title;
   final String? linkText;
   final VoidCallback? onTap;
+  final Color linkColor;
 
-  const _SectionHeader(
-      {required this.title, this.linkText, required this.onTap});
+  const _SectionHeader({
+    required this.title,
+    this.linkText,
+    required this.onTap,
+    this.linkColor = AppColors.textMuted,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(title, style: AppTextStyles.h5),
+        Text(
+          title,
+          style: AppTextStyles.h5.copyWith(
+            fontSize: 16,
+            color: AppColors.primary,
+          ),
+        ),
         if (linkText != null)
           GestureDetector(
             onTap: onTap,
             child: Text(
               linkText!,
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: linkColor,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
       ],
@@ -391,40 +429,20 @@ class _ActiveOrderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cluster = order.clusterMember?.cluster;
-    final statusSteps = ['Ordered', 'Clustered', 'Payment', 'Dispatched'];
-    final stepIndex = () {
-      switch (order.status) {
-        case OrderStatus.pending:
-          return 0;
-        case OrderStatus.clustered:
-          return 1;
-        case OrderStatus.paymentPending:
-        case OrderStatus.paid:
-          return 2;
-        case OrderStatus.processing:
-          return 2;
-        case OrderStatus.outForDelivery:
-        case OrderStatus.dispatched:
-          return 3;
-        case OrderStatus.delivered:
-          return 3;
-        default:
-          return 0;
-      }
-    }();
+    final totalAmount = (cluster != null && cluster.bids.isNotEmpty)
+        ? cluster.bids.first.totalPrice
+        : 0;
+    final amountText = totalAmount > 0
+        ? '₹${NumberFormat('#,###').format(totalAmount.round())}'
+        : '₹${NumberFormat('#,###').format((order.quantity * 840).round())}';
+    final progress = _progressForStatus(order.status);
+    final rightEta = _etaLabel(order.deliveryDate);
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color: AppColors.primary,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x08000000),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -435,225 +453,370 @@ class _ActiveOrderCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(order.cropName, style: AppTextStyles.h5),
                     Text(
-                      '${order.quantity.toStringAsFixed(0)} ${order.unit}',
-                      style: AppTextStyles.bodySmall,
+                      order.cropName,
+                      style:
+                          AppTextStyles.h5.copyWith(color: AppColors.surface),
+                    ),
+                    Text(
+                      '${order.quantity.toStringAsFixed(0)} ${order.unit}  ·  ${cluster?.vendor?.businessName ?? 'AgroMart Supplies'}',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textOnPrimaryMuted,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ],
                 ),
               ),
-              StatusBadge.fromOrderStatus(order.status),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.circle,
+                      size: 7,
+                      color: Color(0xFFE69A28),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      _statusLabel(order.status),
+                      style: AppTextStyles.caption.copyWith(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.surface,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 16),
-
-          // Progress track
-          Row(
-            children: List.generate(statusSteps.length, (i) {
-              final isCompleted = i <= stepIndex;
-              return Expanded(
-                child: Row(
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color:
-                            isCompleted ? AppColors.primary : AppColors.border,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    if (i < statusSteps.length - 1)
-                      Expanded(
-                        child: Container(
-                          height: 2,
-                          color: i < stepIndex
-                              ? AppColors.primary
-                              : AppColors.border,
-                        ),
-                      ),
-                  ],
-                ),
-              );
-            }),
+          const SizedBox(height: 14),
+          ClusterProgressBar(
+            value: progress,
+            backgroundColor: Colors.white.withOpacity(0.14),
+            foregroundColor: AppColors.surface,
+            height: 8,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Row(
-            children: statusSteps
-                .map((s) => Expanded(
-                      child: Text(
-                        s,
-                        style: AppTextStyles.caption.copyWith(fontSize: 10),
-                      ),
-                    ))
-                .toList(),
-          ),
-
-          if (cluster != null) ...[
-            const SizedBox(height: 16),
-            const Divider(height: 1),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                if (cluster.vendor != null)
-                  Text(
-                    cluster.vendor!.businessName,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  )
-                else
-                  Text('Finding vendor…', style: AppTextStyles.bodySmall),
-                GestureDetector(
-                  onTap: () => context.push('/clusters/${cluster.id}'),
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.inputBackground,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      'Track Order',
-                      style: AppTextStyles.caption.copyWith(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-
-          if (order.status == OrderStatus.paymentPending && cluster != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: SizedBox(
-                width: double.infinity,
-                height: 44,
-                child: ElevatedButton(
-                  onPressed: () => context.push('/payment/${cluster.id}'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    shape: const StadiumBorder(),
-                    elevation: 0,
-                  ),
-                  child: Text('Pay Now', style: AppTextStyles.buttonSmall),
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                _progressLeftText(order.status),
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.textOnPrimaryMuted,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
-            ),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.location_on_outlined,
+                    size: 13,
+                    color: Color(0xFFE69A28),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    rightEta,
+                    style: AppTextStyles.caption.copyWith(
+                      color: const Color(0xFFE69A28),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'YOUR TOTAL',
+                    style: AppTextStyles.caption.copyWith(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textOnPrimaryMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    amountText,
+                    style: AppTextStyles.h2.copyWith(
+                      color: AppColors.surface,
+                      fontSize: 20,
+                    ),
+                  ),
+                ],
+              ),
+              GestureDetector(
+                onTap: () {
+                  if (cluster != null) {
+                    context.push('/clusters/${cluster.id}');
+                  } else {
+                    context.push('/orders');
+                  }
+                },
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.location_on_outlined,
+                        size: 14,
+                        color: AppColors.surface,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Track Order',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.surface,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static double _progressForStatus(OrderStatus status) {
+    switch (status) {
+      case OrderStatus.pending:
+        return 0.2;
+      case OrderStatus.clustered:
+        return 0.4;
+      case OrderStatus.paymentPending:
+      case OrderStatus.paid:
+        return 0.6;
+      case OrderStatus.processing:
+        return 0.7;
+      case OrderStatus.outForDelivery:
+      case OrderStatus.dispatched:
+      case OrderStatus.delivered:
+        return 0.82;
+      case OrderStatus.rejected:
+      case OrderStatus.failed:
+        return 0.2;
+    }
+  }
+
+  static String _statusLabel(OrderStatus status) {
+    switch (status) {
+      case OrderStatus.pending:
+      case OrderStatus.clustered:
+        return 'In Progress';
+      case OrderStatus.paymentPending:
+        return 'Payment Due';
+      case OrderStatus.paid:
+      case OrderStatus.processing:
+        return 'Processing';
+      case OrderStatus.outForDelivery:
+      case OrderStatus.dispatched:
+        return 'In Transit';
+      case OrderStatus.delivered:
+        return 'Delivered';
+      case OrderStatus.rejected:
+      case OrderStatus.failed:
+        return 'Issue';
+    }
+  }
+
+  static String _progressLeftText(OrderStatus status) {
+    switch (status) {
+      case OrderStatus.pending:
+      case OrderStatus.clustered:
+        return 'Order received';
+      case OrderStatus.paymentPending:
+        return 'Waiting for payment';
+      case OrderStatus.paid:
+      case OrderStatus.processing:
+        return 'Preparing dispatch';
+      case OrderStatus.outForDelivery:
+      case OrderStatus.dispatched:
+        return 'Dispatched from vendor';
+      case OrderStatus.delivered:
+        return 'Delivered successfully';
+      case OrderStatus.rejected:
+      case OrderStatus.failed:
+        return 'Order needs attention';
+    }
+  }
+
+  static String _etaLabel(DateTime? eta) {
+    if (eta == null) return 'Today, 4–6 PM';
+    final now = DateTime.now();
+    if (eta.year == now.year && eta.month == now.month && eta.day == now.day) {
+      return 'Today, ${DateFormat('h:mm a').format(eta)}';
+    }
+    return DateFormat('d MMM, h:mm a').format(eta);
+  }
+}
+
+class _ClusterCard extends StatelessWidget {
+  final Cluster cluster;
+  final VoidCallback? onViewTap;
+
+  const _ClusterCard({required this.cluster, this.onViewTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleFarmers = math.min(cluster.membersCount, 3);
+    final remainingFarmers = math.max(0, cluster.membersCount - visibleFarmers);
+    final targetFarmers = math.max(10, cluster.membersCount);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        color: AppColors.inputBackground,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.groups_2_outlined,
+                      size: 16,
+                      color: AppColors.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Your Cluster · ${cluster.district ?? 'Your Area'}',
+                      style: AppTextStyles.h5.copyWith(
+                        fontSize: 14,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              GestureDetector(
+                onTap: onViewTap,
+                child: Text(
+                  'View →',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textMuted,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              ...List.generate(
+                visibleFarmers,
+                (_) => Container(
+                  margin: const EdgeInsets.only(right: 4),
+                  child: const _ClusterFarmerAvatar(),
+                ),
+              ),
+              if (remainingFarmers > 0)
+                Container(
+                  width: 28,
+                  height: 28,
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD0CBB8),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Center(
+                    child: Text(
+                      '+$remainingFarmers',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.primary,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              Text(
+                '${cluster.membersCount} of $targetFarmers farmers joined',
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.textMuted,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClusterProgressBar(
+            value: cluster.fillPercent,
+            backgroundColor: const Color(0xFFC8C2B5),
+            foregroundColor: AppColors.primary,
+            height: 8,
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${(cluster.fillPercent * 100).toStringAsFixed(0)}% demand filled',
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                '${(cluster.targetQuantity - cluster.currentQuantity).clamp(0, cluster.targetQuantity).toStringAsFixed(0)} ${cluster.unit} to go',
+                style: AppTextStyles.caption.copyWith(
+                  color: const Color(0xFFE69A28),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 }
 
-class _ClusterCard extends StatelessWidget {
-  final Cluster cluster;
-
-  const _ClusterCard({required this.cluster});
+class _ClusterFarmerAvatar extends StatelessWidget {
+  const _ClusterFarmerAvatar();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      width: 28,
+      height: 28,
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x08000000),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ],
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(14),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.people,
-                    color: AppColors.primary, size: 18),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(cluster.cropName, style: AppTextStyles.label),
-                    Text(
-                      '${cluster.membersCount} farmers joined',
-                      style: AppTextStyles.caption,
-                    ),
-                  ],
-                ),
-              ),
-              StatusBadge.fromClusterStatus(cluster.status),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // Member avatars
-          Row(
-            children: [
-              ...List.generate(
-                cluster.membersCount.clamp(0, 4),
-                (i) => Container(
-                  width: 28,
-                  height: 28,
-                  margin: const EdgeInsets.only(right: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.15 + i * 0.1),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.surface, width: 2),
-                  ),
-                  child: Center(
-                    child: Text(
-                      String.fromCharCode(65 + i),
-                      style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.primary),
-                    ),
-                  ),
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '${(cluster.fillPercent * 100).toStringAsFixed(0)}% demand filled',
-                style: AppTextStyles.caption.copyWith(color: AppColors.primary),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-
-          ClusterProgressBar(value: cluster.fillPercent),
-          const SizedBox(height: 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '${cluster.currentQuantity.toStringAsFixed(0)} ${cluster.unit} collected',
-                style: AppTextStyles.caption,
-              ),
-              Text(
-                '${(cluster.targetQuantity - cluster.currentQuantity).toStringAsFixed(0)} ${cluster.unit} to go',
-                style: AppTextStyles.caption.copyWith(color: AppColors.primary),
-              ),
-            ],
-          ),
-        ],
+      child: const Center(
+        child: Icon(
+          Icons.person_outline,
+          size: 13,
+          color: AppColors.surface,
+        ),
       ),
     );
   }
@@ -666,71 +829,129 @@ class _MandiPricesCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final visiblePrices = prices.take(3).toList();
+    if (visiblePrices.isEmpty) return const SizedBox.shrink();
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color: AppColors.primary,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x08000000),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ],
       ),
       child: Column(
-        children: prices.asMap().entries.map((entry) {
-          final i = entry.key;
-          final p = entry.value;
-          final change = (p['change'] as num).toDouble();
-          final isUp = change > 0;
-          final isFlat = change == 0;
-
-          return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              if (i > 0) const Divider(height: 16),
               Row(
                 children: [
-                  Expanded(
-                    child:
-                        Text(p['name'] as String, style: AppTextStyles.label),
-                  ),
-                  Text(
-                    '₹${p['price']}/${p['unit']}',
-                    style: AppTextStyles.price.copyWith(fontSize: 16),
+                  const Icon(
+                    Icons.trending_up,
+                    size: 16,
+                    color: AppColors.surface,
                   ),
                   const SizedBox(width: 8),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isFlat
-                          ? AppColors.inputBackground
-                          : isUp
-                              ? AppColors.successLight
-                              : AppColors.errorLight,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      isFlat
-                          ? '—'
-                          : '${isUp ? '+' : ''}${change.toStringAsFixed(1)}%',
-                      style: AppTextStyles.caption.copyWith(
-                        color: isFlat
-                            ? AppColors.textMuted
-                            : isUp
-                                ? AppColors.success
-                                : AppColors.error,
-                        fontWeight: FontWeight.w600,
-                      ),
+                  Text(
+                    'Mandi Prices Today',
+                    style: AppTextStyles.h5.copyWith(
+                      fontSize: 14,
+                      color: AppColors.surface,
                     ),
                   ),
                 ],
               ),
+              Text(
+                'Live · Mandya',
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.textOnPrimaryMuted,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ],
-          );
-        }).toList(),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              ...visiblePrices.asMap().entries.expand((entry) {
+                final index = entry.key;
+                final price = entry.value;
+                return [
+                  Expanded(child: _MandiPriceTile(price: price)),
+                  if (index < visiblePrices.length - 1)
+                    const SizedBox(width: 10),
+                ];
+              }),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MandiPriceTile extends StatelessWidget {
+  final Map<String, dynamic> price;
+
+  const _MandiPriceTile({required this.price});
+
+  @override
+  Widget build(BuildContext context) {
+    final change = (price['change'] as num).toDouble();
+    final isUp = change > 0;
+    final isDown = change < 0;
+    final changeColor = isUp
+        ? const Color(0xFF4CAF50)
+        : isDown
+            ? const Color(0xFFE57373)
+            : AppColors.textOnPrimaryMuted;
+    final changeIcon = isUp
+        ? Icons.trending_up
+        : isDown
+            ? Icons.trending_down
+            : Icons.remove;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            price['name'] as String,
+            style: AppTextStyles.caption.copyWith(
+              color: AppColors.textOnPrimaryMuted,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '₹${price['price']}',
+            style: AppTextStyles.h4.copyWith(
+              color: AppColors.surface,
+              fontSize: 18,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Icon(changeIcon, size: 12, color: changeColor),
+              const SizedBox(width: 3),
+              Text(
+                '${isUp ? '+' : ''}${change.toStringAsFixed(1)}%',
+                style: AppTextStyles.caption.copyWith(
+                  color: changeColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -743,23 +964,46 @@ class _ActivityItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isPayment = order.status == OrderStatus.paid ||
+        order.status == OrderStatus.paymentPending;
+    final isCluster = order.status == OrderStatus.clustered;
+    final title = isPayment
+        ? 'Payment confirmed'
+        : isCluster
+            ? 'Joined ${order.clusterMember?.cluster?.district ?? 'Cluster'} Cluster'
+            : order.status == OrderStatus.dispatched ||
+                    order.status == OrderStatus.outForDelivery
+                ? 'Order dispatched'
+                : 'Order placed';
+    final subtitle = isCluster
+        ? '${order.clusterMember?.cluster?.membersCount ?? 0} farmers  ·  ${order.clusterMember?.cluster?.targetQuantity.toStringAsFixed(0) ?? '0'}${order.clusterMember?.cluster?.unit ?? order.unit} target'
+        : '${order.cropName} · ₹${NumberFormat('#,###').format((order.quantity * 840).round())}';
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: BorderRadius.circular(14),
+        color: AppColors.inputBackground,
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
               color: AppColors.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(19),
             ),
-            child: const Icon(Icons.eco, color: AppColors.primary, size: 20),
+            child: Icon(
+              isPayment
+                  ? Icons.check_circle_outline
+                  : isCluster
+                      ? Icons.groups_2_outlined
+                      : Icons.local_shipping_outlined,
+              color: AppColors.primary,
+              size: 18,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -767,24 +1011,33 @@ class _ActivityItem extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  order.status == OrderStatus.dispatched ||
-                          order.status == OrderStatus.outForDelivery
-                      ? 'Order Dispatched'
-                      : order.status == OrderStatus.clustered
-                          ? 'Joined Cluster'
-                          : 'Order Placed',
-                  style: AppTextStyles.label,
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.body.copyWith(
+                    color: AppColors.primary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 Text(
-                  '${order.cropName} · ${order.quantity.toStringAsFixed(0)} ${order.unit}',
-                  style: AppTextStyles.caption,
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textMuted,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),
           ),
           Text(
             _timeAgo(order.createdAt),
-            style: AppTextStyles.caption,
+            style: AppTextStyles.caption.copyWith(
+              color: AppColors.textMuted,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ),
@@ -793,7 +1046,8 @@ class _ActivityItem extends StatelessWidget {
 
   String _timeAgo(DateTime dt) {
     final diff = DateTime.now().difference(dt);
-    if (diff.inDays > 0) return '${diff.inDays}d ago';
+    if (diff.inDays >= 1 && diff.inDays < 2) return 'Yesterday';
+    if (diff.inDays > 1) return '${diff.inDays}d ago';
     if (diff.inHours > 0) return '${diff.inHours}h ago';
     return '${diff.inMinutes}m ago';
   }
