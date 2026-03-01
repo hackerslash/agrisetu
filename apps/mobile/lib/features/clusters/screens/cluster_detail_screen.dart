@@ -87,9 +87,6 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
   Widget _buildContent(BuildContext context, Cluster cluster, farmer) {
     final isVoting = cluster.status == ClusterStatus.voting;
     final isPayment = cluster.status == ClusterStatus.payment;
-    final canTrackDelivery = cluster.status == ClusterStatus.processing ||
-        cluster.status == ClusterStatus.outForDelivery ||
-        cluster.status == ClusterStatus.dispatched;
     final myMembers =
         (cluster.members).where((m) => m.farmerId == farmer?.id).toList();
     final myPaymentDone =
@@ -101,6 +98,11 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
     }
     final paidFarmers = paidByFarmer.values.where((paid) => paid).length;
     final totalFarmers = paidByFarmer.length;
+    final allFarmersPaid = totalFarmers > 0 && paidFarmers == totalFarmers;
+    final canTrackDelivery = cluster.status == ClusterStatus.processing ||
+        cluster.status == ClusterStatus.outForDelivery ||
+        cluster.status == ClusterStatus.dispatched ||
+        (isPayment && allFarmersPaid);
 
     return RefreshIndicator(
       color: AppColors.primary,
@@ -271,32 +273,42 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: myPaymentDone
-                          ? AppColors.infoLight
-                          : AppColors.successLight,
+                      color: allFarmersPaid
+                          ? AppColors.successLight
+                          : myPaymentDone
+                              ? AppColors.infoLight
+                              : AppColors.successLight,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Row(
                       children: [
                         Icon(
-                          myPaymentDone
-                              ? Icons.hourglass_top
-                              : Icons.check_circle,
-                          color: myPaymentDone
-                              ? AppColors.info
-                              : AppColors.success,
+                          allFarmersPaid
+                              ? Icons.local_shipping_outlined
+                              : myPaymentDone
+                                  ? Icons.hourglass_top
+                                  : Icons.check_circle,
+                          color: allFarmersPaid
+                              ? AppColors.success
+                              : myPaymentDone
+                                  ? AppColors.info
+                                  : AppColors.success,
                           size: 20,
                         ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            myPaymentDone
-                                ? 'Your payment is done. Waiting for other farmers.'
-                                : 'Vendor selected! Proceed to payment.',
+                            allFarmersPaid
+                                ? 'All farmers have paid. You can track your order now.'
+                                : myPaymentDone
+                                    ? 'Your payment is done. Waiting for other farmers.'
+                                    : 'Vendor selected! Proceed to payment.',
                             style: AppTextStyles.body.copyWith(
-                              color: myPaymentDone
-                                  ? AppColors.info
-                                  : AppColors.success,
+                              color: allFarmersPaid
+                                  ? AppColors.success
+                                  : myPaymentDone
+                                      ? AppColors.info
+                                      : AppColors.success,
                             ),
                           ),
                         ),
@@ -342,7 +354,7 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
                         ),
                       ),
                     ),
-                  if (myPaymentDone)
+                  if (myPaymentDone && !allFarmersPaid)
                     SizedBox(
                       width: double.infinity,
                       height: 52,
