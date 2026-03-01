@@ -160,6 +160,15 @@ class AppTheme {
           surface: AppColors.surface,
         ),
         scaffoldBackgroundColor: AppColors.background,
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: _DissolvePageTransitionsBuilder(),
+            TargetPlatform.iOS: _DissolvePageTransitionsBuilder(),
+            TargetPlatform.linux: _DissolvePageTransitionsBuilder(),
+            TargetPlatform.macOS: _DissolvePageTransitionsBuilder(),
+            TargetPlatform.windows: _DissolvePageTransitionsBuilder(),
+          },
+        ),
         appBarTheme: AppBarTheme(
           backgroundColor: AppColors.primary,
           foregroundColor: AppColors.surface,
@@ -205,7 +214,8 @@ class AppTheme {
             side: const BorderSide(color: AppColors.primary, width: 1.5),
             shape: const StadiumBorder(),
             minimumSize: const Size(double.infinity, 52),
-            textStyle: AppTextStyles.buttonSmall.copyWith(color: AppColors.primary),
+            textStyle:
+                AppTextStyles.buttonSmall.copyWith(color: AppColors.primary),
             elevation: 0,
           ),
         ),
@@ -228,7 +238,8 @@ class AppTheme {
             borderRadius: BorderRadius.circular(16),
             borderSide: const BorderSide(color: AppColors.error, width: 1.5),
           ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           hintStyle: AppTextStyles.body.copyWith(color: AppColors.textMuted),
         ),
         bottomNavigationBarTheme: BottomNavigationBarThemeData(
@@ -266,8 +277,31 @@ class AppTheme {
         snackBarTheme: SnackBarThemeData(
           backgroundColor: AppColors.textPrimary,
           contentTextStyle: AppTextStyles.body.copyWith(color: Colors.white),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           behavior: SnackBarBehavior.floating,
         ),
       );
+}
+
+class _DissolvePageTransitionsBuilder extends PageTransitionsBuilder {
+  const _DissolvePageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    return FadeTransition(
+      opacity: CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOut,
+        reverseCurve: Curves.easeIn,
+      ),
+      child: child,
+    );
+  }
 }

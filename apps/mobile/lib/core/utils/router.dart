@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,6 +25,42 @@ import '../../shared/widgets/main_scaffold.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 final _shellNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shell');
+
+CustomTransitionPage<void> _smoothDissolvePage({
+  required GoRouterState state,
+  required Widget child,
+}) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    transitionDuration: const Duration(milliseconds: 360),
+    reverseTransitionDuration: const Duration(milliseconds: 260),
+    child: child,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final dissolve = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      final opacity = CurvedAnimation(
+        parent: dissolve,
+        curve: const Interval(0.12, 1.0),
+        reverseCurve: const Interval(0.0, 0.88),
+      );
+
+      return AnimatedBuilder(
+        animation: dissolve,
+        child: FadeTransition(opacity: opacity, child: child),
+        builder: (context, fadeChild) {
+          final sigma = (1.0 - dissolve.value) * 8.0;
+          return ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+            child: fadeChild,
+          );
+        },
+      );
+    },
+  );
+}
 
 final routerProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
@@ -94,101 +132,175 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(path: '/landing', builder: (_, __) => const LandingScreen()),
       GoRoute(
-          path: '/login',
-          builder: (_, state) {
-            final phone = state.extra as String?;
-            return PhoneLoginScreen(initialPhone: phone);
-          }),
+        path: '/landing',
+        pageBuilder: (_, state) =>
+            _smoothDissolvePage(state: state, child: const LandingScreen()),
+      ),
       GoRoute(
-          path: '/otp',
-          builder: (_, state) {
-            final phone = state.extra as String? ?? '';
-            return OtpVerifyScreen(phone: phone);
-          }),
+        path: '/login',
+        pageBuilder: (_, state) {
+          final phone = state.extra as String?;
+          return _smoothDissolvePage(
+            state: state,
+            child: PhoneLoginScreen(initialPhone: phone),
+          );
+        },
+      ),
       GoRoute(
-          path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
+        path: '/otp',
+        pageBuilder: (_, state) {
+          final phone = state.extra as String? ?? '';
+          return _smoothDissolvePage(
+            state: state,
+            child: OtpVerifyScreen(phone: phone),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/onboarding',
+        pageBuilder: (_, state) => _smoothDissolvePage(
+          state: state,
+          child: const OnboardingScreen(),
+        ),
+      ),
       GoRoute(
         path: '/profile/edit',
-        builder: (_, __) => const OnboardingScreen(isEditMode: true),
+        pageBuilder: (_, state) => _smoothDissolvePage(
+          state: state,
+          child: const OnboardingScreen(isEditMode: true),
+        ),
       ),
       ShellRoute(
         navigatorKey: _shellNavigatorKey,
         builder: (context, state, child) => MainScaffold(child: child),
         routes: [
-          GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
           GoRoute(
-              path: '/orders', builder: (_, __) => const OrderHistoryScreen()),
+            path: '/home',
+            pageBuilder: (_, state) => _smoothDissolvePage(
+              state: state,
+              child: const HomeScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/orders',
+            pageBuilder: (_, state) => _smoothDissolvePage(
+              state: state,
+              child: const OrderHistoryScreen(),
+            ),
+          ),
           GoRoute(
             path: '/orders/:id',
-            builder: (_, state) {
+            pageBuilder: (_, state) {
               final prefill = state.extra as Map<String, dynamic>?;
-              return OrderDetailsScreen(
-                orderId: state.pathParameters['id']!,
-                prefill: prefill,
+              return _smoothDissolvePage(
+                state: state,
+                child: OrderDetailsScreen(
+                  orderId: state.pathParameters['id']!,
+                  prefill: prefill,
+                ),
               );
             },
           ),
           GoRoute(
             path: '/clusters',
-            builder: (_, state) {
+            pageBuilder: (_, state) {
               final extra = state.extra;
               if (extra is Map<String, dynamic>) {
-                return AvailableClustersScreen(
-                  cropName: extra['cropName'] as String?,
-                  orderId: extra['orderId'] as String?,
+                return _smoothDissolvePage(
+                  state: state,
+                  child: AvailableClustersScreen(
+                    cropName: extra['cropName'] as String?,
+                    orderId: extra['orderId'] as String?,
+                  ),
                 );
               }
               final cropName = extra as String?;
-              return AvailableClustersScreen(cropName: cropName);
+              return _smoothDissolvePage(
+                state: state,
+                child: AvailableClustersScreen(cropName: cropName),
+              );
             },
           ),
           GoRoute(
             path: '/clusters/:id',
-            builder: (_, state) => ClusterDetailScreen(
-              clusterId: state.pathParameters['id']!,
+            pageBuilder: (_, state) => _smoothDissolvePage(
+              state: state,
+              child: ClusterDetailScreen(
+                clusterId: state.pathParameters['id']!,
+              ),
             ),
           ),
           GoRoute(
-              path: '/clusters-empty',
-              builder: (_, __) => const ClusterEmptyScreen()),
+            path: '/clusters-empty',
+            pageBuilder: (_, state) => _smoothDissolvePage(
+              state: state,
+              child: const ClusterEmptyScreen(),
+            ),
+          ),
           GoRoute(
             path: '/payment/:clusterId',
-            builder: (_, state) => PaymentScreen(
-              clusterId: state.pathParameters['clusterId']!,
+            pageBuilder: (_, state) => _smoothDissolvePage(
+              state: state,
+              child: PaymentScreen(
+                clusterId: state.pathParameters['clusterId']!,
+              ),
             ),
           ),
           GoRoute(
             path: '/payment-confirmed/:clusterId',
-            builder: (_, state) {
+            pageBuilder: (_, state) {
               final extra = state.extra as Map<String, dynamic>?;
-              return PaymentConfirmedScreen(
-                clusterId: state.pathParameters['clusterId']!,
-                allPaid: extra?['allPaid'] as bool? ?? false,
+              return _smoothDissolvePage(
+                state: state,
+                child: PaymentConfirmedScreen(
+                  clusterId: state.pathParameters['clusterId']!,
+                  allPaid: extra?['allPaid'] as bool? ?? false,
+                ),
               );
             },
           ),
           GoRoute(
             path: '/payment-failed/:clusterId',
-            builder: (_, state) => PaymentFailedScreen(
-              clusterId: state.pathParameters['clusterId']!,
+            pageBuilder: (_, state) => _smoothDissolvePage(
+              state: state,
+              child: PaymentFailedScreen(
+                clusterId: state.pathParameters['clusterId']!,
+              ),
             ),
           ),
           GoRoute(
             path: '/delivery/:clusterId',
-            builder: (_, state) => DeliveryTrackingScreen(
-              clusterId: state.pathParameters['clusterId']!,
+            pageBuilder: (_, state) => _smoothDissolvePage(
+              state: state,
+              child: DeliveryTrackingScreen(
+                clusterId: state.pathParameters['clusterId']!,
+              ),
             ),
           ),
           GoRoute(
             path: '/delivered/:clusterId',
-            builder: (_, state) => OrderDeliveredScreen(
-              clusterId: state.pathParameters['clusterId']!,
+            pageBuilder: (_, state) => _smoothDissolvePage(
+              state: state,
+              child: OrderDeliveredScreen(
+                clusterId: state.pathParameters['clusterId']!,
+              ),
             ),
           ),
-          GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
-          GoRoute(path: '/voice', builder: (_, __) => const VoiceOrderScreen()),
+          GoRoute(
+            path: '/profile',
+            pageBuilder: (_, state) => _smoothDissolvePage(
+              state: state,
+              child: const ProfileScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/voice',
+            pageBuilder: (_, state) => _smoothDissolvePage(
+              state: state,
+              child: const VoiceOrderScreen(),
+            ),
+          ),
         ],
       ),
     ],
