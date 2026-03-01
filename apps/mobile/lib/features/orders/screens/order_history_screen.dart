@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../../shared/widgets/app_header.dart';
 import '../../../shared/widgets/status_badge.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/models/order_model.dart';
@@ -25,47 +26,30 @@ class OrderHistoryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ordersAsync = ref.watch(allOrdersProvider);
+    final headerTrailing = ordersAsync.maybeWhen(
+      data: (orders) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: AppColors.surface.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          '${orders.length} total',
+          style: AppTextStyles.bodySmall.copyWith(color: AppColors.surface),
+        ),
+      ),
+      orElse: () => const SizedBox.shrink(),
+    );
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      appBar: AppHeader(
+        title: 'My Orders',
+        showBack: false,
+        trailing: headerTrailing,
+      ),
       body: Column(
         children: [
-          // Header
-          Container(
-            color: AppColors.primary,
-            padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top,
-              left: 24,
-              right: 24,
-              bottom: 20,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'My Orders',
-                  style: AppTextStyles.h3.copyWith(color: AppColors.surface),
-                ),
-                ordersAsync.maybeWhen(
-                  data: (orders) => Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      '${orders.length} total',
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: AppColors.surface),
-                    ),
-                  ),
-                  orElse: () => const SizedBox.shrink(),
-                ),
-              ],
-            ),
-          ),
-
           // New Order FAB
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),

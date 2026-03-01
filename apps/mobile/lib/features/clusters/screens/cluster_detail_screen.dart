@@ -113,6 +113,7 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
           SliverAppBar(
             backgroundColor: AppColors.primary,
             pinned: true,
+            toolbarHeight: 72,
             leading: GestureDetector(
               onTap: () => context.pop(),
               child: const Icon(Icons.arrow_back, color: AppColors.surface),
@@ -439,6 +440,8 @@ class _MapSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final topBarHeight = MediaQuery.paddingOf(context).top + 72;
+    final addressTopOffset = topBarHeight + 8;
     final farmerPoints = cluster.members
         .where(
           (member) =>
@@ -532,34 +535,53 @@ class _MapSection extends StatelessWidget {
             ),
           ],
         ),
+        // Keep the toolbar readable over the map.
         Positioned(
-          top: 12,
+          top: 0,
+          left: 0,
+          right: 0,
+          child: IgnorePointer(
+            child: Container(
+              height: topBarHeight,
+              color: AppColors.primary,
+            ),
+          ),
+        ),
+        Positioned(
+          top: addressTopOffset,
           left: 16,
-          right: 16,
-          child: Row(
-            children: [
-              Expanded(
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    locationLabel.isNotEmpty
-                        ? locationLabel
-                        : 'Location unavailable',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.surface,
-                      fontWeight: FontWeight.w700,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.sizeOf(context).width * 0.7,
+            ),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.location_on,
+                      size: 14, color: AppColors.surface),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      locationLabel.isNotEmpty
+                          ? locationLabel
+                          : 'Location unavailable',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.surface,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ],

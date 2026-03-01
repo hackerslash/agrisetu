@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../../shared/widgets/app_header.dart';
 
 class PaymentConfirmedScreen extends StatelessWidget {
   final String clusterId;
@@ -16,29 +17,22 @@ class PaymentConfirmedScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      appBar: AppHeader(
+        title: 'Payment',
+        onBack: () => context.go('/home'),
+        trailing: const Icon(
+          Icons.check_circle_outline,
+          color: AppColors.surface,
+          size: 24,
+        ),
+      ),
       body: SafeArea(
-        child: Padding(
+        top: false,
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              // Header
-              Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => context.go('/home'),
-                    child: const Icon(Icons.arrow_back, color: AppColors.primary),
-                  ),
-                  const Spacer(),
-                  Text(
-                    'Payment',
-                    style: AppTextStyles.h3,
-                  ),
-                  const Spacer(),
-                  const Icon(Icons.check_circle,
-                      color: AppColors.success, size: 24),
-                ],
-              ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
 
               // Success banner
               Container(
@@ -114,8 +108,7 @@ class PaymentConfirmedScreen extends StatelessWidget {
                   ],
                 ),
               ),
-
-              const Spacer(),
+              const SizedBox(height: 24),
 
               if (allPaid)
                 SizedBox(

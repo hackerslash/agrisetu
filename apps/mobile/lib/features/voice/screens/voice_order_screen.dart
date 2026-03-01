@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../../shared/widgets/app_header.dart';
 
 class VoiceOrderScreen extends StatefulWidget {
   const VoiceOrderScreen({super.key});
@@ -57,42 +58,16 @@ class _VoiceOrderScreenState extends State<VoiceOrderScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.surface,
-      body: Column(
-        children: [
-          // Header
-          Container(
-            color: AppColors.primary,
-            padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top,
-              left: 24,
-              right: 24,
-              bottom: 20,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                GestureDetector(
-                  onTap: () => context.pop(),
-                  child: const Icon(Icons.arrow_back,
-                      color: AppColors.surface, size: 24),
-                ),
-                Text(
-                  'Voice Order',
-                  style:
-                      AppTextStyles.h3.copyWith(color: AppColors.surface),
-                ),
-                const Icon(Icons.history,
-                    color: AppColors.surface, size: 24),
-              ],
-            ),
-          ),
-
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  const SizedBox(height: 16),
+      appBar: AppHeader(
+        title: 'Voice Order',
+        onBack: () => context.pop(),
+        trailing: const Icon(Icons.history, color: AppColors.surface, size: 24),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            const SizedBox(height: 16),
                   Text(
                     'Tap the mic and speak your order in your language',
                     style: AppTextStyles.body.copyWith(
@@ -316,12 +291,9 @@ class _VoiceOrderScreenState extends State<VoiceOrderScreen>
                             text: '"నాకు 50 కేజీల టమాట విత్తనాలు కావాలి"'),
                         ],
                       ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ],
+                    )
+          ],
+        ),
       ),
     );
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../../shared/widgets/app_header.dart';
 
 class ClusterEmptyScreen extends StatelessWidget {
   const ClusterEmptyScreen({super.key});
@@ -9,20 +10,17 @@ class ClusterEmptyScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      appBar: const AppHeader(
+        title: 'Your Cluster',
+        trailing: Icon(Icons.share_outlined, color: AppColors.surface),
+      ),
       body: SafeArea(
-        child: Padding(
+        top: false,
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Your Cluster', style: AppTextStyles.h3),
-                  const Icon(Icons.share_outlined,
-                      color: AppColors.textMuted),
-                ],
-              ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 16),
               Container(
                 width: 80,
                 height: 80,
@@ -106,7 +104,7 @@ class ClusterEmptyScreen extends StatelessWidget {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton.icon(
-                  onPressed: () => context.push('/orders/new'),
+                  onPressed: () => context.push('/voice'),
                   icon: const Icon(Icons.add, size: 20),
                   label: const Text('Place an Order'),
                   style: ElevatedButton.styleFrom(

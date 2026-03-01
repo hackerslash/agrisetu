@@ -1,10 +1,10 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../shared/theme/app_theme.dart';
-import '../../../shared/widgets/status_badge.dart';
 import '../../../shared/widgets/progress_bar.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/models/order_model.dart';
@@ -87,7 +87,7 @@ class _AvailableClustersScreenState
   Future<void> _createNewCluster() async {
     final orderId = widget.orderId;
     if (orderId == null) {
-      context.push('/orders/new');
+      context.push('/voice');
       return;
     }
 
@@ -122,23 +122,30 @@ class _AvailableClustersScreenState
     final selectionMode = widget.orderId != null;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.surface,
       body: Column(
         children: [
           Container(
             color: AppColors.primary,
             padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top,
+              top: MediaQuery.of(context).padding.top + 16,
               left: 24,
               right: 24,
-              bottom: 20,
+              bottom: 16,
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const SizedBox(width: 24),
+                GestureDetector(
+                  onTap: () => Navigator.maybePop(context),
+                  child: const Icon(
+                    Icons.arrow_back,
+                    size: 24,
+                    color: AppColors.surface,
+                  ),
+                ),
                 Text(
-                  selectionMode ? 'Choose Cluster' : 'Clusters',
+                  'Available Clusters',
                   style: AppTextStyles.h3.copyWith(color: AppColors.surface),
                 ),
                 const SizedBox(width: 24),
@@ -156,7 +163,7 @@ class _AvailableClustersScreenState
                     );
                   }
                   return _EmptyState(
-                    onCreateOrder: () => context.push('/orders/new'),
+                    onCreateOrder: () => context.push('/voice'),
                   );
                 }
 
@@ -165,62 +172,69 @@ class _AvailableClustersScreenState
                   onRefresh: () async =>
                       ref.invalidate(availableClustersProvider(query)),
                   child: ListView(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 80),
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
                     children: [
-                      if (farmer?.district != null)
-                        Row(
-                          children: [
-                            const Icon(Icons.location_on,
-                                size: 16, color: AppColors.primary),
-                            const SizedBox(width: 4),
-                            Text(
-                              farmer!.district!,
-                              style: AppTextStyles.label
-                                  .copyWith(color: AppColors.primary),
-                            ),
-                          ],
-                        ),
-                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.location_on_outlined,
+                            size: 18,
+                            color: AppColors.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Available Clusters Near You',
+                            style: AppTextStyles.h4
+                                .copyWith(color: AppColors.primary),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
                       Text(
-                        selectionMode
-                            ? 'Choose one of ${clusters.length} matching cluster${clusters.length != 1 ? 's' : ''}'
-                            : '${clusters.length} active cluster${clusters.length != 1 ? 's' : ''} in your area',
-                        style: AppTextStyles.bodySmall,
+                        _subtitleText(clusters),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textMuted,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                       const SizedBox(height: 16),
-                      ...clusters
-                          .map(
-                            (c) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: _ClusterCard(
-                                cluster: c,
-                                selectionMode: selectionMode,
-                                currentFarmerId: farmer?.id,
-                                isBusy:
-                                    _joiningClusterId == c.id || _isCreatingNew,
-                                onPrimaryTap: () => _joinCluster(c.id),
-                              ),
-                            ),
-                          )
-                          .toList(),
-                      const SizedBox(height: 8),
+                      ...clusters.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final cluster = entry.value;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _ClusterCard(
+                            cluster: cluster,
+                            selectionMode: selectionMode,
+                            isPrimaryCard: index == 0,
+                            showPrimaryAction: !selectionMode || index == 0,
+                            currentFarmerId: farmer?.id,
+                            farmerLat: farmer?.latitude,
+                            farmerLng: farmer?.longitude,
+                            isBusy: _joiningClusterId == cluster.id ||
+                                _isCreatingNew,
+                            onPrimaryTap: () => _joinCluster(cluster.id),
+                          ),
+                        );
+                      }),
+                      const SizedBox(height: 4),
                       SizedBox(
                         width: double.infinity,
-                        height: 52,
+                        height: 56,
                         child: OutlinedButton.icon(
                           onPressed: _joiningClusterId != null || _isCreatingNew
                               ? null
                               : selectionMode
                                   ? _createNewCluster
-                                  : () => context.push('/orders/new'),
+                                  : () => context.push('/voice'),
                           icon: _isCreatingNew
                               ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
+                                  width: 20,
+                                  height: 20,
                                   child:
                                       CircularProgressIndicator(strokeWidth: 2),
                                 )
-                              : const Icon(Icons.add, size: 20),
+                              : const Icon(Icons.add_circle_outline, size: 22),
                           label: Text(
                             selectionMode
                                 ? 'Create New Cluster'
@@ -229,9 +243,9 @@ class _AvailableClustersScreenState
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.primary,
                             side: const BorderSide(
-                                color: AppColors.primary, width: 1.5),
+                                color: AppColors.primary, width: 2),
                             shape: const StadiumBorder(),
-                            textStyle: AppTextStyles.buttonSmall
+                            textStyle: AppTextStyles.h5
                                 .copyWith(color: AppColors.primary),
                           ),
                         ),
@@ -250,19 +264,35 @@ class _AvailableClustersScreenState
       ),
     );
   }
+
+  String _subtitleText(List<Cluster> clusters) {
+    final crop = (widget.cropName ?? clusters.first.cropName).trim();
+    final minTarget =
+        clusters.map((c) => c.targetQuantity).reduce(math.min).round();
+    final unit = clusters.first.unit;
+    return 'Clusters for $crop (${minTarget.toString()}$unit min)';
+  }
 }
 
 class _ClusterCard extends StatelessWidget {
   final Cluster cluster;
   final bool selectionMode;
+  final bool isPrimaryCard;
+  final bool showPrimaryAction;
   final String? currentFarmerId;
+  final double? farmerLat;
+  final double? farmerLng;
   final bool isBusy;
   final VoidCallback onPrimaryTap;
 
   const _ClusterCard({
     required this.cluster,
     required this.selectionMode,
+    required this.isPrimaryCard,
+    required this.showPrimaryAction,
     required this.currentFarmerId,
+    required this.farmerLat,
+    required this.farmerLng,
     required this.isBusy,
     required this.onPrimaryTap,
   });
@@ -275,143 +305,307 @@ class _ClusterCard extends StatelessWidget {
         cluster.members.where((m) => m.farmerId == currentFarmerId).toList();
     final currentFarmerPaid = currentFarmerRows.isNotEmpty &&
         currentFarmerRows.every((m) => m.hasPaid);
+    final locationText = _locationText(
+      cluster: cluster,
+      farmerLat: farmerLat,
+      farmerLng: farmerLng,
+    );
 
-    return GestureDetector(
-      onTap:
-          selectionMode ? null : () => context.push('/clusters/${cluster.id}'),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.inputBackground,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(cluster.cropName, style: AppTextStyles.h5),
-                      Text(
-                        cluster.district ?? '',
-                        style: AppTextStyles.caption,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: selectionMode
+            ? onPrimaryTap
+            : () => context.push('/clusters/${cluster.id}'),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.inputBackground,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isPrimaryCard ? AppColors.primary : Colors.transparent,
+              width: 2,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _clusterTitle(cluster),
+                          style: AppTextStyles.h5
+                              .copyWith(color: AppColors.primary),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.location_on_outlined,
+                              size: 12,
+                              color: AppColors.textMuted,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                locationText,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.caption.copyWith(
+                                  color: AppColors.textMuted,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.groups_2_outlined,
+                          size: 14,
+                          color: AppColors.primary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '${cluster.membersCount} Farmers',
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: _StatBlock(
+                      label: 'COLLECTED',
+                      value:
+                          '${cluster.currentQuantity.toStringAsFixed(0)} ${cluster.unit}',
+                    ),
+                  ),
+                  Expanded(
+                    child: _StatBlock(
+                      label: 'TARGET',
+                      value:
+                          '${cluster.targetQuantity.toStringAsFixed(0)} ${cluster.unit}',
+                    ),
+                  ),
+                  Expanded(
+                    child: _StatBlock(
+                      label: 'FILLED',
+                      value:
+                          '${(cluster.fillPercent * 100).toStringAsFixed(0)}%',
+                      valueColor: const Color(0xFFE69A28),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              ClusterProgressBar(
+                value: cluster.fillPercent,
+                backgroundColor: const Color(0xFFD0CBB8),
+                foregroundColor: AppColors.primary,
+                height: 10,
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '${cluster.currentQuantity.toStringAsFixed(0)} ${cluster.unit} collected',
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.textMuted,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Text(
+                    '${(cluster.targetQuantity - cluster.currentQuantity).clamp(0, cluster.targetQuantity).toStringAsFixed(0)} ${cluster.unit} needed',
+                    style: AppTextStyles.caption.copyWith(
+                      color: const Color(0xFFE69A28),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              if (showPrimaryAction) ...[
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: isBusy
+                        ? null
+                        : selectionMode
+                            ? onPrimaryTap
+                            : () => context.push('/clusters/${cluster.id}'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
                       ),
-                    ],
+                      elevation: 0,
+                    ),
+                    child: isBusy
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              if (selectionMode) ...[
+                                const Icon(
+                                  Icons.check_circle_outline,
+                                  size: 20,
+                                  color: AppColors.surface,
+                                ),
+                                const SizedBox(width: 8),
+                              ],
+                              Text(
+                                selectionMode
+                                    ? 'Join This Cluster'
+                                    : isVoting
+                                        ? 'Vote for Vendor'
+                                        : isPayment
+                                            ? (currentFarmerPaid
+                                                ? 'Waiting for Others'
+                                                : 'Pay Now')
+                                            : 'View Cluster',
+                                style: AppTextStyles.h5
+                                    .copyWith(color: AppColors.surface),
+                              ),
+                            ],
+                          ),
                   ),
                 ),
-                StatusBadge.fromClusterStatus(cluster.status),
               ],
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                _StatPill(
-                  label: 'Farmers',
-                  value: cluster.membersCount.toString(),
-                ),
-                const SizedBox(width: 8),
-                _StatPill(
-                  label: 'Collected',
-                  value:
-                      '${cluster.currentQuantity.toStringAsFixed(0)} ${cluster.unit}',
-                ),
-                const SizedBox(width: 8),
-                _StatPill(
-                  label: 'Target',
-                  value:
-                      '${cluster.targetQuantity.toStringAsFixed(0)} ${cluster.unit}',
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ClusterProgressBar(value: cluster.fillPercent),
-            const SizedBox(height: 6),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '${(cluster.fillPercent * 100).toStringAsFixed(0)}% filled',
-                  style: AppTextStyles.caption,
-                ),
-                Text(
-                  '${(cluster.targetQuantity - cluster.currentQuantity).clamp(0, cluster.targetQuantity).toStringAsFixed(0)} ${cluster.unit} remaining',
-                  style:
-                      AppTextStyles.caption.copyWith(color: AppColors.primary),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: ElevatedButton(
-                onPressed: isBusy
-                    ? null
-                    : selectionMode
-                        ? onPrimaryTap
-                        : () => context.push('/clusters/${cluster.id}'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: isVoting || isPayment
-                      ? AppColors.primary
-                      : AppColors.primary.withOpacity(0.8),
-                  shape: const StadiumBorder(),
-                  elevation: 0,
-                ),
-                child: isBusy
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Text(
-                        selectionMode
-                            ? 'Join This Cluster'
-                            : isVoting
-                                ? 'Vote for Vendor'
-                                : isPayment
-                                    ? (currentFarmerPaid
-                                        ? 'Waiting for Others'
-                                        : 'Pay Now')
-                                    : 'View Cluster',
-                        style: AppTextStyles.buttonSmall,
-                      ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
+
+  static String _clusterTitle(Cluster cluster) {
+    if ((cluster.district ?? '').trim().isNotEmpty) {
+      return '${cluster.district!.trim()} Cluster';
+    }
+    return '${cluster.cropName} Cluster';
+  }
+
+  static String _locationText({
+    required Cluster cluster,
+    required double? farmerLat,
+    required double? farmerLng,
+  }) {
+    final location = (cluster.locationAddress ?? '').trim().isNotEmpty
+        ? cluster.locationAddress!.trim()
+        : [cluster.district, cluster.state]
+            .whereType<String>()
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .join(', ');
+    final fallbackLocation = location.isEmpty ? 'your area' : location;
+    final clusterLat = cluster.latitude;
+    final clusterLng = cluster.longitude;
+    if (farmerLat == null ||
+        farmerLng == null ||
+        clusterLat == null ||
+        clusterLng == null) {
+      return fallbackLocation;
+    }
+
+    final km = _distanceInKm(
+      lat1: farmerLat,
+      lng1: farmerLng,
+      lat2: clusterLat,
+      lng2: clusterLng,
+    );
+    return '${km.toStringAsFixed(1)} km away • $fallbackLocation';
+  }
+
+  static double _distanceInKm({
+    required double lat1,
+    required double lng1,
+    required double lat2,
+    required double lng2,
+  }) {
+    const radiusKm = 6371.0;
+    final dLat = _toRadians(lat2 - lat1);
+    final dLng = _toRadians(lng2 - lng1);
+    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_toRadians(lat1)) *
+            math.cos(_toRadians(lat2)) *
+            math.sin(dLng / 2) *
+            math.sin(dLng / 2);
+    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    return radiusKm * c;
+  }
+
+  static double _toRadians(double value) => value * (math.pi / 180);
 }
 
-class _StatPill extends StatelessWidget {
+class _StatBlock extends StatelessWidget {
   final String label;
   final String value;
+  final Color valueColor;
 
-  const _StatPill({required this.label, required this.value});
+  const _StatBlock({
+    required this.label,
+    required this.value,
+    this.valueColor = AppColors.primary,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        children: [
-          Text(value,
-              style: AppTextStyles.label
-                  .copyWith(color: AppColors.primary, fontSize: 13)),
-          Text(label, style: AppTextStyles.caption.copyWith(fontSize: 10)),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTextStyles.caption.copyWith(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.2,
+            color: AppColors.textMuted,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: AppTextStyles.h3.copyWith(
+            fontSize: 20,
+            color: valueColor,
+          ),
+        ),
+      ],
     );
   }
 }

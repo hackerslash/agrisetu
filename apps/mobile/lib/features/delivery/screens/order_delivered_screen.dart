@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../../shared/widgets/app_header.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../clusters/screens/cluster_detail_screen.dart';
@@ -75,25 +76,16 @@ class _OrderDeliveredScreenState extends ConsumerState<OrderDeliveredScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      appBar: AppHeader(
+        title: 'Order Delivered',
+        onBack: () => context.go('/orders'),
+      ),
       body: SafeArea(
+        top: false,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
             children: [
-              // Header
-              Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => context.go('/orders'),
-                    child: const Icon(Icons.arrow_back,
-                        color: AppColors.primary),
-                  ),
-                  const Spacer(),
-                  Text('Order Delivered', style: AppTextStyles.h3),
-                  const Spacer(),
-                  const SizedBox(width: 24),
-                ],
-              ),
               const SizedBox(height: 24),
 
               // Status card

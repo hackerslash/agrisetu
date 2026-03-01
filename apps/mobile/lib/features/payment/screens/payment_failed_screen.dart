@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../../shared/widgets/app_header.dart';
 
 class PaymentFailedScreen extends StatelessWidget {
   final String clusterId;
@@ -11,25 +12,22 @@ class PaymentFailedScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      appBar: AppHeader(
+        title: 'Payment',
+        onBack: () => context.go('/home'),
+        trailing: const Icon(
+          Icons.warning_amber,
+          color: AppColors.surface,
+          size: 24,
+        ),
+      ),
       body: SafeArea(
-        child: Padding(
+        top: false,
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => context.go('/home'),
-                    child: const Icon(Icons.arrow_back, color: AppColors.primary),
-                  ),
-                  const Spacer(),
-                  Text('Payment', style: AppTextStyles.h3),
-                  const Spacer(),
-                  const Icon(Icons.warning_amber,
-                      color: AppColors.warning, size: 24),
-                ],
-              ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
 
               // Fail banner
               Container(
@@ -125,7 +123,7 @@ class PaymentFailedScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              const Spacer(),
+              const SizedBox(height: 24),
 
               SizedBox(
                 width: double.infinity,
