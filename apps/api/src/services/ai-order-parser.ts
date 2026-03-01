@@ -44,6 +44,14 @@ const UNIT_ALIASES: Record<string, string> = {
 
 const SUPPORTED_UNITS = ["kg", "quintal", "ton", "bag", "litre"] as const;
 
+function logAiJson(label: string, payload: unknown) {
+  try {
+    console.log(`[ai-order-parser] ${label}: ${JSON.stringify(payload)}`);
+  } catch {
+    console.log(`[ai-order-parser] ${label}:`, payload);
+  }
+}
+
 function clampConfidence(input: unknown, fallback = 0.4) {
   if (typeof input !== "number" || Number.isNaN(input)) return fallback;
   return Math.max(0, Math.min(1, input));
@@ -156,12 +164,14 @@ function fallbackExtraction(
     unit,
     transcriptLower,
   });
+  const resolvedCropName = matchedGig?.cropName ?? cropName;
+  const resolvedUnit = matchedGig?.unit ?? unit;
 
-  const needsClarification = !cropName || !quantity || !unit;
+  const needsClarification = !resolvedCropName || !quantity || !resolvedUnit;
   return {
-    cropName,
+    cropName: resolvedCropName,
     quantity: quantity && quantity > 0 ? quantity : null,
-    unit,
+    unit: resolvedUnit,
     matchedGigId: matchedGig?.id ?? null,
     matchedGigLabel: buildGigLabel(matchedGig),
     confidence: needsClarification ? 0.35 : 0.65,
@@ -255,6 +265,7 @@ async function callModelForExtraction(params: {
   }
 
   const parsed = extractJsonObject(contentText);
+  logAiJson("parsed-model-json", parsed);
   return parsed;
 }
 
@@ -287,16 +298,18 @@ export async function extractVoiceOrderFromTranscript(params: {
         unit,
         transcriptLower: transcript.toLowerCase(),
       });
+    const resolvedCropName = matchedGig?.cropName ?? cropName;
+    const resolvedUnit = matchedGig?.unit ?? unit;
 
     const explicitNeedsClarification =
       typeof parsed.needsClarification === "boolean" ? parsed.needsClarification : false;
-    const inferredNeedsClarification = !cropName || !quantity || !unit;
+    const inferredNeedsClarification = !resolvedCropName || !quantity || !resolvedUnit;
     const needsClarification = explicitNeedsClarification || inferredNeedsClarification;
 
     return {
-      cropName,
+      cropName: resolvedCropName,
       quantity,
-      unit,
+      unit: resolvedUnit,
       matchedGigId: matchedGig?.id ?? null,
       matchedGigLabel: buildGigLabel(matchedGig),
       confidence: clampConfidence(parsed.confidence, needsClarification ? 0.5 : 0.8),

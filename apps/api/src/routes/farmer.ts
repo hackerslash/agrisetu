@@ -262,6 +262,7 @@ const createOrderSchema = z.object({
     .string()
     .min(1)
     .transform((v) => v.toLowerCase().trim()),
+  matchedGigId: z.string().trim().min(1).optional(),
   deliveryDate: z.string().optional(),
 });
 
@@ -276,6 +277,7 @@ router.post("/orders", async (req, res) => {
       where: { id: req.user!.id },
       select: {
         district: true,
+        state: true,
         latitude: true,
         longitude: true,
       },
@@ -285,12 +287,51 @@ router.post("/orders", async (req, res) => {
       return;
     }
 
+    let resolvedCropName = parsed.data.cropName.trim();
+    let resolvedUnit = parsed.data.unit;
+
+    if (parsed.data.matchedGigId) {
+      const matchedGig = await prisma.gig.findFirst({
+        where: {
+          id: parsed.data.matchedGigId,
+          status: GigStatus.PUBLISHED,
+          availableQuantity: { gt: 0 },
+        },
+        include: {
+          vendor: {
+            select: {
+              state: true,
+              latitude: true,
+              longitude: true,
+              serviceRadiusKm: true,
+            },
+          },
+        },
+      });
+
+      if (
+        matchedGig &&
+        isGigServiceableForFarmer({
+          farmerLatitude: farmer.latitude,
+          farmerLongitude: farmer.longitude,
+          farmerState: farmer.state,
+          vendorLatitude: matchedGig.vendor.latitude,
+          vendorLongitude: matchedGig.vendor.longitude,
+          vendorState: matchedGig.vendor.state,
+          serviceRadiusKm: matchedGig.vendor.serviceRadiusKm,
+        })
+      ) {
+        resolvedCropName = matchedGig.cropName;
+        resolvedUnit = matchedGig.unit.toLowerCase().trim();
+      }
+    }
+
     const order = await prisma.order.create({
       data: {
         farmerId: req.user!.id,
-        cropName: parsed.data.cropName,
+        cropName: resolvedCropName,
         quantity: parsed.data.quantity,
-        unit: parsed.data.unit,
+        unit: resolvedUnit,
         deliveryDate: parsed.data.deliveryDate
           ? new Date(parsed.data.deliveryDate)
           : null,
@@ -298,8 +339,8 @@ router.post("/orders", async (req, res) => {
     });
 
     const availableClusters = await findJoinableClusters(
-      parsed.data.cropName,
-      parsed.data.unit,
+      resolvedCropName,
+      resolvedUnit,
       farmer.district ?? undefined,
       farmer.latitude ?? undefined,
       farmer.longitude ?? undefined,

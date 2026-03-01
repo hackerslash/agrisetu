@@ -41,6 +41,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
   final _unitCtrl = TextEditingController();
   String? _voiceTranscript;
   double? _voiceConfidence;
+  String? _matchedGigId;
   String? _matchedGigLabel;
   String? _extractionSource;
   bool _isCreating = false;
@@ -55,6 +56,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
       _unitCtrl.text = widget.prefill?['unit'] as String? ?? 'kg';
       _voiceTranscript = widget.prefill?['transcript'] as String?;
       _voiceConfidence = (widget.prefill?['confidence'] as num?)?.toDouble();
+      _matchedGigId = widget.prefill?['matchedGigId'] as String?;
       _matchedGigLabel = widget.prefill?['matchedGigLabel'] as String?;
       _extractionSource = widget.prefill?['extractionSource'] as String?;
     }
@@ -73,11 +75,17 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     setState(() => _isCreating = true);
     try {
       final api = ref.read(apiClientProvider);
-      final createRes = await api.createOrder({
+      final payload = <String, dynamic>{
         'cropName': _cropCtrl.text.trim(),
         'quantity': double.parse(_quantityCtrl.text),
         'unit': _unitCtrl.text.trim(),
-      });
+      };
+      final matchedGigId = _matchedGigId?.trim();
+      if (matchedGigId != null && matchedGigId.isNotEmpty) {
+        payload['matchedGigId'] = matchedGigId;
+      }
+
+      final createRes = await api.createOrder(payload);
 
       final orderData = (createRes['order'] is Map<String, dynamic>)
           ? createRes['order'] as Map<String, dynamic>
