@@ -7,7 +7,7 @@
     "dev:all": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
     "dev:api": "npm run dev --workspace=apps/api",
     "dev:web": "npm run dev --workspace=apps/web",
-    "dev:mobile": "cd apps/mobile && flutter run",
+    "dev:mobile": "cd apps/mobile && set -a && . ./.env && set +a && flutter run --dart-define=API_BASE_URL=\"$API_BASE_URL\"",
     "mobile:get": "cd apps/mobile && flutter pub get",
     "mobile:build:android": "cd apps/mobile && flutter build apk",
     "mobile:build:ios": "cd apps/mobile && flutter build ios",

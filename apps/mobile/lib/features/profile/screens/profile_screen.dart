@@ -19,11 +19,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _isUploadingAvatar = false;
 
   Future<void> _pickAvatar() async {
-    final dataUrl = await pickAvatarDataUrl();
-    if (dataUrl == null || dataUrl.isEmpty) return;
-
-    setState(() => _isUploadingAvatar = true);
     try {
+      if (_isUploadingAvatar) return;
+
+      final dataUrl = await pickAvatarDataUrl();
+      if (dataUrl == null || dataUrl.isEmpty) return;
+
+      setState(() => _isUploadingAvatar = true);
       await ref.read(authProvider.notifier).uploadAvatarDataUrl(dataUrl);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -35,7 +37,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         SnackBar(content: Text(e.toString())),
       );
     } finally {
-      if (mounted) {
+      if (mounted && _isUploadingAvatar) {
         setState(() => _isUploadingAvatar = false);
       }
     }
@@ -82,24 +84,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      Container(
-                        width: 72,
-                        height: 72,
-                        decoration: const BoxDecoration(
-                          color: AppColors.surface,
-                          shape: BoxShape.circle,
-                        ),
-                        child: ClipOval(
-                          child: avatarUrl != null && avatarUrl.isNotEmpty
-                              ? Image.network(
-                                  avatarUrl,
-                                  width: 72,
-                                  height: 72,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) =>
-                                      _buildAvatarFallback(farmer),
-                                )
-                              : _buildAvatarFallback(farmer),
+                      GestureDetector(
+                        onTap: farmer == null ? null : _pickAvatar,
+                        child: Container(
+                          width: 72,
+                          height: 72,
+                          decoration: const BoxDecoration(
+                            color: AppColors.surface,
+                            shape: BoxShape.circle,
+                          ),
+                          child: ClipOval(
+                            child: avatarUrl != null && avatarUrl.isNotEmpty
+                                ? Image.network(
+                                    avatarUrl,
+                                    width: 72,
+                                    height: 72,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) =>
+                                        _buildAvatarFallback(farmer),
+                                  )
+                                : _buildAvatarFallback(farmer),
+                          ),
                         ),
                       ),
                       if (_isUploadingAvatar)
@@ -125,8 +130,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         right: -2,
                         bottom: -2,
                         child: GestureDetector(
-                          onTap:
-                              farmer == null ? null : _pickAvatar,
+                          onTap: farmer == null ? null : _pickAvatar,
                           child: Container(
                             width: 24,
                             height: 24,

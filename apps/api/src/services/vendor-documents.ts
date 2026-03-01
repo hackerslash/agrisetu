@@ -18,19 +18,15 @@ type AwsConfig = {
   credentials?: {
     accessKeyId: string;
     secretAccessKey: string;
+    sessionToken?: string;
   };
 };
 
 type DocType = "PAN" | "GST" | "QUALITY_CERT";
 
 function getAwsConfig(): AwsConfig {
-  const region =
-    process.env.AWS_REGION?.trim() ||
-    process.env.AWS_DEFAULT_REGION?.trim() ||
-    DEFAULT_REGION;
-  const bucket =
-    process.env.AWS_VENDOR_DOCS_BUCKET?.trim() ||
-    process.env.VENDOR_DOCS_BUCKET?.trim();
+  const region = process.env.AWS_REGION?.trim() || DEFAULT_REGION;
+  const bucket = process.env.AWS_VENDOR_DOCS_BUCKET?.trim();
 
   if (!bucket) {
     throw new Error(
@@ -38,11 +34,15 @@ function getAwsConfig(): AwsConfig {
     );
   }
 
-  const accessKeyId =
-    process.env.AWS_ACCESS_KEY_ID?.trim() || process.env.AWS_ACCESS_KEY?.trim();
-  const secretAccessKey =
-    process.env.AWS_SECRET_ACCESS_KEY?.trim() ||
-    process.env.AWS_SECRET_KEY?.trim();
+  const accessKeyId = process.env.AWS_ACCESS_KEY_ID?.trim();
+  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY?.trim();
+  const sessionToken = process.env.AWS_SESSION_TOKEN?.trim();
+
+  if ((accessKeyId && !secretAccessKey) || (!accessKeyId && secretAccessKey)) {
+    throw new Error(
+      "Set both AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or neither.",
+    );
+  }
 
   if (accessKeyId && secretAccessKey) {
     return {
@@ -51,6 +51,7 @@ function getAwsConfig(): AwsConfig {
       credentials: {
         accessKeyId,
         secretAccessKey,
+        ...(sessionToken ? { sessionToken } : {}),
       },
     };
   }
@@ -191,6 +192,8 @@ async function buildSignedGetUrl(params: {
     region: params.region,
     credentials: params.credentials,
     sha256: Hash.bind(null, "sha256"),
+    // S3 uses its own path canonicalization rules for SigV4.
+    uriEscapePath: false,
   });
 
   const unsigned = new HttpRequest({
@@ -198,6 +201,10 @@ async function buildSignedGetUrl(params: {
     hostname: `${params.bucket}.s3.${params.region}.amazonaws.com`,
     method: "GET",
     path: encodeObjectKeyPath(params.objectKey),
+    headers: {
+      host: `${params.bucket}.s3.${params.region}.amazonaws.com`,
+      "x-amz-content-sha256": "UNSIGNED-PAYLOAD",
+    },
   });
 
   const signed = await signer.presign(unsigned, {

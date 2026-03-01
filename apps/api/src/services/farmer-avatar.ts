@@ -17,17 +17,13 @@ type AwsConfig = {
   credentials?: {
     accessKeyId: string;
     secretAccessKey: string;
+    sessionToken?: string;
   };
 };
 
 function getAwsConfig(): AwsConfig {
-  const region =
-    process.env.AWS_REGION?.trim() ||
-    process.env.AWS_DEFAULT_REGION?.trim() ||
-    DEFAULT_REGION;
-  const bucket =
-    process.env.AWS_FARMER_PROFILE_BUCKET?.trim() ||
-    process.env.FARMER_PROFILE_BUCKET?.trim();
+  const region = process.env.AWS_REGION?.trim() || DEFAULT_REGION;
+  const bucket = process.env.AWS_FARMER_PROFILE_BUCKET?.trim();
 
   if (!bucket) {
     throw new Error(
@@ -35,11 +31,15 @@ function getAwsConfig(): AwsConfig {
     );
   }
 
-  const accessKeyId =
-    process.env.AWS_ACCESS_KEY_ID?.trim() || process.env.AWS_ACCESS_KEY?.trim();
-  const secretAccessKey =
-    process.env.AWS_SECRET_ACCESS_KEY?.trim() ||
-    process.env.AWS_SECRET_KEY?.trim();
+  const accessKeyId = process.env.AWS_ACCESS_KEY_ID?.trim();
+  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY?.trim();
+  const sessionToken = process.env.AWS_SESSION_TOKEN?.trim();
+
+  if ((accessKeyId && !secretAccessKey) || (!accessKeyId && secretAccessKey)) {
+    throw new Error(
+      "Set both AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or neither.",
+    );
+  }
 
   if (accessKeyId && secretAccessKey) {
     return {
@@ -48,11 +48,17 @@ function getAwsConfig(): AwsConfig {
       credentials: {
         accessKeyId,
         secretAccessKey,
+        ...(sessionToken ? { sessionToken } : {}),
       },
     };
   }
 
   return { region, bucket };
+}
+
+function shouldUseUnsignedAvatarUrls() {
+  const value = process.env.AWS_FARMER_AVATAR_UNSIGNED_URLS?.trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
 }
 
 function resolveImageExtension(params: { fileName?: string; mimeType?: string }) {
@@ -81,7 +87,16 @@ function toPublicUrl(params: { region: string; bucket: string; objectKey: string
     .split("/")
     .map((segment) => encodeURIComponent(segment))
     .join("/");
-  return `https://${params.bucket}.s3.${params.region}.amazonaws.com/${encodedObjectKey}`;
+  return `https://s3.${params.region}.amazonaws.com/${params.bucket}/${encodedObjectKey}`;
+}
+
+function trimQueryAndHash(value: string) {
+  const hashIndex = value.indexOf("#");
+  const queryIndex = value.indexOf("?");
+  let endIndex = value.length;
+  if (hashIndex >= 0) endIndex = Math.min(endIndex, hashIndex);
+  if (queryIndex >= 0) endIndex = Math.min(endIndex, queryIndex);
+  return value.slice(0, endIndex);
 }
 
 function parseManagedObjectKey(params: {
@@ -91,17 +106,37 @@ function parseManagedObjectKey(params: {
 }) {
   const s3UriPrefix = `s3://${params.bucket}/`;
   if (params.avatarUrl.startsWith(s3UriPrefix)) {
-    return decodeURIComponent(params.avatarUrl.slice(s3UriPrefix.length));
+    return decodeURIComponent(
+      trimQueryAndHash(params.avatarUrl.slice(s3UriPrefix.length)),
+    );
   }
 
   const directPrefix = `https://${params.bucket}.s3.${params.region}.amazonaws.com/`;
   if (params.avatarUrl.startsWith(directPrefix)) {
-    return decodeURIComponent(params.avatarUrl.slice(directPrefix.length));
+    return decodeURIComponent(
+      trimQueryAndHash(params.avatarUrl.slice(directPrefix.length)),
+    );
   }
 
   const globalPrefix = `https://${params.bucket}.s3.amazonaws.com/`;
   if (params.avatarUrl.startsWith(globalPrefix)) {
-    return decodeURIComponent(params.avatarUrl.slice(globalPrefix.length));
+    return decodeURIComponent(
+      trimQueryAndHash(params.avatarUrl.slice(globalPrefix.length)),
+    );
+  }
+
+  const pathStylePrefix = `https://s3.${params.region}.amazonaws.com/${params.bucket}/`;
+  if (params.avatarUrl.startsWith(pathStylePrefix)) {
+    return decodeURIComponent(
+      trimQueryAndHash(params.avatarUrl.slice(pathStylePrefix.length)),
+    );
+  }
+
+  const pathStyleGlobalPrefix = `https://s3.amazonaws.com/${params.bucket}/`;
+  if (params.avatarUrl.startsWith(pathStyleGlobalPrefix)) {
+    return decodeURIComponent(
+      trimQueryAndHash(params.avatarUrl.slice(pathStyleGlobalPrefix.length)),
+    );
   }
 
   return null;
@@ -112,6 +147,13 @@ function encodeObjectKeyPath(objectKey: string) {
     .split("/")
     .map((segment) => encodeURIComponent(segment))
     .join("/")}`;
+}
+
+function encodeQueryComponent(value: string) {
+  return encodeURIComponent(value).replace(
+    /[!'()*]/g,
+    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
 }
 
 type SignedRequestLike = {
@@ -131,20 +173,24 @@ type SignedRequestLike = {
 };
 
 function formatHttpRequestUrl(request: SignedRequestLike) {
-  const query = new URLSearchParams();
+  const queryPairs: string[] = [];
   const entries = Object.entries(request.query ?? {});
   for (const [key, value] of entries) {
+    const encodedKey = encodeQueryComponent(key);
     if (Array.isArray(value)) {
-      for (const v of value) query.append(key, String(v));
+      for (const v of value) {
+        if (v == null) continue;
+        queryPairs.push(`${encodedKey}=${encodeQueryComponent(String(v))}`);
+      }
       continue;
     }
     if (value == null) continue;
-    query.append(key, String(value));
+    queryPairs.push(`${encodedKey}=${encodeQueryComponent(String(value))}`);
   }
 
   const protocol = request.protocol ?? "https:";
   const port = request.port ? `:${request.port}` : "";
-  const queryString = query.toString();
+  const queryString = queryPairs.join("&");
   return `${protocol}//${request.hostname}${port}${request.path}${
     queryString ? `?${queryString}` : ""
   }`;
@@ -179,13 +225,21 @@ async function buildSignedGetUrl(params: {
     region: params.region,
     credentials: params.credentials,
     sha256: Hash.bind(null, "sha256"),
+    // S3 uses its own path canonicalization rules for SigV4.
+    uriEscapePath: false,
   });
 
   const unsigned = new HttpRequest({
     protocol: "https:",
-    hostname: `${params.bucket}.s3.${params.region}.amazonaws.com`,
+    hostname: `s3.${params.region}.amazonaws.com`,
     method: "GET",
-    path: encodeObjectKeyPath(params.objectKey),
+    path: `/${encodeURIComponent(params.bucket)}${encodeObjectKeyPath(
+      params.objectKey,
+    )}`,
+    headers: {
+      host: `s3.${params.region}.amazonaws.com`,
+      "x-amz-content-sha256": "UNSIGNED-PAYLOAD",
+    },
   });
 
   const signed = await signer.presign(unsigned, {
@@ -274,6 +328,14 @@ export async function resolveFarmerAvatarUrlForClient(avatarUrl?: string | null)
 
   if (!objectKey) {
     return avatarUrl;
+  }
+
+  if (shouldUseUnsignedAvatarUrls()) {
+    return toPublicUrl({
+      region: aws.region,
+      bucket: aws.bucket,
+      objectKey,
+    });
   }
 
   const credentials = await resolveSigningCredentials(aws);

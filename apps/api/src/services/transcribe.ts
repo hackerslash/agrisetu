@@ -32,6 +32,7 @@ type AwsConfig = {
   credentials?: {
     accessKeyId: string;
     secretAccessKey: string;
+    sessionToken?: string;
   };
 };
 
@@ -61,14 +62,8 @@ function wait(ms: number) {
 }
 
 function getAwsConfig(): AwsConfig {
-  const region =
-    process.env.AWS_REGION?.trim() ||
-    process.env.AWS_DEFAULT_REGION?.trim() ||
-    DEFAULT_REGION;
-  const bucket =
-    process.env.AWS_TRANSCRIBE_BUCKET?.trim() ||
-    process.env.TRANSCRIBE_BUCKET?.trim() ||
-    process.env.AWS_S3_BUCKET?.trim();
+  const region = process.env.AWS_REGION?.trim() || DEFAULT_REGION;
+  const bucket = process.env.AWS_TRANSCRIBE_BUCKET?.trim();
 
   if (!bucket) {
     throw new Error(
@@ -76,11 +71,15 @@ function getAwsConfig(): AwsConfig {
     );
   }
 
-  const accessKeyId =
-    process.env.AWS_ACCESS_KEY_ID?.trim() || process.env.AWS_ACCESS_KEY?.trim();
-  const secretAccessKey =
-    process.env.AWS_SECRET_ACCESS_KEY?.trim() ||
-    process.env.AWS_SECRET_KEY?.trim();
+  const accessKeyId = process.env.AWS_ACCESS_KEY_ID?.trim();
+  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY?.trim();
+  const sessionToken = process.env.AWS_SESSION_TOKEN?.trim();
+
+  if ((accessKeyId && !secretAccessKey) || (!accessKeyId && secretAccessKey)) {
+    throw new Error(
+      "Set both AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or neither.",
+    );
+  }
 
   if (accessKeyId && secretAccessKey) {
     return {
@@ -89,6 +88,7 @@ function getAwsConfig(): AwsConfig {
       credentials: {
         accessKeyId,
         secretAccessKey,
+        ...(sessionToken ? { sessionToken } : {}),
       },
     };
   }

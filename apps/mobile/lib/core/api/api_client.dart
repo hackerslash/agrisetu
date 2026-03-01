@@ -116,8 +116,19 @@ class ApiClient {
       case 'image/jpg':
         return 'jpg';
       default:
-        throw const ApiException('Only JPG, PNG, and WEBP avatars are supported.');
+        throw const ApiException(
+            'Only JPG, PNG, and WEBP avatars are supported.');
     }
+  }
+
+  DioMediaType _multipartContentTypeForMime(String mimeType) {
+    final parts = mimeType.split('/');
+    if (parts.length != 2 ||
+        parts[0].trim().isEmpty ||
+        parts[1].trim().isEmpty) {
+      throw const ApiException('Invalid avatar format.');
+    }
+    return DioMediaType(parts[0].trim(), parts[1].trim());
   }
 
   // ─── Auth ───────────────────────────────────────────────────────────────────
@@ -437,6 +448,7 @@ class ApiClient {
           MultipartFile.fromBytes(
             decoded.bytes,
             filename: 'farmer_avatar.$extension',
+            contentType: _multipartContentTypeForMime(decoded.mimeType),
           ),
         ),
       );
