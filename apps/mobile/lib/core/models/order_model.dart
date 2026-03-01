@@ -115,6 +115,7 @@ class ClusterMember {
   final bool hasPaid;
   final DateTime? paidAt;
   final Cluster? cluster;
+  final ClusterFarmer? farmer;
 
   const ClusterMember({
     required this.id,
@@ -125,6 +126,7 @@ class ClusterMember {
     required this.hasPaid,
     this.paidAt,
     this.cluster,
+    this.farmer,
   });
 
   factory ClusterMember.fromJson(Map<String, dynamic> json) {
@@ -141,6 +143,44 @@ class ClusterMember {
       cluster: json['cluster'] != null
           ? Cluster.fromJson(json['cluster'] as Map<String, dynamic>)
           : null,
+      farmer: json['farmer'] != null
+          ? ClusterFarmer.fromJson(json['farmer'] as Map<String, dynamic>)
+          : null,
+    );
+  }
+}
+
+class ClusterFarmer {
+  final String id;
+  final String? name;
+  final String? village;
+  final String? district;
+  final String? state;
+  final String? locationAddress;
+  final double? latitude;
+  final double? longitude;
+
+  const ClusterFarmer({
+    required this.id,
+    this.name,
+    this.village,
+    this.district,
+    this.state,
+    this.locationAddress,
+    this.latitude,
+    this.longitude,
+  });
+
+  factory ClusterFarmer.fromJson(Map<String, dynamic> json) {
+    return ClusterFarmer(
+      id: json['id'] as String,
+      name: json['name'] as String?,
+      village: json['village'] as String?,
+      district: json['district'] as String?,
+      state: json['state'] as String?,
+      locationAddress: json['locationAddress'] as String?,
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
     );
   }
 }
@@ -209,6 +249,9 @@ class Cluster {
   final ClusterStatus status;
   final String? district;
   final String? state;
+  final String? locationAddress;
+  final double? latitude;
+  final double? longitude;
   final String? vendorId;
   final String? gigId;
   final DateTime createdAt;
@@ -227,6 +270,9 @@ class Cluster {
     required this.status,
     this.district,
     this.state,
+    this.locationAddress,
+    this.latitude,
+    this.longitude,
     this.vendorId,
     this.gigId,
     required this.createdAt,
@@ -252,6 +298,9 @@ class Cluster {
       status: ClusterStatus.fromString(json['status'] as String),
       district: json['district'] as String?,
       state: json['state'] as String?,
+      locationAddress: json['locationAddress'] as String?,
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
       vendorId: json['vendorId'] as String?,
       gigId: json['gigId'] as String?,
       createdAt: DateTime.parse(json['createdAt'] as String),
@@ -332,6 +381,10 @@ class Vendor {
   final String contactName;
   final String? state;
   final String? businessType;
+  final String? locationAddress;
+  final double? latitude;
+  final double? longitude;
+  final double? serviceRadiusKm;
   final bool isVerified;
 
   const Vendor({
@@ -340,6 +393,10 @@ class Vendor {
     required this.contactName,
     this.state,
     this.businessType,
+    this.locationAddress,
+    this.latitude,
+    this.longitude,
+    this.serviceRadiusKm,
     required this.isVerified,
   });
 
@@ -350,6 +407,10 @@ class Vendor {
       contactName: json['contactName'] as String,
       state: json['state'] as String?,
       businessType: json['businessType'] as String?,
+      locationAddress: json['locationAddress'] as String?,
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
+      serviceRadiusKm: (json['serviceRadiusKm'] as num?)?.toDouble(),
       isVerified: json['isVerified'] as bool? ?? false,
     );
   }

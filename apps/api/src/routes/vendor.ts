@@ -3,13 +3,17 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { authenticate, requireVendor } from "../middleware/auth.js";
 import { success, error } from "../lib/response.js";
-import { syncClustersForPublishedGig } from "../services/cluster.js";
+import {
+  isClusterServiceableForVendor,
+  syncClustersForPublishedGig,
+} from "../services/cluster.js";
 import {
   GigStatus,
   ClusterStatus,
   OrderStatus,
   PaymentStatus,
 } from "@prisma/client";
+import { isValidCoordinate } from "../lib/geo.js";
 
 const router = Router();
 router.use(authenticate, requireVendor);
@@ -30,6 +34,10 @@ router.get("/profile", async (req, res) => {
         pan: true,
         state: true,
         businessType: true,
+        locationAddress: true,
+        latitude: true,
+        longitude: true,
+        serviceRadiusKm: true,
         isVerified: true,
         createdAt: true,
         documents: true,
@@ -51,6 +59,10 @@ const updateProfileSchema = z.object({
   phone: z.string().optional(),
   state: z.string().optional(),
   businessType: z.string().optional(),
+  locationAddress: z.string().optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  serviceRadiusKm: z.number().positive().max(500).optional(),
 });
 
 router.patch("/profile", async (req, res) => {
@@ -71,6 +83,10 @@ router.patch("/profile", async (req, res) => {
         phone: true,
         state: true,
         businessType: true,
+        locationAddress: true,
+        latitude: true,
+        longitude: true,
+        serviceRadiusKm: true,
         isVerified: true,
       },
     });
@@ -259,6 +275,24 @@ router.delete("/gigs/:id", async (req, res) => {
 
 router.get("/clusters", async (req, res) => {
   try {
+    const vendorProfile = await prisma.vendor.findUnique({
+      where: { id: req.user!.id },
+      select: {
+        latitude: true,
+        longitude: true,
+        serviceRadiusKm: true,
+      },
+    });
+    const hasServiceConfig = Boolean(
+      vendorProfile &&
+      isValidCoordinate(vendorProfile.latitude, vendorProfile.longitude) &&
+      (vendorProfile.serviceRadiusKm ?? 0) > 0,
+    );
+    if (!hasServiceConfig) {
+      success(res, []);
+      return;
+    }
+
     const vendorGigs = await prisma.gig.findMany({
       where: { vendorId: req.user!.id, status: GigStatus.PUBLISHED },
       select: { cropName: true, unit: true },
@@ -284,7 +318,16 @@ router.get("/clusters", async (req, res) => {
       },
       orderBy: { createdAt: "desc" },
     });
-    success(res, clusters);
+    const serviceableClusters = clusters.filter((cluster) =>
+      isClusterServiceableForVendor({
+        vendorLatitude: vendorProfile!.latitude,
+        vendorLongitude: vendorProfile!.longitude,
+        serviceRadiusKm: vendorProfile!.serviceRadiusKm,
+        clusterLatitude: cluster.latitude,
+        clusterLongitude: cluster.longitude,
+      }),
+    );
+    success(res, serviceableClusters);
   } catch {
     error(res, "Internal server error", 500);
   }
@@ -303,6 +346,24 @@ router.post("/clusters/:id/bid", async (req, res) => {
     return;
   }
   try {
+    const vendorProfile = await prisma.vendor.findUnique({
+      where: { id: req.user!.id },
+      select: {
+        latitude: true,
+        longitude: true,
+        serviceRadiusKm: true,
+      },
+    });
+    const hasServiceConfig = Boolean(
+      vendorProfile &&
+      isValidCoordinate(vendorProfile.latitude, vendorProfile.longitude) &&
+      (vendorProfile.serviceRadiusKm ?? 0) > 0,
+    );
+    if (!hasServiceConfig) {
+      error(res, "Configure vendor location and service radius first", 400);
+      return;
+    }
+
     const cluster = await prisma.cluster.findUnique({
       where: { id: req.params.id },
     });
@@ -317,6 +378,18 @@ router.post("/clusters/:id/bid", async (req, res) => {
       cluster.status !== ClusterStatus.VOTING
     ) {
       error(res, "Cluster is not accepting bids", 400);
+      return;
+    }
+    if (
+      !isClusterServiceableForVendor({
+        vendorLatitude: vendorProfile!.latitude,
+        vendorLongitude: vendorProfile!.longitude,
+        serviceRadiusKm: vendorProfile!.serviceRadiusKm,
+        clusterLatitude: cluster.latitude,
+        clusterLongitude: cluster.longitude,
+      })
+    ) {
+      error(res, "Cluster is outside your configured service radius", 400);
       return;
     }
 
@@ -424,7 +497,7 @@ router.patch("/orders/:id/accept", async (req, res) => {
       error(res, "Order not found", 404);
       return;
     }
-    
+
     // Initialize delivery tracking with Order Received status
     await prisma.delivery.upsert({
       where: { clusterId: req.params.id },
@@ -478,7 +551,7 @@ router.patch("/orders/:id/accept", async (req, res) => {
         ],
       },
     });
-    
+
     success(res, { accepted: true });
   } catch {
     error(res, "Internal server error", 500);
@@ -635,7 +708,11 @@ router.patch("/orders/:id/out-for-delivery", async (req, res) => {
             status: "completed",
             timestamp: new Date().toISOString(),
           },
-          { step: "Dispatched", status: "in_progress", timestamp: new Date().toISOString() },
+          {
+            step: "Dispatched",
+            status: "in_progress",
+            timestamp: new Date().toISOString(),
+          },
           { step: "Delivered", status: "pending", timestamp: null },
         ],
       },
@@ -737,11 +814,7 @@ router.patch("/orders/:id/deliver", async (req, res) => {
       cluster.status !== ClusterStatus.DISPATCHED &&
       cluster.status !== ClusterStatus.OUT_FOR_DELIVERY
     ) {
-      error(
-        res,
-        "Order must be dispatched before marking as delivered",
-        400,
-      );
+      error(res, "Order must be dispatched before marking as delivered", 400);
       return;
     }
 

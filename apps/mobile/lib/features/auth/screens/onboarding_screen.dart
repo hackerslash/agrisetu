@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
+import 'package:latlong2/latlong.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../core/providers/auth_provider.dart';
 
@@ -19,8 +23,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final _villageCtrl = TextEditingController();
   final _districtCtrl = TextEditingController();
   final _stateCtrl = TextEditingController();
+  final _locationAddressCtrl = TextEditingController();
   final _landAreaCtrl = TextEditingController();
   final _upiCtrl = TextEditingController();
+  double? _latitude;
+  double? _longitude;
+  bool _locating = false;
   String _selectedLanguage = 'en';
   final List<String> _cropsGrown = [];
   bool _isLoading = false;
@@ -46,13 +54,93 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     _villageCtrl.dispose();
     _districtCtrl.dispose();
     _stateCtrl.dispose();
+    _locationAddressCtrl.dispose();
     _landAreaCtrl.dispose();
     _upiCtrl.dispose();
     super.dispose();
   }
 
+  Future<void> _captureCurrentLocation() async {
+    if (_locating) return;
+    setState(() {
+      _locating = true;
+      _error = null;
+    });
+
+    try {
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) {
+        throw Exception('Please enable location services on your phone.');
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw Exception(
+            'Location permission is required to fetch map location.');
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+
+      _latitude = position.latitude;
+      _longitude = position.longitude;
+
+      String? resolvedAddress;
+      try {
+        final placemarks = await placemarkFromCoordinates(
+            position.latitude, position.longitude);
+        if (placemarks.isNotEmpty) {
+          final p = placemarks.first;
+          final addressParts = [
+            p.street,
+            p.subLocality,
+            p.locality,
+            p.subAdministrativeArea,
+            p.administrativeArea,
+            p.postalCode,
+          ].where((value) => value != null && value.trim().isNotEmpty).toList();
+          resolvedAddress = addressParts.join(', ');
+
+          if (_villageCtrl.text.trim().isEmpty &&
+              (p.locality ?? '').isNotEmpty) {
+            _villageCtrl.text = p.locality!;
+          }
+          if (_districtCtrl.text.trim().isEmpty &&
+              (p.subAdministrativeArea ?? '').isNotEmpty) {
+            _districtCtrl.text = p.subAdministrativeArea!;
+          }
+          if (_stateCtrl.text.trim().isEmpty &&
+              (p.administrativeArea ?? '').isNotEmpty) {
+            _stateCtrl.text = p.administrativeArea!;
+          }
+        }
+      } catch (_) {
+        // Keep coordinates even when reverse geocoding fails.
+      }
+
+      _locationAddressCtrl.text = resolvedAddress ??
+          'Lat ${position.latitude.toStringAsFixed(6)}, Lng ${position.longitude.toStringAsFixed(6)}';
+      setState(() {});
+    } catch (e) {
+      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_latitude == null || _longitude == null) {
+      setState(() => _error = 'Please capture your location on map first.');
+      return;
+    }
     setState(() {
       _isLoading = true;
       _error = null;
@@ -63,6 +151,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         'village': _villageCtrl.text.trim(),
         'district': _districtCtrl.text.trim(),
         'state': _stateCtrl.text.trim(),
+        'locationAddress': _locationAddressCtrl.text.trim(),
+        'latitude': _latitude,
+        'longitude': _longitude,
         'landArea': _landAreaCtrl.text.isNotEmpty
             ? double.tryParse(_landAreaCtrl.text)
             : null,
@@ -154,6 +245,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       _villageCtrl.text = farmer.village ?? '';
       _districtCtrl.text = farmer.district ?? '';
       _stateCtrl.text = farmer.state ?? '';
+      _locationAddressCtrl.text = farmer.locationAddress ?? '';
+      _latitude = farmer.latitude;
+      _longitude = farmer.longitude;
       _landAreaCtrl.text =
           farmer.landArea != null ? farmer.landArea!.toString() : '';
       _upiCtrl.text = farmer.upiId ?? '';
@@ -349,6 +443,94 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 16),
+
+                    _buildField(
+                      label: 'Exact Location Address',
+                      controller: _locationAddressCtrl,
+                      hint: 'Captured from map / GPS',
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Location address is required'
+                          : null,
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: OutlinedButton.icon(
+                        onPressed: (_isLoading || _locating)
+                            ? null
+                            : _captureCurrentLocation,
+                        icon: _locating
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.my_location_outlined, size: 18),
+                        label: Text(
+                          _locating
+                              ? 'Fetching current location...'
+                              : 'Use my current location',
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          side: const BorderSide(color: AppColors.primary),
+                          shape: const StadiumBorder(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (_latitude != null && _longitude != null)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: SizedBox(
+                          height: 190,
+                          child: FlutterMap(
+                            options: MapOptions(
+                              initialCenter: LatLng(_latitude!, _longitude!),
+                              initialZoom: 15,
+                              interactionOptions: const InteractionOptions(
+                                  flags: InteractiveFlag.all),
+                            ),
+                            children: [
+                              TileLayer(
+                                urlTemplate:
+                                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                userAgentPackageName:
+                                    'com.example.agrisetu_app',
+                              ),
+                              CircleLayer(
+                                circles: [
+                                  CircleMarker(
+                                    point: LatLng(_latitude!, _longitude!),
+                                    radius: 35,
+                                    useRadiusInMeter: true,
+                                    color: AppColors.primary.withOpacity(0.15),
+                                    borderStrokeWidth: 1.2,
+                                    borderColor: AppColors.primary,
+                                  ),
+                                ],
+                              ),
+                              MarkerLayer(
+                                markers: [
+                                  Marker(
+                                    width: 42,
+                                    height: 42,
+                                    point: LatLng(_latitude!, _longitude!),
+                                    child: const Icon(
+                                      Icons.location_on,
+                                      color: AppColors.primary,
+                                      size: 36,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     const SizedBox(height: 16),
 
                     _buildField(

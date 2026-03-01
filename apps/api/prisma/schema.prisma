@@ -14,6 +14,9 @@ model Farmer {
   village        String?
   district       String?
   state          String?
+  locationAddress String?
+  latitude       Float?
+  longitude      Float?
   landArea       Float?
   cropsGrown     String[]
   upiId          String?
@@ -39,6 +42,10 @@ model Vendor {
   pan          String?
   state        String?
   businessType String?
+  locationAddress String?
+  latitude     Float?
+  longitude    Float?
+  serviceRadiusKm Float         @default(25)
   isVerified   Boolean          @default(false)
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
@@ -124,6 +131,9 @@ model Cluster {
   status          ClusterStatus   @default(FORMING)
   district        String?
   state           String?
+  locationAddress String?
+  latitude        Float?
+  longitude       Float?
   vendorId        String?
   gigId           String?
   createdAt       DateTime        @default(now())

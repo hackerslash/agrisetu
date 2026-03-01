@@ -45,8 +45,22 @@ const profileSchema = z.object({
   phone: z.string().min(10, "Valid phone required"),
   state: z.string().optional(),
   businessType: z.string().optional(),
+  locationAddress: z.string().optional(),
+  latitude: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : Number(v)),
+    z.number().min(-90).max(90).optional(),
+  ),
+  longitude: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : Number(v)),
+    z.number().min(-180).max(180).optional(),
+  ),
+  serviceRadiusKm: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : Number(v)),
+    z.number().positive("Radius must be > 0").max(500).optional(),
+  ),
 });
 type ProfileFormData = z.infer<typeof profileSchema>;
+type ProfileFormInput = z.input<typeof profileSchema>;
 
 const passwordSchema = z
   .object({
@@ -108,13 +122,14 @@ export function SettingsContent() {
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [locating, setLocating] = useState(false);
 
   const { data: vendor, isLoading } = useQuery({
     queryKey: ["vendor-profile"],
     queryFn: () => authApi.getMe(),
   });
 
-  const profileForm = useForm<ProfileFormData>({
+  const profileForm = useForm<ProfileFormInput, unknown, ProfileFormData>({
     resolver: zodResolver(profileSchema),
     values: vendor
       ? {
@@ -123,6 +138,10 @@ export function SettingsContent() {
           phone: vendor.phone,
           state: vendor.state ?? "",
           businessType: vendor.businessType ?? "",
+          locationAddress: vendor.locationAddress ?? "",
+          latitude: vendor.latitude ?? undefined,
+          longitude: vendor.longitude ?? undefined,
+          serviceRadiusKm: vendor.serviceRadiusKm ?? 25,
         }
       : undefined,
   });
@@ -158,6 +177,56 @@ export function SettingsContent() {
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: string } } };
       setProfileError(e.response?.data?.error ?? "Update failed");
+    }
+  }
+
+  async function useCurrentLocation() {
+    if (!navigator.geolocation) {
+      setProfileError("Browser geolocation is not available");
+      return;
+    }
+    setProfileError("");
+    setLocating(true);
+    try {
+      const position = await new Promise<GeolocationPosition>(
+        (resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 10000,
+          });
+        },
+      );
+
+      const latitude = Number(position.coords.latitude.toFixed(6));
+      const longitude = Number(position.coords.longitude.toFixed(6));
+
+      profileForm.setValue("latitude", latitude);
+      profileForm.setValue("longitude", longitude);
+
+      let address = `Lat ${latitude}, Lng ${longitude}`;
+      try {
+        const reverseGeocode = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=jsonv2`,
+        );
+        if (reverseGeocode.ok) {
+          const data = (await reverseGeocode.json()) as {
+            display_name?: string;
+          };
+          if (data.display_name?.trim()) {
+            address = data.display_name.trim();
+          }
+        }
+      } catch {
+        // Keep coordinate-based fallback address.
+      }
+
+      profileForm.setValue("locationAddress", address);
+    } catch {
+      setProfileError(
+        "Unable to fetch your location. Please allow browser location permission.",
+      );
+    } finally {
+      setLocating(false);
     }
   }
 
@@ -317,6 +386,60 @@ export function SettingsContent() {
                 <option value="RETAILER">Retailer</option>
                 <option value="WHOLESALER">Wholesaler</option>
               </select>
+            </div>
+            <FormInput
+              label="Business Location Address"
+              placeholder="Street, Village/Town, District"
+              error={profileForm.formState.errors.locationAddress?.message}
+              {...profileForm.register("locationAddress")}
+            />
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <FormInput
+                  label="Latitude"
+                  type="number"
+                  placeholder="12.9716"
+                  error={profileForm.formState.errors.latitude?.message}
+                  step="0.000001"
+                  {...profileForm.register("latitude")}
+                />
+              </div>
+              <div className="flex-1">
+                <FormInput
+                  label="Longitude"
+                  type="number"
+                  placeholder="77.5946"
+                  error={profileForm.formState.errors.longitude?.message}
+                  step="0.000001"
+                  {...profileForm.register("longitude")}
+                />
+              </div>
+            </div>
+            <div className="flex gap-4 items-end">
+              <div className="flex-1">
+                <FormInput
+                  label="Service Radius (km)"
+                  type="number"
+                  placeholder="25"
+                  error={profileForm.formState.errors.serviceRadiusKm?.message}
+                  step="1"
+                  {...profileForm.register("serviceRadiusKm")}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={useCurrentLocation}
+                className="rounded-xl font-semibold"
+                style={{
+                  backgroundColor: "#EDE8DF",
+                  color: "#1A1A1A",
+                  height: 48,
+                  padding: "0 16px",
+                  fontSize: 13,
+                }}
+              >
+                {locating ? "Fetching…" : "Fetch location"}
+              </button>
             </div>
             <div className="flex flex-col gap-1.5">
               <label

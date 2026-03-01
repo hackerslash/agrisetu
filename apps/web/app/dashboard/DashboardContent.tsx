@@ -42,6 +42,11 @@ export function DashboardContent() {
     queryFn: () => vendorApi.getOrders(),
   });
 
+  const { data: publishedGigs = [] } = useQuery({
+    queryKey: ["gigs", "PUBLISHED"],
+    queryFn: () => vendorApi.getGigs("PUBLISHED"),
+  });
+
   // Open clusters vendor can bid on (FORMING / VOTING matching their gigs)
   const { data: openClusters = [] } = useQuery({
     queryKey: ["vendor-clusters"],
@@ -103,7 +108,7 @@ export function DashboardContent() {
       <div className="flex gap-4">
         <MetricCard
           label="Published Gigs"
-          value={analytics?.ordersFulfilled ?? "—"}
+          value={publishedGigs.length}
           sub="All visible to farmers"
           icon={<Briefcase size={16} color="#2C5F2D" />}
         />

@@ -5,22 +5,158 @@ import {
   OrderStatus,
   PaymentStatus,
 } from "@prisma/client";
+import {
+  getCoordinateCentroid,
+  isValidCoordinate,
+  isWithinRadiusKm,
+} from "../lib/geo.js";
 
 const DEFAULT_TARGET_QUANTITY = 1000;
+const DEFAULT_FARMER_CLUSTER_RADIUS_KM = 50;
 
 function normalizeUnit(unit: string) {
   return unit.toLowerCase().trim();
 }
 
-async function findBestMatchingGig(cropName: string, unit: string) {
-  return prisma.gig.findFirst({
+export function isClusterServiceableForVendor(params: {
+  vendorLatitude?: number | null;
+  vendorLongitude?: number | null;
+  serviceRadiusKm?: number | null;
+  clusterLatitude?: number | null;
+  clusterLongitude?: number | null;
+}) {
+  const {
+    vendorLatitude,
+    vendorLongitude,
+    serviceRadiusKm,
+    clusterLatitude,
+    clusterLongitude,
+  } = params;
+
+  // Backward-compatible behavior for historical clusters without coordinates.
+  if (!isValidCoordinate(clusterLatitude, clusterLongitude)) {
+    return true;
+  }
+
+  if (!isValidCoordinate(vendorLatitude, vendorLongitude)) {
+    return false;
+  }
+
+  const radiusKm =
+    typeof serviceRadiusKm === "number" && serviceRadiusKm > 0
+      ? serviceRadiusKm
+      : 0;
+
+  if (radiusKm <= 0) {
+    return false;
+  }
+
+  const from = {
+    latitude: vendorLatitude as number,
+    longitude: vendorLongitude as number,
+  };
+  const to = {
+    latitude: clusterLatitude as number,
+    longitude: clusterLongitude as number,
+  };
+
+  return isWithinRadiusKm(from, to, radiusKm);
+}
+
+async function findBestMatchingGig(
+  cropName: string,
+  unit: string,
+  clusterLatitude?: number,
+  clusterLongitude?: number,
+) {
+  const gigs = await prisma.gig.findMany({
     where: {
       cropName: { equals: cropName, mode: "insensitive" },
       unit: { equals: unit, mode: "insensitive" },
       status: GigStatus.PUBLISHED,
     },
-    orderBy: { minQuantity: "asc" },
+    include: {
+      vendor: {
+        select: {
+          latitude: true,
+          longitude: true,
+          serviceRadiusKm: true,
+        },
+      },
+    },
+    orderBy: [{ minQuantity: "asc" }, { createdAt: "asc" }],
   });
+
+  if (!isValidCoordinate(clusterLatitude, clusterLongitude)) {
+    return gigs[0] ?? null;
+  }
+
+  return (
+    gigs.find((gig) =>
+      isClusterServiceableForVendor({
+        vendorLatitude: gig.vendor.latitude,
+        vendorLongitude: gig.vendor.longitude,
+        serviceRadiusKm: gig.vendor.serviceRadiusKm,
+        clusterLatitude,
+        clusterLongitude,
+      }),
+    ) ?? null
+  );
+}
+
+async function buildClusterLocationPatch(params: {
+  clusterId: string;
+  current: {
+    district: string | null;
+    state: string | null;
+    locationAddress: string | null;
+  };
+}) {
+  const members = await prisma.clusterMember.findMany({
+    where: { clusterId: params.clusterId },
+    include: {
+      farmer: {
+        select: {
+          latitude: true,
+          longitude: true,
+          district: true,
+          state: true,
+          locationAddress: true,
+        },
+      },
+    },
+  });
+
+  const coordinatePoints = members
+    .filter((member) =>
+      isValidCoordinate(member.farmer.latitude, member.farmer.longitude),
+    )
+    .map((member) => ({
+      latitude: member.farmer.latitude as number,
+      longitude: member.farmer.longitude as number,
+    }));
+
+  const centroid = getCoordinateCentroid(coordinatePoints);
+  const firstWithAddress = members.find(
+    (member) => member.farmer.locationAddress,
+  );
+  const firstWithDistrict = members.find((member) => member.farmer.district);
+  const firstWithState = members.find((member) => member.farmer.state);
+
+  return {
+    ...(centroid
+      ? { latitude: centroid.latitude, longitude: centroid.longitude }
+      : {}),
+    ...(!params.current.locationAddress && firstWithAddress
+      ? { locationAddress: firstWithAddress.farmer.locationAddress }
+      : {}),
+    ...(!params.current.district && firstWithDistrict
+      ? { district: firstWithDistrict.farmer.district }
+      : {}),
+    ...(!params.current.state && firstWithState
+      ? { state: firstWithState.farmer.state }
+      : {}),
+  };
 }
 
 /**
@@ -34,15 +170,41 @@ async function autoCreateBidsForVotingCluster(
   unit: string,
   currentQuantity: number,
 ) {
+  const cluster = await prisma.cluster.findUnique({
+    where: { id: clusterId },
+    select: { latitude: true, longitude: true },
+  });
+
   const matchingGigs = await prisma.gig.findMany({
     where: {
       cropName: { equals: cropName, mode: "insensitive" },
       unit: { equals: unit, mode: "insensitive" },
       status: GigStatus.PUBLISHED,
     },
+    include: {
+      vendor: {
+        select: {
+          latitude: true,
+          longitude: true,
+          serviceRadiusKm: true,
+        },
+      },
+    },
   });
 
   for (const gig of matchingGigs) {
+    if (
+      !isClusterServiceableForVendor({
+        vendorLatitude: gig.vendor.latitude,
+        vendorLongitude: gig.vendor.longitude,
+        serviceRadiusKm: gig.vendor.serviceRadiusKm,
+        clusterLatitude: cluster?.latitude,
+        clusterLongitude: cluster?.longitude,
+      })
+    ) {
+      continue;
+    }
+
     // Skip if this vendor already has a bid on this cluster
     const existing = await prisma.vendorBid.findFirst({
       where: { clusterId, vendorId: gig.vendorId },
@@ -88,15 +250,15 @@ export async function findJoinableClusters(
   cropName: string,
   unit: string,
   district?: string,
+  latitude?: number,
+  longitude?: number,
 ) {
   const normalizedUnit = normalizeUnit(unit);
-
-  return prisma.cluster.findMany({
+  const clusters = await prisma.cluster.findMany({
     where: {
       cropName: { equals: cropName, mode: "insensitive" },
       unit: { equals: normalizedUnit, mode: "insensitive" },
       status: { in: [ClusterStatus.FORMING, ClusterStatus.VOTING] },
-      ...(district ? { district } : {}),
     },
     include: {
       members: { include: { farmer: true, order: true } },
@@ -107,6 +269,41 @@ export async function findJoinableClusters(
     },
     orderBy: { createdAt: "asc" },
   });
+
+  if (isValidCoordinate(latitude, longitude)) {
+    const farmerPoint = {
+      latitude: latitude as number,
+      longitude: longitude as number,
+    };
+    return clusters.filter((cluster) => {
+      if (isValidCoordinate(cluster.latitude, cluster.longitude)) {
+        return isWithinRadiusKm(
+          farmerPoint,
+          {
+            latitude: cluster.latitude as number,
+            longitude: cluster.longitude as number,
+          },
+          DEFAULT_FARMER_CLUSTER_RADIUS_KM,
+        );
+      }
+
+      return Boolean(
+        district &&
+        cluster.district &&
+        cluster.district.toLowerCase() === district.toLowerCase(),
+      );
+    });
+  }
+
+  if (district) {
+    return clusters.filter(
+      (cluster) =>
+        cluster.district &&
+        cluster.district.toLowerCase() === district.toLowerCase(),
+    );
+  }
+
+  return clusters;
 }
 
 async function createClusterForOrder(
@@ -114,9 +311,17 @@ async function createClusterForOrder(
   unit: string,
   district?: string,
   state?: string,
+  locationAddress?: string,
+  latitude?: number,
+  longitude?: number,
 ) {
   const normalizedUnit = normalizeUnit(unit);
-  const matchingGig = await findBestMatchingGig(cropName, normalizedUnit);
+  const matchingGig = await findBestMatchingGig(
+    cropName,
+    normalizedUnit,
+    latitude,
+    longitude,
+  );
   const targetQuantity = matchingGig?.minQuantity ?? DEFAULT_TARGET_QUANTITY;
 
   return prisma.cluster.create({
@@ -128,6 +333,9 @@ async function createClusterForOrder(
       status: ClusterStatus.FORMING,
       district: district ?? null,
       state: state ?? null,
+      locationAddress: locationAddress ?? null,
+      latitude: latitude ?? null,
+      longitude: longitude ?? null,
       gigId: matchingGig?.id ?? null,
     },
   });
@@ -162,9 +370,21 @@ export async function assignOrderToCluster(params: {
     },
   });
 
+  const locationPatch = await buildClusterLocationPatch({
+    clusterId,
+    current: {
+      district: cluster.district,
+      state: cluster.state,
+      locationAddress: cluster.locationAddress,
+    },
+  });
+
   const updated = await prisma.cluster.update({
     where: { id: clusterId },
-    data: { currentQuantity: { increment: quantity } },
+    data: {
+      currentQuantity: { increment: quantity },
+      ...locationPatch,
+    },
   });
 
   await prisma.order.update({
@@ -213,12 +433,18 @@ export async function createNewClusterAndAssignOrder(params: {
   unit: string;
   district?: string;
   state?: string;
+  locationAddress?: string;
+  latitude?: number;
+  longitude?: number;
 }) {
   const cluster = await createClusterForOrder(
     params.cropName,
     params.unit,
     params.district,
     params.state,
+    params.locationAddress,
+    params.latitude,
+    params.longitude,
   );
 
   return assignOrderToCluster({
@@ -241,9 +467,18 @@ export async function autoAssignCluster(
   unit: string,
   district?: string,
   state?: string,
+  locationAddress?: string,
+  latitude?: number,
+  longitude?: number,
 ) {
   const normalizedUnit = normalizeUnit(unit);
-  const joinable = await findJoinableClusters(cropName, normalizedUnit, district);
+  const joinable = await findJoinableClusters(
+    cropName,
+    normalizedUnit,
+    district,
+    latitude,
+    longitude,
+  );
   const chosen = joinable[0];
 
   if (chosen) {
@@ -263,6 +498,9 @@ export async function autoAssignCluster(
     unit: normalizedUnit,
     district,
     state,
+    locationAddress,
+    latitude,
+    longitude,
   });
 }
 

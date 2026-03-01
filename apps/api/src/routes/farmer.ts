@@ -10,9 +10,11 @@ import {
   findJoinableClusters,
 } from "../services/cluster.js";
 import { ClusterStatus, OrderStatus, PaymentStatus } from "@prisma/client";
+import { isValidCoordinate, isWithinRadiusKm } from "../lib/geo.js";
 
 const router = Router();
 router.use(authenticate, requireFarmer);
+const FARMER_CLUSTER_RADIUS_KM = 50;
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
 
@@ -36,6 +38,9 @@ const updateProfileSchema = z.object({
   village: z.string().optional(),
   district: z.string().optional(),
   state: z.string().optional(),
+  locationAddress: z.string().optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
   landArea: z.number().optional(),
   cropsGrown: z.array(z.string()).optional(),
   upiId: z.string().optional(),
@@ -65,7 +70,10 @@ router.patch("/profile", async (req, res) => {
 const createOrderSchema = z.object({
   cropName: z.string().min(1),
   quantity: z.number().positive(),
-  unit: z.string().min(1).transform((v) => v.toLowerCase().trim()),
+  unit: z
+    .string()
+    .min(1)
+    .transform((v) => v.toLowerCase().trim()),
   deliveryDate: z.string().optional(),
 });
 
@@ -78,6 +86,11 @@ router.post("/orders", async (req, res) => {
   try {
     const farmer = await prisma.farmer.findUnique({
       where: { id: req.user!.id },
+      select: {
+        district: true,
+        latitude: true,
+        longitude: true,
+      },
     });
     if (!farmer) {
       error(res, "Farmer profile not found", 404);
@@ -93,20 +106,18 @@ router.post("/orders", async (req, res) => {
         deliveryDate: parsed.data.deliveryDate
           ? new Date(parsed.data.deliveryDate)
           : null,
-        },
-      });
+      },
+    });
 
     const availableClusters = await findJoinableClusters(
       parsed.data.cropName,
       parsed.data.unit,
       farmer.district ?? undefined,
+      farmer.latitude ?? undefined,
+      farmer.longitude ?? undefined,
     );
 
-    success(
-      res,
-      { ...order, availableClusters },
-      201,
-    );
+    success(res, { ...order, availableClusters }, 201);
   } catch {
     error(res, "Internal server error", 500);
   }
@@ -147,13 +158,15 @@ router.get("/orders/:id/cluster-options", async (req, res) => {
 
     const farmer = await prisma.farmer.findUnique({
       where: { id: req.user!.id },
-      select: { district: true },
+      select: { district: true, latitude: true, longitude: true },
     });
 
     const clusters = await findJoinableClusters(
       order.cropName,
       order.unit,
       farmer?.district ?? undefined,
+      farmer?.latitude ?? undefined,
+      farmer?.longitude ?? undefined,
     );
     success(res, clusters);
   } catch {
@@ -203,7 +216,13 @@ router.post("/orders/:id/assign-cluster", async (req, res) => {
 
     const farmer = await prisma.farmer.findUnique({
       where: { id: req.user!.id },
-      select: { district: true, state: true },
+      select: {
+        district: true,
+        state: true,
+        locationAddress: true,
+        latitude: true,
+        longitude: true,
+      },
     });
     if (!farmer) {
       error(res, "Farmer profile not found", 404);
@@ -219,6 +238,8 @@ router.post("/orders/:id/assign-cluster", async (req, res) => {
           unit: true,
           district: true,
           status: true,
+          latitude: true,
+          longitude: true,
         },
       });
 
@@ -235,9 +256,31 @@ router.post("/orders/:id/assign-cluster", async (req, res) => {
         cluster.cropName.toLowerCase() === order.cropName.toLowerCase();
       const sameUnit = cluster.unit.toLowerCase() === order.unit.toLowerCase();
       const sameDistrict =
-        !farmer.district || !cluster.district || farmer.district === cluster.district;
+        !farmer.district ||
+        !cluster.district ||
+        farmer.district.toLowerCase() === cluster.district.toLowerCase();
+      const hasGeoContext =
+        isValidCoordinate(farmer.latitude, farmer.longitude) &&
+        isValidCoordinate(cluster.latitude, cluster.longitude);
+      const sameGeo = hasGeoContext
+        ? isWithinRadiusKm(
+            {
+              latitude: farmer.latitude as number,
+              longitude: farmer.longitude as number,
+            },
+            {
+              latitude: cluster.latitude as number,
+              longitude: cluster.longitude as number,
+            },
+            FARMER_CLUSTER_RADIUS_KM,
+          )
+        : null;
 
-      if (!sameCrop || !sameUnit || !sameDistrict) {
+      if (
+        !sameCrop ||
+        !sameUnit ||
+        !((sameGeo ?? false) || (!hasGeoContext && sameDistrict))
+      ) {
         error(res, "Selected cluster does not match this order", 400);
         return;
       }
@@ -257,6 +300,9 @@ router.post("/orders/:id/assign-cluster", async (req, res) => {
         unit: order.unit,
         district: farmer.district ?? undefined,
         state: farmer.state ?? undefined,
+        locationAddress: farmer.locationAddress ?? undefined,
+        latitude: farmer.latitude ?? undefined,
+        longitude: farmer.longitude ?? undefined,
       });
     }
 
@@ -284,7 +330,10 @@ router.post("/orders/:id/assign-cluster", async (req, res) => {
 
     success(res, updatedOrder);
   } catch (e) {
-    if (e instanceof Error && e.message === "Cluster not available for joining") {
+    if (
+      e instanceof Error &&
+      e.message === "Cluster not available for joining"
+    ) {
       error(res, e.message, 400);
       return;
     }
@@ -388,7 +437,7 @@ router.post("/clusters/:id/join", async (req, res) => {
 
     const farmer = await prisma.farmer.findUnique({
       where: { id: req.user!.id },
-      select: { district: true },
+      select: { district: true, latitude: true, longitude: true },
     });
 
     const cluster = await prisma.cluster.findUnique({
@@ -399,6 +448,8 @@ router.post("/clusters/:id/join", async (req, res) => {
         unit: true,
         district: true,
         status: true,
+        latitude: true,
+        longitude: true,
       },
     });
     if (
@@ -410,11 +461,34 @@ router.post("/clusters/:id/join", async (req, res) => {
       return;
     }
 
-    const sameCrop = cluster.cropName.toLowerCase() === order.cropName.toLowerCase();
+    const sameCrop =
+      cluster.cropName.toLowerCase() === order.cropName.toLowerCase();
     const sameUnit = cluster.unit.toLowerCase() === order.unit.toLowerCase();
     const sameDistrict =
-      !farmer?.district || !cluster.district || farmer.district === cluster.district;
-    if (!sameCrop || !sameUnit || !sameDistrict) {
+      !farmer?.district ||
+      !cluster.district ||
+      farmer.district.toLowerCase() === cluster.district.toLowerCase();
+    const hasGeoContext =
+      isValidCoordinate(farmer?.latitude, farmer?.longitude) &&
+      isValidCoordinate(cluster.latitude, cluster.longitude);
+    const sameGeo = hasGeoContext
+      ? isWithinRadiusKm(
+          {
+            latitude: farmer?.latitude as number,
+            longitude: farmer?.longitude as number,
+          },
+          {
+            latitude: cluster.latitude as number,
+            longitude: cluster.longitude as number,
+          },
+          FARMER_CLUSTER_RADIUS_KM,
+        )
+      : null;
+    if (
+      !sameCrop ||
+      !sameUnit ||
+      !((sameGeo ?? false) || (!hasGeoContext && sameDistrict))
+    ) {
       error(res, "Cluster does not match this order", 400);
       return;
     }
@@ -759,7 +833,11 @@ router.post("/delivery/:clusterId/confirm", async (req, res) => {
       where: {
         id: { in: myMembers.map((m) => m.orderId) },
         status: {
-          notIn: [OrderStatus.DELIVERED, OrderStatus.REJECTED, OrderStatus.FAILED],
+          notIn: [
+            OrderStatus.DELIVERED,
+            OrderStatus.REJECTED,
+            OrderStatus.FAILED,
+          ],
         },
       },
       data: { status: OrderStatus.DELIVERED },

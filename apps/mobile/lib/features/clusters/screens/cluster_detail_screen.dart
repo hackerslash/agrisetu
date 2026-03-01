@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:latlong2/latlong.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/widgets/app_header.dart';
 import '../../../shared/widgets/status_badge.dart';
@@ -425,94 +427,132 @@ class _MapSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.primary,
-      child: Stack(
-        children: [
-          // Map placeholder
-          Container(
-            color: const Color(0xFFE8F5E9),
-            child: CustomPaint(
-              painter: _MapGridPainter(),
-              size: Size.infinite,
-            ),
+    final farmerPoints = cluster.members
+        .where(
+          (member) =>
+              member.farmer?.latitude != null &&
+              member.farmer?.longitude != null,
+        )
+        .map((member) =>
+            LatLng(member.farmer!.latitude!, member.farmer!.longitude!))
+        .toList();
+
+    LatLng center;
+    if (cluster.latitude != null && cluster.longitude != null) {
+      center = LatLng(cluster.latitude!, cluster.longitude!);
+    } else if (farmerPoints.isNotEmpty) {
+      final avgLat =
+          farmerPoints.fold<double>(0, (sum, point) => sum + point.latitude) /
+              farmerPoints.length;
+      final avgLng =
+          farmerPoints.fold<double>(0, (sum, point) => sum + point.longitude) /
+              farmerPoints.length;
+      center = LatLng(avgLat, avgLng);
+    } else {
+      center = const LatLng(20.5937, 78.9629);
+    }
+
+    final locationLabel = cluster.locationAddress ??
+        [cluster.district, cluster.state]
+            .whereType<String>()
+            .where((value) => value.trim().isNotEmpty)
+            .join(', ');
+
+    return Stack(
+      children: [
+        FlutterMap(
+          options: MapOptions(
+            initialCenter: center,
+            initialZoom: farmerPoints.isNotEmpty ? 12.5 : 5.0,
+            interactionOptions:
+                const InteractionOptions(flags: InteractiveFlag.all),
           ),
-          // Location label
-          Positioned(
-            top: 12,
-            left: 16,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                '${cluster.district ?? 'Your District'}, ${cluster.state ?? ''}',
-                style: AppTextStyles.caption.copyWith(
-                  color: AppColors.surface,
-                  fontWeight: FontWeight.w700,
+          children: [
+            TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'com.example.agrisetu_app',
+            ),
+            CircleLayer(
+              circles: [
+                CircleMarker(
+                  point: center,
+                  radius: 2000,
+                  useRadiusInMeter: true,
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderColor: AppColors.primary.withOpacity(0.35),
+                  borderStrokeWidth: 1.3,
+                ),
+              ],
+            ),
+            MarkerLayer(
+              markers: [
+                Marker(
+                  width: 44,
+                  height: 44,
+                  point: center,
+                  child: const Icon(
+                    Icons.location_on,
+                    color: AppColors.primary,
+                    size: 38,
+                  ),
+                ),
+                ...farmerPoints.map(
+                  (point) => Marker(
+                    width: 30,
+                    height: 30,
+                    point: point,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        shape: BoxShape.circle,
+                        border:
+                            Border.all(color: AppColors.primary, width: 1.5),
+                      ),
+                      child: const Icon(
+                        Icons.person,
+                        size: 16,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        Positioned(
+          top: 12,
+          left: 16,
+          right: 16,
+          child: Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    locationLabel.isNotEmpty
+                        ? locationLabel
+                        : 'Location unavailable',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.surface,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
-          // Cluster pins
-          ...List.generate(
-            cluster.membersCount.clamp(0, 5),
-            (i) => Positioned(
-              left: 100.0 + (i % 3) * 80,
-              top: 80.0 + (i ~/ 3) * 60,
-              child: Container(
-                width: i == 0 ? 40 : 30,
-                height: i == 0 ? 40 : 30,
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.surface, width: 2),
-                ),
-                child: const Icon(Icons.person,
-                    color: AppColors.surface, size: 16),
-              ),
-            ),
-          ),
-          // Radius circle
-          Center(
-            child: Container(
-              width: 180,
-              height: 180,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: AppColors.primary.withOpacity(0.3),
-                  width: 2,
-                ),
-                color: AppColors.primary.withOpacity(0.08),
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
-}
-
-class _MapGridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFFBBDDBB)
-      ..strokeWidth = 1;
-
-    for (double y = 0; y < size.height; y += 60) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
-    for (double x = 0; x < size.width; x += 80) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_) => false;
 }
 
 class _StatsBox extends StatelessWidget {

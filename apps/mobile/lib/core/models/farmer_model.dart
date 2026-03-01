@@ -5,6 +5,9 @@ class Farmer {
   final String? village;
   final String? district;
   final String? state;
+  final String? locationAddress;
+  final double? latitude;
+  final double? longitude;
   final double? landArea;
   final List<String> cropsGrown;
   final String? upiId;
@@ -19,6 +22,9 @@ class Farmer {
     this.village,
     this.district,
     this.state,
+    this.locationAddress,
+    this.latitude,
+    this.longitude,
     this.landArea,
     this.cropsGrown = const [],
     this.upiId,
@@ -28,7 +34,9 @@ class Farmer {
   });
 
   bool get isProfileComplete =>
-      name != null && village != null && district != null;
+      name != null &&
+      district != null &&
+      ((latitude != null && longitude != null) || village != null);
 
   int get profileCompleteness {
     int score = 0;
@@ -36,10 +44,12 @@ class Farmer {
     if (village != null) score += 15;
     if (district != null) score += 15;
     if (state != null) score += 10;
+    if (locationAddress != null) score += 10;
+    if (latitude != null && longitude != null) score += 10;
     if (landArea != null) score += 10;
     if (cropsGrown.isNotEmpty) score += 15;
     if (upiId != null) score += 15;
-    return score;
+    return score.clamp(0, 100);
   }
 
   factory Farmer.fromJson(Map<String, dynamic> json) {
@@ -50,6 +60,9 @@ class Farmer {
       village: json['village'] as String?,
       district: json['district'] as String?,
       state: json['state'] as String?,
+      locationAddress: json['locationAddress'] as String?,
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
       landArea: (json['landArea'] as num?)?.toDouble(),
       cropsGrown: List<String>.from(json['cropsGrown'] ?? []),
       upiId: json['upiId'] as String?,
@@ -66,6 +79,9 @@ class Farmer {
         'village': village,
         'district': district,
         'state': state,
+        'locationAddress': locationAddress,
+        'latitude': latitude,
+        'longitude': longitude,
         'landArea': landArea,
         'cropsGrown': cropsGrown,
         'upiId': upiId,
@@ -79,6 +95,9 @@ class Farmer {
     String? village,
     String? district,
     String? state,
+    String? locationAddress,
+    double? latitude,
+    double? longitude,
     double? landArea,
     List<String>? cropsGrown,
     String? upiId,
@@ -92,6 +111,9 @@ class Farmer {
       village: village ?? this.village,
       district: district ?? this.district,
       state: state ?? this.state,
+      locationAddress: locationAddress ?? this.locationAddress,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
       landArea: landArea ?? this.landArea,
       cropsGrown: cropsGrown ?? this.cropsGrown,
       upiId: upiId ?? this.upiId,

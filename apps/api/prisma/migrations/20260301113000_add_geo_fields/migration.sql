@@ -1,0 +1,18 @@
+-- AlterTable
+ALTER TABLE "Farmer"
+ADD COLUMN "locationAddress" TEXT,
+ADD COLUMN "latitude" DOUBLE PRECISION,
+ADD COLUMN "longitude" DOUBLE PRECISION;
+
+-- AlterTable
+ALTER TABLE "Vendor"
+ADD COLUMN "locationAddress" TEXT,
+ADD COLUMN "latitude" DOUBLE PRECISION,
+ADD COLUMN "longitude" DOUBLE PRECISION,
+ADD COLUMN "serviceRadiusKm" DOUBLE PRECISION NOT NULL DEFAULT 25;
+
+-- AlterTable
+ALTER TABLE "Cluster"
+ADD COLUMN "locationAddress" TEXT,
+ADD COLUMN "latitude" DOUBLE PRECISION,
+ADD COLUMN "longitude" DOUBLE PRECISION;

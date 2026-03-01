@@ -9,6 +9,10 @@ export async function registerStep1(data: {
   phone: string;
   state?: string;
   businessType?: string;
+  locationAddress?: string;
+  latitude?: number;
+  longitude?: number;
+  serviceRadiusKm?: number;
 }): Promise<{ vendor: Vendor; token: string }> {
   const res = await getApiClient().post("/auth/vendor/register/step1", data);
   const result = res.data.data as { vendor: Vendor; token: string };

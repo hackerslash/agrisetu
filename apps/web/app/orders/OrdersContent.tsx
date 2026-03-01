@@ -197,11 +197,11 @@ export function OrdersContent() {
       <div className="flex gap-3">
         {[
           { label: "New Orders", value: stats.new, color: "#1A1A1A" },
-          { label: "Processing", value: stats.inProgress, color: "#2C5F2D" },
+          { label: "Processing", value: stats.inProgress, color: "#F59E0B" },
           {
-            label: "Ready for Delivery",
+            label: "Order Fulfilled",
             value: stats.completed,
-            color: "#F59E0B",
+            color: "#16A34A",
           },
         ].map(({ label, value, color }) => (
           <div
@@ -738,4 +738,3 @@ export function OrdersContent() {
     </div>
   );
 }
-

@@ -17,8 +17,22 @@ const step1Schema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
   state: z.string().optional(),
   businessType: z.string().optional(),
+  locationAddress: z.string().optional(),
+  latitude: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : Number(v)),
+    z.number().min(-90).max(90).optional(),
+  ),
+  longitude: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : Number(v)),
+    z.number().min(-180).max(180).optional(),
+  ),
+  serviceRadiusKm: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : Number(v)),
+    z.number().positive("Radius must be > 0").max(500).optional(),
+  ),
 });
 type Step1Data = z.infer<typeof step1Schema>;
+type Step1FormInput = z.input<typeof step1Schema>;
 
 // ─── Step 2 Schema ────────────────────────────────────────────────────────────
 
@@ -107,9 +121,12 @@ export function RegisterWizard() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [apiError, setApiError] = useState("");
+  const [locating, setLocating] = useState(false);
 
   // Step 1 form
-  const form1 = useForm<Step1Data>({ resolver: zodResolver(step1Schema) });
+  const form1 = useForm<Step1FormInput, unknown, Step1Data>({
+    resolver: zodResolver(step1Schema),
+  });
   const form2 = useForm<Step2Data>({ resolver: zodResolver(step2Schema) });
   const form3 = useForm<Step3Data>({ resolver: zodResolver(step3Schema) });
 
@@ -122,6 +139,38 @@ export function RegisterWizard() {
       const e = err as { response?: { data?: { error?: string } } };
       setApiError(e.response?.data?.error ?? "Registration failed");
     }
+  }
+
+  function setCurrentLocationForStep1() {
+    if (!navigator.geolocation) {
+      setApiError("Browser geolocation is not available");
+      return;
+    }
+    setApiError("");
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        form1.setValue("latitude", Number(position.coords.latitude.toFixed(6)));
+        form1.setValue(
+          "longitude",
+          Number(position.coords.longitude.toFixed(6)),
+        );
+        if (!form1.getValues("locationAddress")) {
+          form1.setValue(
+            "locationAddress",
+            `Lat ${position.coords.latitude.toFixed(6)}, Lng ${position.coords.longitude.toFixed(6)}`,
+          );
+        }
+        setLocating(false);
+      },
+      () => {
+        setApiError(
+          "Unable to fetch your location. Please allow location permission.",
+        );
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
   }
 
   async function onStep2(data: Step2Data) {
@@ -300,6 +349,60 @@ export function RegisterWizard() {
                 <option value="WHOLESALER">Wholesaler</option>
               </select>
             </div>
+          </div>
+          <FormInput
+            label="Business Location Address"
+            placeholder="Street, Village/Town, District"
+            error={form1.formState.errors.locationAddress?.message}
+            {...form1.register("locationAddress")}
+          />
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <FormInput
+                label="Latitude"
+                type="number"
+                placeholder="12.9716"
+                step="0.000001"
+                error={form1.formState.errors.latitude?.message}
+                {...form1.register("latitude")}
+              />
+            </div>
+            <div className="flex-1">
+              <FormInput
+                label="Longitude"
+                type="number"
+                placeholder="77.5946"
+                step="0.000001"
+                error={form1.formState.errors.longitude?.message}
+                {...form1.register("longitude")}
+              />
+            </div>
+          </div>
+          <div className="flex items-end gap-3">
+            <div className="flex-1">
+              <FormInput
+                label="Service Radius (km)"
+                type="number"
+                placeholder="25"
+                step="1"
+                error={form1.formState.errors.serviceRadiusKm?.message}
+                {...form1.register("serviceRadiusKm")}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={setCurrentLocationForStep1}
+              className="flex items-center justify-center font-semibold rounded-xl"
+              style={{
+                backgroundColor: "#EDE8DF",
+                color: "#1A1A1A",
+                height: 52,
+                padding: "0 16px",
+                fontSize: 13,
+              }}
+            >
+              {locating ? "Fetching…" : "Use current location"}
+            </button>
           </div>
           <button
             type="submit"

@@ -36,6 +36,10 @@ export interface Vendor {
   pan?: string | null;
   state?: string | null;
   businessType?: string | null;
+  locationAddress?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  serviceRadiusKm?: number | null;
   isVerified: boolean;
   createdAt: string;
   documents?: VendorDocument[];
@@ -56,6 +60,9 @@ export interface Farmer {
   village?: string | null;
   district?: string | null;
   state?: string | null;
+  locationAddress?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   landArea?: number | null;
   cropsGrown: string[];
   upiId?: string | null;
@@ -103,6 +110,9 @@ export interface Cluster {
   status: ClusterStatus;
   district?: string | null;
   state?: string | null;
+  locationAddress?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   vendorId?: string | null;
   gigId?: string | null;
   createdAt: string;
