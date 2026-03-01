@@ -39,6 +39,10 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
   final _cropCtrl = TextEditingController();
   final _quantityCtrl = TextEditingController();
   final _unitCtrl = TextEditingController();
+  String? _voiceTranscript;
+  double? _voiceConfidence;
+  String? _matchedGigLabel;
+  String? _extractionSource;
   bool _isCreating = false;
   bool _voting = false;
 
@@ -47,8 +51,12 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     super.initState();
     if (widget.orderId == 'new') {
       _cropCtrl.text = widget.prefill?['crop'] as String? ?? '';
-      _quantityCtrl.text = widget.prefill?['quantity'] as String? ?? '';
+      _quantityCtrl.text = widget.prefill?['quantity']?.toString() ?? '';
       _unitCtrl.text = widget.prefill?['unit'] as String? ?? 'kg';
+      _voiceTranscript = widget.prefill?['transcript'] as String?;
+      _voiceConfidence = (widget.prefill?['confidence'] as num?)?.toDouble();
+      _matchedGigLabel = widget.prefill?['matchedGigLabel'] as String?;
+      _extractionSource = widget.prefill?['extractionSource'] as String?;
     }
   }
 
@@ -755,9 +763,11 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     );
   }
 
-  // ── New Order Form (unchanged) ──────────────────────────────────────────
   Widget _buildNewOrderForm(BuildContext context) {
     final units = ['kg', 'quintal', 'ton', 'bag', 'litre'];
+    final hasVoiceContext = (_voiceTranscript?.trim().isNotEmpty ?? false) ||
+        _matchedGigLabel != null;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppHeader(title: 'Confirm Your Order'),
@@ -778,13 +788,61 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                       color: AppColors.surface, size: 18),
                   const SizedBox(width: 10),
                   Text(
-                    'AI detected your order details. Please verify.',
+                    hasVoiceContext
+                        ? 'AI detected your order details. Please verify.'
+                        : 'Enter your order details to continue.',
                     style: AppTextStyles.bodySmall
                         .copyWith(color: AppColors.surface),
                   ),
                 ],
               ),
             ),
+            if (hasVoiceContext) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.inputBackground,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if ((_voiceTranscript ?? '').isNotEmpty) ...[
+                      Text('Voice Transcript', style: AppTextStyles.caption),
+                      const SizedBox(height: 6),
+                      Text(
+                        '"${_voiceTranscript!}"',
+                        style: AppTextStyles.body.copyWith(
+                          color: AppColors.primary,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                    if ((_matchedGigLabel ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Text('Matched Gig', style: AppTextStyles.caption),
+                      const SizedBox(height: 4),
+                      Text(_matchedGigLabel!, style: AppTextStyles.bodySmall),
+                    ],
+                    if (_voiceConfidence != null ||
+                        (_extractionSource ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        [
+                          if (_voiceConfidence != null)
+                            'Confidence ${(_voiceConfidence! * 100).toStringAsFixed(0)}%',
+                          if ((_extractionSource ?? '').isNotEmpty)
+                            (_extractionSource ?? '').toUpperCase(),
+                        ].join(' · '),
+                        style: AppTextStyles.caption,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
             Container(
               decoration: BoxDecoration(

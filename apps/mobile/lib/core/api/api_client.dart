@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../constants/app_constants.dart';
+import '../models/voice_order_model.dart';
 
 class ApiException implements Exception {
   final String message;
@@ -139,6 +140,60 @@ class ApiClient {
     try {
       final res = await _dio.post('/farmer/orders', data: data);
       return _handleResponse(res) as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<VoiceOrderResult> parseVoiceOrder({
+    String? audioFilePath,
+    List<int>? audioBytes,
+    String? audioFileName,
+    String? transcript,
+    String? languageCode,
+  }) async {
+    final hasAudioFile = audioFilePath != null && audioFilePath.isNotEmpty;
+    final hasAudioBytes = audioBytes != null && audioBytes.isNotEmpty;
+    if (!hasAudioFile &&
+        !hasAudioBytes &&
+        (transcript == null || transcript.trim().isEmpty)) {
+      throw const ApiException('Provide either audio file or transcript.');
+    }
+
+    try {
+      final formData = FormData();
+      if (hasAudioBytes) {
+        final bytes = audioBytes;
+        formData.files.add(
+          MapEntry(
+            'audio',
+            MultipartFile.fromBytes(
+              bytes,
+              filename: audioFileName ?? 'agrisetu_voice.webm',
+            ),
+          ),
+        );
+      } else if (hasAudioFile) {
+        final audioPath = audioFilePath;
+        final segments = audioPath.split(RegExp(r'[\\/]'));
+        final fileName = segments.isNotEmpty ? segments.last : 'voice.m4a';
+        formData.files.add(
+          MapEntry(
+            'audio',
+            await MultipartFile.fromFile(audioPath, filename: fileName),
+          ),
+        );
+      }
+      if (transcript != null && transcript.trim().isNotEmpty) {
+        formData.fields.add(MapEntry('transcript', transcript.trim()));
+      }
+      if (languageCode != null && languageCode.trim().isNotEmpty) {
+        formData.fields.add(MapEntry('languageCode', languageCode.trim()));
+      }
+
+      final res = await _dio.post('/farmer/voice/parse-order', data: formData);
+      final data = _handleResponse(res) as Map<String, dynamic>;
+      return VoiceOrderResult.fromJson(data);
     } on DioException catch (e) {
       throw _handleError(e);
     }

@@ -28,6 +28,8 @@
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>AgriSetu uses your location to match nearby clusters and show delivery maps.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>AgriSetu uses the microphone so you can place orders by voice.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

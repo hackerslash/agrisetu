@@ -1,4 +1,5 @@
 import { Router } from "express";
+import multer from "multer";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { authenticate, requireFarmer } from "../middleware/auth.js";
@@ -9,12 +10,137 @@ import {
   createNewClusterAndAssignOrder,
   findJoinableClusters,
 } from "../services/cluster.js";
-import { ClusterStatus, OrderStatus, PaymentStatus } from "@prisma/client";
+import {
+  ClusterStatus,
+  GigStatus,
+  OrderStatus,
+  PaymentStatus,
+} from "@prisma/client";
 import { isValidCoordinate, isWithinRadiusKm } from "../lib/geo.js";
+import {
+  extractVoiceOrderFromTranscript,
+  type GigContext,
+} from "../services/ai-order-parser.js";
+import { transcribeAudioBuffer } from "../services/transcribe.js";
 
 const router = Router();
 router.use(authenticate, requireFarmer);
 const FARMER_CLUSTER_RADIUS_KM = 50;
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 12 * 1024 * 1024 },
+});
+
+function isGigServiceableForFarmer(params: {
+  farmerLatitude?: number | null;
+  farmerLongitude?: number | null;
+  farmerState?: string | null;
+  vendorLatitude?: number | null;
+  vendorLongitude?: number | null;
+  vendorState?: string | null;
+  serviceRadiusKm?: number | null;
+}) {
+  const {
+    farmerLatitude,
+    farmerLongitude,
+    farmerState,
+    vendorLatitude,
+    vendorLongitude,
+    vendorState,
+    serviceRadiusKm,
+  } = params;
+
+  const farmerHasCoords = isValidCoordinate(farmerLatitude, farmerLongitude);
+  const vendorHasCoords = isValidCoordinate(vendorLatitude, vendorLongitude);
+
+  if (farmerHasCoords && vendorHasCoords) {
+    const radiusKm =
+      typeof serviceRadiusKm === "number" && serviceRadiusKm > 0
+        ? serviceRadiusKm
+        : 0;
+    if (radiusKm <= 0) return false;
+    return isWithinRadiusKm(
+      { latitude: farmerLatitude as number, longitude: farmerLongitude as number },
+      { latitude: vendorLatitude as number, longitude: vendorLongitude as number },
+      radiusKm,
+    );
+  }
+
+  if (farmerState && vendorState) {
+    return farmerState.toLowerCase() === vendorState.toLowerCase();
+  }
+
+  return true;
+}
+
+async function getAvailableGigContextForFarmer(
+  farmerId: string,
+): Promise<{
+  farmerLanguage: string | null;
+  gigs: GigContext[];
+}> {
+  const farmer = await prisma.farmer.findUnique({
+    where: { id: farmerId },
+    select: {
+      language: true,
+      state: true,
+      latitude: true,
+      longitude: true,
+    },
+  });
+
+  if (!farmer) {
+    throw new Error("Farmer profile not found");
+  }
+
+  const gigs = await prisma.gig.findMany({
+    where: {
+      status: GigStatus.PUBLISHED,
+      availableQuantity: { gt: 0 },
+    },
+    include: {
+      vendor: {
+        select: {
+          businessName: true,
+          state: true,
+          latitude: true,
+          longitude: true,
+          serviceRadiusKm: true,
+        },
+      },
+    },
+    orderBy: [{ updatedAt: "desc" }],
+    take: 120,
+  });
+
+  const serviceableGigs = gigs
+    .filter((gig) =>
+      isGigServiceableForFarmer({
+        farmerLatitude: farmer.latitude,
+        farmerLongitude: farmer.longitude,
+        farmerState: farmer.state,
+        vendorLatitude: gig.vendor.latitude,
+        vendorLongitude: gig.vendor.longitude,
+        vendorState: gig.vendor.state,
+        serviceRadiusKm: gig.vendor.serviceRadiusKm,
+      }),
+    )
+    .slice(0, 60)
+    .map((gig) => ({
+      id: gig.id,
+      cropName: gig.cropName,
+      unit: gig.unit,
+      minQuantity: gig.minQuantity,
+      pricePerUnit: gig.pricePerUnit,
+      vendorBusinessName: gig.vendor.businessName,
+      vendorState: gig.vendor.state,
+    }));
+
+  return {
+    farmerLanguage: farmer.language,
+    gigs: serviceableGigs,
+  };
+}
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
 
@@ -62,6 +188,68 @@ router.patch("/profile", async (req, res) => {
     success(res, farmer);
   } catch {
     error(res, "Internal server error", 500);
+  }
+});
+
+const voiceOrderSchema = z.object({
+  transcript: z.string().trim().min(2).max(1000).optional(),
+  languageCode: z.string().trim().min(2).max(16).optional(),
+});
+
+router.post("/voice/parse-order", upload.single("audio"), async (req, res) => {
+  const parsed = voiceOrderSchema.safeParse(req.body);
+  if (!parsed.success) {
+    error(res, "Invalid request", 422, parsed.error.flatten());
+    return;
+  }
+
+  const audioFile = req.file;
+  let transcript = parsed.data.transcript?.trim() ?? "";
+  let detectedLanguageCode: string | null = null;
+
+  if (!audioFile && transcript.length === 0) {
+    error(
+      res,
+      "Provide either voice audio file or transcript text",
+      422,
+    );
+    return;
+  }
+
+  try {
+    const context = await getAvailableGigContextForFarmer(req.user!.id);
+    const languageCode = parsed.data.languageCode;
+
+    if (audioFile) {
+      const transcribed = await transcribeAudioBuffer({
+        audioBuffer: audioFile.buffer,
+        fileName: audioFile.originalname,
+        mimeType: audioFile.mimetype,
+        languageCode: languageCode ?? undefined,
+      });
+      transcript = transcribed.transcript;
+      detectedLanguageCode = transcribed.detectedLanguageCode;
+    }
+
+    const extraction = await extractVoiceOrderFromTranscript({
+      transcript,
+      gigs: context.gigs,
+      farmerLanguage: context.farmerLanguage,
+    });
+
+    success(res, {
+      transcript,
+      extraction,
+      context: {
+        availableGigCount: context.gigs.length,
+        transcribedFromAudio: Boolean(audioFile),
+        detectedLanguageCode,
+      },
+    });
+  } catch (e) {
+    const message =
+      e instanceof Error ? e.message : "Unable to process voice order";
+    error(res, message, 500);
   }
 });
 
