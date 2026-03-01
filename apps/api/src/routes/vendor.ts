@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { authenticate, requireVendor } from "../middleware/auth.js";
 import { success, error } from "../lib/response.js";
 import {
+  buildClusterPaymentDeadline,
   isClusterServiceableForVendor,
   syncClustersForPublishedGig,
 } from "../services/cluster.js";
@@ -584,7 +585,10 @@ router.patch("/orders/:id/accept", async (req, res) => {
   try {
     const cluster = await prisma.cluster.updateMany({
       where: { id: req.params.id, vendorId: req.user!.id },
-      data: { status: ClusterStatus.PAYMENT },
+      data: {
+        status: ClusterStatus.PAYMENT,
+        paymentDeadlineAt: buildClusterPaymentDeadline(),
+      },
     });
     if (cluster.count === 0) {
       error(res, "Order not found", 404);

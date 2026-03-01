@@ -254,6 +254,7 @@ class Cluster {
   final double? longitude;
   final String? vendorId;
   final String? gigId;
+  final DateTime? paymentDeadlineAt;
   final DateTime createdAt;
   final List<ClusterMember> members;
   final List<VendorBid> bids;
@@ -275,6 +276,7 @@ class Cluster {
     this.longitude,
     this.vendorId,
     this.gigId,
+    this.paymentDeadlineAt,
     required this.createdAt,
     this.members = const [],
     this.bids = const [],
@@ -303,6 +305,9 @@ class Cluster {
       longitude: (json['longitude'] as num?)?.toDouble(),
       vendorId: json['vendorId'] as String?,
       gigId: json['gigId'] as String?,
+      paymentDeadlineAt: json['paymentDeadlineAt'] != null
+          ? DateTime.parse(json['paymentDeadlineAt'] as String)
+          : null,
       createdAt: DateTime.parse(json['createdAt'] as String),
       members: (json['members'] as List<dynamic>?)
               ?.map((e) => ClusterMember.fromJson(e as Map<String, dynamic>))

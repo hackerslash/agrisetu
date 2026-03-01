@@ -22,29 +22,41 @@ class PaymentScreen extends ConsumerStatefulWidget {
 class _PaymentScreenState extends ConsumerState<PaymentScreen> {
   bool _isInitiating = false;
   bool _isPaying = false;
+  bool _navigatedToFailed = false;
   Map<String, dynamic>? _paymentData;
-  Timer? _timer;
-  int _secondsLeft = 86400; // 24h
+  Timer? _clockTimer;
+  DateTime _now = DateTime.now();
 
   @override
   void initState() {
     super.initState();
     _initiatePayment();
-    _startTimer();
+    _startClockTicker();
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _clockTimer?.cancel();
     super.dispose();
   }
 
-  void _startTimer() {
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_secondsLeft > 0) {
-        setState(() => _secondsLeft--);
-      }
+  void _startClockTicker() {
+    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _now = DateTime.now());
     });
+  }
+
+  bool _isPaymentWindowExpiredError(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('payment window expired') ||
+        message.contains('not accepting payments');
+  }
+
+  void _goToFailedScreen() {
+    if (!mounted || _navigatedToFailed) return;
+    _navigatedToFailed = true;
+    context.go('/payment-failed/${widget.clusterId}');
   }
 
   Future<void> _initiatePayment() async {
@@ -54,7 +66,9 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
       final data = await api.initiatePayment(widget.clusterId);
       setState(() => _paymentData = data);
     } catch (e) {
-      if (mounted) {
+      if (_isPaymentWindowExpiredError(e)) {
+        _goToFailedScreen();
+      } else if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(e.toString())));
       }
@@ -89,19 +103,24 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
           extra: {'allPaid': allPaid},
         );
       }
-    } catch (_) {
-      if (mounted) {
-        context.go('/payment-failed/${widget.clusterId}');
+    } catch (e) {
+      if (_isPaymentWindowExpiredError(e)) {
+        _goToFailedScreen();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
       }
     } finally {
       if (mounted) setState(() => _isPaying = false);
     }
   }
 
-  String _formatDuration() {
-    final h = _secondsLeft ~/ 3600;
-    final m = (_secondsLeft % 3600) ~/ 60;
-    final s = _secondsLeft % 60;
+  String _formatDuration(num totalSeconds) {
+    final seconds = totalSeconds.toInt();
+    final safeSeconds = seconds < 0 ? 0 : seconds;
+    final h = safeSeconds ~/ 3600;
+    final m = (safeSeconds % 3600) ~/ 60;
+    final s = safeSeconds % 60;
     return '${h.toString().padLeft(2, '0')} : ${m.toString().padLeft(2, '0')} : ${s.toString().padLeft(2, '0')}';
   }
 
@@ -120,6 +139,19 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
       ),
       body: clusterAsync.when(
         data: (cluster) {
+          final deadline = cluster.paymentDeadlineAt;
+          final secondsLeft = deadline == null
+              ? 0
+              : deadline.difference(_now).inSeconds.clamp(0, 10 * 24 * 3600);
+          final paymentExpired = cluster.status == ClusterStatus.failed ||
+              (deadline != null && secondsLeft <= 0);
+          if (paymentExpired) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _goToFailedScreen();
+            });
+            return const SizedBox.shrink();
+          }
+
           final paidByFarmer = <String, bool>{};
           for (final member in cluster.members) {
             final current = paidByFarmer[member.farmerId] ?? false;
@@ -158,7 +190,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                             ),
                           ),
                           Text(
-                            _formatDuration(),
+                            _formatDuration(secondsLeft),
                             style: AppTextStyles.h2.copyWith(
                               color: AppColors.surface,
                               fontFamily: 'monospace',

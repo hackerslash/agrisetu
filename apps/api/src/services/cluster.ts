@@ -13,9 +13,21 @@ import {
 
 const DEFAULT_TARGET_QUANTITY = 1000;
 const DEFAULT_FARMER_CLUSTER_RADIUS_KM = 50;
+const DEFAULT_CLUSTER_PAYMENT_WINDOW_HOURS = 24;
+const parsedPaymentWindowHours = Number(process.env.CLUSTER_PAYMENT_WINDOW_HOURS);
+const CLUSTER_PAYMENT_WINDOW_HOURS =
+  Number.isFinite(parsedPaymentWindowHours) && parsedPaymentWindowHours > 0
+    ? parsedPaymentWindowHours
+    : DEFAULT_CLUSTER_PAYMENT_WINDOW_HOURS;
+const CLUSTER_PAYMENT_WINDOW_MS =
+  CLUSTER_PAYMENT_WINDOW_HOURS * 60 * 60 * 1000;
 
 function normalizeUnit(unit: string) {
   return unit.toLowerCase().trim();
+}
+
+export function buildClusterPaymentDeadline(start = new Date()) {
+  return new Date(start.getTime() + CLUSTER_PAYMENT_WINDOW_MS);
 }
 
 export function isClusterServiceableForVendor(params: {
@@ -565,6 +577,118 @@ export async function syncClustersForPublishedGig(
       cluster.currentQuantity,
     );
   }
+}
+
+export async function ensureClusterPaymentDeadline(clusterId: string) {
+  const expectedDeadline = buildClusterPaymentDeadline();
+  await prisma.cluster.updateMany({
+    where: {
+      id: clusterId,
+      status: ClusterStatus.PAYMENT,
+      paymentDeadlineAt: null,
+    },
+    data: {
+      paymentDeadlineAt: expectedDeadline,
+    },
+  });
+
+  const cluster = await prisma.cluster.findUnique({
+    where: { id: clusterId },
+    select: { status: true, paymentDeadlineAt: true },
+  });
+
+  if (!cluster || cluster.status !== ClusterStatus.PAYMENT) {
+    return null;
+  }
+
+  return cluster.paymentDeadlineAt;
+}
+
+export async function expireClusterIfPaymentWindowElapsed(
+  clusterId: string,
+  now = new Date(),
+) {
+  const deadline = await ensureClusterPaymentDeadline(clusterId);
+  if (!deadline || deadline.getTime() > now.getTime()) {
+    return false;
+  }
+
+  const timedOutCluster = await prisma.cluster.findFirst({
+    where: {
+      id: clusterId,
+      status: ClusterStatus.PAYMENT,
+      paymentDeadlineAt: { lte: now },
+    },
+    select: {
+      id: true,
+      members: {
+        select: {
+          orderId: true,
+        },
+      },
+    },
+  });
+
+  if (!timedOutCluster) {
+    return false;
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const statusUpdate = await tx.cluster.updateMany({
+      where: {
+        id: clusterId,
+        status: ClusterStatus.PAYMENT,
+        paymentDeadlineAt: { lte: now },
+      },
+      data: {
+        status: ClusterStatus.FAILED,
+      },
+    });
+
+    if (statusUpdate.count === 0) {
+      return;
+    }
+
+    const orderIds = timedOutCluster.members.map((member) => member.orderId);
+    if (orderIds.length > 0) {
+      await tx.order.updateMany({
+        where: { id: { in: orderIds } },
+        data: { status: OrderStatus.FAILED },
+      });
+    }
+
+    await tx.payment.updateMany({
+      where: {
+        clusterId,
+        status: PaymentStatus.SUCCESS,
+      },
+      data: {
+        status: PaymentStatus.REFUNDED,
+      },
+    });
+
+    await tx.payment.updateMany({
+      where: {
+        clusterId,
+        status: PaymentStatus.PENDING,
+      },
+      data: {
+        status: PaymentStatus.FAILED,
+      },
+    });
+  });
+
+  return true;
+}
+
+export async function reconcileClusterPaymentTimeouts(clusterIds: string[]) {
+  if (clusterIds.length === 0) return;
+  const uniqueClusterIds = Array.from(new Set(clusterIds));
+  await Promise.all(
+    uniqueClusterIds.map((clusterId) =>
+      expireClusterIfPaymentWindowElapsed(clusterId),
+    ),
+  );
 }
 
 export async function checkAndTransitionPayment(clusterId: string) {

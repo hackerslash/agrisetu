@@ -6,9 +6,13 @@ import { authenticate, requireFarmer } from "../middleware/auth.js";
 import { success, error } from "../lib/response.js";
 import {
   assignOrderToCluster,
+  buildClusterPaymentDeadline,
   checkAndTransitionPayment,
   createNewClusterAndAssignOrder,
+  ensureClusterPaymentDeadline,
+  expireClusterIfPaymentWindowElapsed,
   findJoinableClusters,
+  reconcileClusterPaymentTimeouts,
 } from "../services/cluster.js";
 import {
   ClusterStatus,
@@ -138,6 +142,7 @@ async function getAvailableGigContextForFarmer(
     .map((gig) => ({
       id: gig.id,
       cropName: gig.cropName,
+      variety: gig.variety,
       unit: gig.unit,
       minQuantity: gig.minQuantity,
       pricePerUnit: gig.pricePerUnit,
@@ -678,21 +683,33 @@ router.get("/orders/:id", async (req, res) => {
 router.get("/clusters", async (req, res) => {
   const { crop } = req.query;
   try {
-    const clusters = await prisma.cluster.findMany({
-      where: {
-        members: { some: { farmerId: req.user!.id } },
-        status: { notIn: [ClusterStatus.COMPLETED, ClusterStatus.FAILED] },
-        ...(crop
-          ? { cropName: { contains: crop as string, mode: "insensitive" } }
-          : {}),
-      },
-      include: {
-        members: true,
-        bids: { include: { vendor: true } },
-      },
-      distinct: ["id"],
-      orderBy: { createdAt: "desc" },
-    });
+    const fetchClusters = () =>
+      prisma.cluster.findMany({
+        where: {
+          members: { some: { farmerId: req.user!.id } },
+          status: { notIn: [ClusterStatus.COMPLETED, ClusterStatus.FAILED] },
+          ...(crop
+            ? { cropName: { contains: crop as string, mode: "insensitive" } }
+            : {}),
+        },
+        include: {
+          members: true,
+          bids: { include: { vendor: true } },
+        },
+        distinct: ["id"],
+        orderBy: { createdAt: "desc" },
+      });
+
+    let clusters = await fetchClusters();
+    const paymentClusterIds = clusters
+      .filter((cluster) => cluster.status === ClusterStatus.PAYMENT)
+      .map((cluster) => cluster.id);
+
+    if (paymentClusterIds.length > 0) {
+      await reconcileClusterPaymentTimeouts(paymentClusterIds);
+      clusters = await fetchClusters();
+    }
+
     success(res, clusters);
   } catch {
     error(res, "Internal server error", 500);
@@ -802,6 +819,7 @@ router.post("/clusters/:id/join", async (req, res) => {
 
 router.get("/clusters/:id", async (req, res) => {
   try {
+    await expireClusterIfPaymentWindowElapsed(req.params.id);
     const cluster = await prisma.cluster.findUnique({
       where: { id: req.params.id },
       include: {
@@ -900,6 +918,7 @@ router.post("/clusters/:id/vote", async (req, res) => {
             status: ClusterStatus.PAYMENT,
             vendorId: winningBid.vendorId,
             gigId: winningBid.gigId,
+            paymentDeadlineAt: buildClusterPaymentDeadline(),
           },
         });
         // Update all member orders to PAYMENT_PENDING
@@ -944,6 +963,8 @@ router.post("/payments/initiate", async (req, res) => {
       return;
     }
 
+    await expireClusterIfPaymentWindowElapsed(parsed.data.clusterId);
+
     const cluster = await prisma.cluster.findUnique({
       where: { id: parsed.data.clusterId },
       include: {
@@ -954,8 +975,24 @@ router.post("/payments/initiate", async (req, res) => {
       error(res, "Cluster not found", 404);
       return;
     }
+    if (cluster.status === ClusterStatus.FAILED) {
+      error(res, "Payment window expired for this cluster", 400);
+      return;
+    }
     if (cluster.status !== ClusterStatus.PAYMENT) {
       error(res, "Cluster is not ready for payment", 400);
+      return;
+    }
+
+    const paymentDeadlineAt = await ensureClusterPaymentDeadline(cluster.id);
+    if (!paymentDeadlineAt) {
+      error(res, "Cluster payment window is unavailable", 400);
+      return;
+    }
+
+    if (paymentDeadlineAt.getTime() <= Date.now()) {
+      await expireClusterIfPaymentWindowElapsed(parsed.data.clusterId);
+      error(res, "Payment window expired for this cluster", 400);
       return;
     }
 
@@ -988,7 +1025,12 @@ router.post("/payments/initiate", async (req, res) => {
       });
     }
 
-    success(res, { upiRef, amount, clusterId: parsed.data.clusterId });
+    success(res, {
+      upiRef,
+      amount,
+      clusterId: parsed.data.clusterId,
+      paymentDeadlineAt: paymentDeadlineAt.toISOString(),
+    });
   } catch {
     error(res, "Internal server error", 500);
   }
@@ -1010,6 +1052,25 @@ router.post("/payments/confirm", async (req, res) => {
     return;
   }
   try {
+    await expireClusterIfPaymentWindowElapsed(parsed.data.clusterId);
+
+    const cluster = await prisma.cluster.findUnique({
+      where: { id: parsed.data.clusterId },
+      select: { status: true },
+    });
+    if (!cluster) {
+      error(res, "Cluster not found", 404);
+      return;
+    }
+    if (cluster.status === ClusterStatus.FAILED) {
+      error(res, "Payment window expired for this cluster", 400);
+      return;
+    }
+    if (cluster.status !== ClusterStatus.PAYMENT) {
+      error(res, "Cluster is not accepting payments", 400);
+      return;
+    }
+
     const payment = await prisma.payment.updateMany({
       where: {
         clusterId: parsed.data.clusterId,
