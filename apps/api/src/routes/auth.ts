@@ -24,8 +24,6 @@ router.post("/farmer/request-otp", async (req, res) => {
     error(res, "Invalid request", 422, parsed.error.flatten());
     return;
   }
-  const { phone } = parsed.data;
-  console.log(`OTP for ${phone}: 123456`);
   success(res, { message: "OTP sent successfully" });
 });
 
