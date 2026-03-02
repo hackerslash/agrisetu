@@ -1124,15 +1124,26 @@ router.get("/payments/summary", async (req, res) => {
 // ─── Analytics ────────────────────────────────────────────────────────────────
 
 router.get("/analytics", async (req, res) => {
-  const { period = "30d" } = req.query;
+  const period =
+    typeof req.query.period === "string" ? req.query.period : "30d";
   const days = period === "7d" ? 7 : period === "90d" ? 90 : 30;
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const now = new Date();
+  const since = new Date(now);
+  since.setHours(0, 0, 0, 0);
+  since.setDate(since.getDate() - (days - 1));
+
+  const toDateKey = (value: Date) => {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
 
   try {
     const clusters = await prisma.cluster.findMany({
       where: {
         vendorId: req.user!.id,
-        createdAt: { gte: since },
+        updatedAt: { gte: since },
       },
       include: {
         payments: true,
@@ -1181,15 +1192,16 @@ router.get("/analytics", async (req, res) => {
     // Revenue by day
     const revenueByDay: Record<string, number> = {};
     for (let i = 0; i < days; i++) {
-      const d = new Date(since.getTime() + i * 24 * 60 * 60 * 1000);
-      const key = d.toISOString().split("T")[0] as string;
+      const d = new Date(since);
+      d.setDate(since.getDate() + i);
+      const key = toDateKey(d);
       revenueByDay[key] = 0;
     }
 
     clusters
       .filter((c) => c.status === ClusterStatus.COMPLETED)
       .forEach((cluster) => {
-        const key = cluster.updatedAt.toISOString().split("T")[0] as string;
+        const key = toDateKey(cluster.updatedAt);
         if (Object.prototype.hasOwnProperty.call(revenueByDay, key)) {
           const amount = cluster.payments
             .filter((p) => p.status === PaymentStatus.SUCCESS)

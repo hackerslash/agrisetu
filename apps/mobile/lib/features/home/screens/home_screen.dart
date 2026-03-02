@@ -48,7 +48,7 @@ class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   String _greeting() {
-    final hour = DateTime.now().hour;
+    final hour = DateTime.now().toLocal().hour;
     if (hour < 12) return 'Good morning 🌾';
     if (hour < 17) return 'Good afternoon ☀️';
     return 'Good evening 🌙';

@@ -899,6 +899,7 @@ router.get("/clusters/:id", async (req, res) => {
         members: { include: { farmer: true, order: true } },
         bids: { include: { vendor: true, vendorVotes: true } },
         delivery: true,
+        vendor: true,
       },
     });
     if (!cluster) {
