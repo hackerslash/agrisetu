@@ -160,6 +160,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           ),
                         ),
                       ),
+                      if (farmer != null && !_isUploadingAvatar)
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: GestureDetector(
+                            onTap: _pickAvatar,
+                            child: Container(
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                color: AppColors.primary,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: AppColors.surface,
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.edit,
+                                size: 13,
+                                color: AppColors.surface,
+                              ),
+                            ),
+                          ),
+                        ),
                       if (_isUploadingAvatar)
                         const Positioned.fill(
                           child: DecoratedBox(

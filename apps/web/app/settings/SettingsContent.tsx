@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Upload, AlertTriangle } from "lucide-react";
+import { Upload, AlertTriangle, LocateFixed } from "lucide-react";
 
 function Toggle({ defaultChecked = true }: { defaultChecked?: boolean }) {
   const [on, setOn] = useState(defaultChecked);
@@ -67,6 +67,12 @@ const profileSchema = z.object({
 });
 type ProfileFormData = z.infer<typeof profileSchema>;
 type ProfileFormInput = z.input<typeof profileSchema>;
+type ReverseGeocodeResult = {
+  display_name?: string;
+  address?: {
+    state?: string;
+  };
+};
 
 const passwordSchema = z
   .object({
@@ -223,24 +229,31 @@ export function SettingsContent() {
       profileForm.setValue("latitude", latitude);
       profileForm.setValue("longitude", longitude);
 
-      let address = `Lat ${latitude}, Lng ${longitude}`;
+      let resolvedAddress: string | undefined;
       try {
         const reverseGeocode = await fetch(
           `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=jsonv2`,
         );
         if (reverseGeocode.ok) {
-          const data = (await reverseGeocode.json()) as {
-            display_name?: string;
-          };
+          const data = (await reverseGeocode.json()) as ReverseGeocodeResult;
           if (data.display_name?.trim()) {
-            address = data.display_name.trim();
+            resolvedAddress = data.display_name.trim();
+          }
+          if (!profileForm.getValues("state")?.trim() && data.address?.state) {
+            profileForm.setValue("state", data.address.state.trim());
           }
         }
       } catch {
-        // Keep coordinate-based fallback address.
+        // Coordinates remain captured even if reverse geocoding fails.
       }
 
-      profileForm.setValue("locationAddress", address);
+      if (resolvedAddress) {
+        profileForm.setValue("locationAddress", resolvedAddress);
+      } else if (!profileForm.getValues("locationAddress")?.trim()) {
+        setProfileError(
+          "Location captured, but address could not be resolved. Please enter address manually.",
+        );
+      }
     } catch {
       setProfileError(
         "Unable to fetch your location. Please allow browser location permission.",
@@ -432,28 +445,8 @@ export function SettingsContent() {
               error={profileForm.formState.errors.locationAddress?.message}
               {...profileForm.register("locationAddress")}
             />
-            <div className="flex gap-4">
-              <div className="flex-1">
-                <FormInput
-                  label="Latitude"
-                  type="number"
-                  placeholder="12.9716"
-                  error={profileForm.formState.errors.latitude?.message}
-                  step="0.000001"
-                  {...profileForm.register("latitude")}
-                />
-              </div>
-              <div className="flex-1">
-                <FormInput
-                  label="Longitude"
-                  type="number"
-                  placeholder="77.5946"
-                  error={profileForm.formState.errors.longitude?.message}
-                  step="0.000001"
-                  {...profileForm.register("longitude")}
-                />
-              </div>
-            </div>
+            <input type="hidden" {...profileForm.register("latitude")} />
+            <input type="hidden" {...profileForm.register("longitude")} />
             <div className="flex gap-4 items-end">
               <div className="flex-1">
                 <FormInput
@@ -468,7 +461,7 @@ export function SettingsContent() {
               <button
                 type="button"
                 onClick={useCurrentLocation}
-                className="rounded-xl font-semibold"
+                className="flex items-center justify-center gap-2 rounded-xl font-semibold"
                 style={{
                   backgroundColor: "#EDE8DF",
                   color: "#1A1A1A",
@@ -477,7 +470,8 @@ export function SettingsContent() {
                   fontSize: 13,
                 }}
               >
-                {locating ? "Fetching…" : "Fetch location"}
+                <LocateFixed size={16} />
+                {locating ? "Fetching..." : "Fetch location"}
               </button>
             </div>
             <div className="flex flex-col gap-1.5">

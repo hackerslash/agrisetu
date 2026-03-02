@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { authApi, vendorApi } from "@repo/api-client";
+import { LocateFixed } from "lucide-react";
 
 // ─── Step 1 Schema ────────────────────────────────────────────────────────────
 
@@ -33,6 +34,12 @@ const step1Schema = z.object({
 });
 type Step1Data = z.infer<typeof step1Schema>;
 type Step1FormInput = z.input<typeof step1Schema>;
+type ReverseGeocodeResult = {
+  display_name?: string;
+  address?: {
+    state?: string;
+  };
+};
 
 // ─── Step 2 Schema ────────────────────────────────────────────────────────────
 
@@ -140,36 +147,60 @@ export function RegisterWizard() {
     }
   }
 
-  function setCurrentLocationForStep1() {
+  async function setCurrentLocationForStep1() {
     if (!navigator.geolocation) {
       setApiError("Browser geolocation is not available");
       return;
     }
     setApiError("");
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        form1.setValue("latitude", Number(position.coords.latitude.toFixed(6)));
-        form1.setValue(
-          "longitude",
-          Number(position.coords.longitude.toFixed(6)),
+    try {
+      const position = await new Promise<GeolocationPosition>(
+        (resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 10000,
+          });
+        },
+      );
+
+      const latitude = Number(position.coords.latitude.toFixed(6));
+      const longitude = Number(position.coords.longitude.toFixed(6));
+      form1.setValue("latitude", latitude);
+      form1.setValue("longitude", longitude);
+
+      let resolvedAddress: string | undefined;
+      try {
+        const reverseGeocode = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=jsonv2`,
         );
-        if (!form1.getValues("locationAddress")) {
-          form1.setValue(
-            "locationAddress",
-            `Lat ${position.coords.latitude.toFixed(6)}, Lng ${position.coords.longitude.toFixed(6)}`,
-          );
+        if (reverseGeocode.ok) {
+          const data = (await reverseGeocode.json()) as ReverseGeocodeResult;
+          if (data.display_name?.trim()) {
+            resolvedAddress = data.display_name.trim();
+          }
+          if (!form1.getValues("state")?.trim() && data.address?.state) {
+            form1.setValue("state", data.address.state.trim());
+          }
         }
-        setLocating(false);
-      },
-      () => {
+      } catch {
+        // Coordinates remain captured even if reverse geocoding fails.
+      }
+
+      if (resolvedAddress) {
+        form1.setValue("locationAddress", resolvedAddress);
+      } else if (!form1.getValues("locationAddress")?.trim()) {
         setApiError(
-          "Unable to fetch your location. Please allow location permission.",
+          "Location captured, but address could not be resolved. Please enter address manually.",
         );
-        setLocating(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
+      }
+    } catch {
+      setApiError(
+        "Unable to fetch your location. Please allow location permission.",
+      );
+    } finally {
+      setLocating(false);
+    }
   }
 
   async function onStep2(data: Step2Data) {
@@ -367,28 +398,8 @@ export function RegisterWizard() {
             error={form1.formState.errors.locationAddress?.message}
             {...form1.register("locationAddress")}
           />
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <FormInput
-                label="Latitude"
-                type="number"
-                placeholder="12.9716"
-                step="0.000001"
-                error={form1.formState.errors.latitude?.message}
-                {...form1.register("latitude")}
-              />
-            </div>
-            <div className="flex-1">
-              <FormInput
-                label="Longitude"
-                type="number"
-                placeholder="77.5946"
-                step="0.000001"
-                error={form1.formState.errors.longitude?.message}
-                {...form1.register("longitude")}
-              />
-            </div>
-          </div>
+          <input type="hidden" {...form1.register("latitude")} />
+          <input type="hidden" {...form1.register("longitude")} />
           <div className="flex items-end gap-3">
             <div className="flex-1">
               <FormInput
@@ -403,7 +414,7 @@ export function RegisterWizard() {
             <button
               type="button"
               onClick={setCurrentLocationForStep1}
-              className="flex items-center justify-center font-semibold rounded-xl"
+              className="flex items-center justify-center gap-2 font-semibold rounded-xl"
               style={{
                 backgroundColor: "#EDE8DF",
                 color: "#1A1A1A",
@@ -412,7 +423,8 @@ export function RegisterWizard() {
                 fontSize: 13,
               }}
             >
-              {locating ? "Fetching…" : "Use current location"}
+              <LocateFixed size={16} />
+              {locating ? "Fetching..." : "Use current location"}
             </button>
           </div>
           <button

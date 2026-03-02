@@ -103,6 +103,31 @@ class HomeScreen extends ConsumerWidget {
                 ),
                 child: Column(
                   children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: AppColors.surface.withOpacity(0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.eco,
+                            color: AppColors.surface,
+                            size: 18,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'AgriSetu',
+                          style: AppTextStyles.h5.copyWith(
+                            color: AppColors.surface,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
                     // Top row
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
