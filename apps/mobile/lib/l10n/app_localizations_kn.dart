@@ -53,4 +53,85 @@ class AppLocalizationsKn extends AppLocalizations {
 
   @override
   String get voiceOrderHint => '\'ನನಗೆ 50 ಕೆಜಿ ಯೂರಿಯಾ ಬೇಕು\' ಎಂದು ಹೇಳಿ...';
+
+  @override
+  String get editProfile => 'ಪ್ರೊಫೈಲ್ ಸಂಪಾದಿಸಿ';
+
+  @override
+  String get inviteNearbyFarmers => 'ಹತ್ತಿರದ ರೈತರನ್ನು ಆಹ್ವಾನಿಸಿ';
+
+  @override
+  String get signOut => 'ಸೈನ್ ಔಟ್';
+
+  @override
+  String get placeAnOrder => 'ಆರ್ಡರ್ ಮಾಡಿ';
+
+  @override
+  String get trackOrder => 'ಆರ್ಡರ್ ಟ್ರ್ಯಾಕ್ ಮಾಡಿ';
+
+  @override
+  String get trackDelivery => 'ವಿತರಣೆ ಟ್ರ್ಯಾಕ್ ಮಾಡಿ';
+
+  @override
+  String get paySecurely => 'ಸುರಕ್ಷಿತವಾಗಿ ಪಾವತಿಸಿ';
+
+  @override
+  String get confirm => 'ಖಚಿತಪಡಿಸಿ';
+
+  @override
+  String get reRecord => 'ಮತ್ತೆ ರೆಕಾರ್ಡ್ ಮಾಡಿ';
+
+  @override
+  String get paymentCompleted => 'ಪಾವತಿ ಪೂರ್ಣಗೊಂಡಿದೆ';
+
+  @override
+  String get avatarUpdated => 'ಅವತಾರ ನವೀಕರಿಸಲಾಗಿದೆ';
+
+  @override
+  String get otpSentAgain => 'OTP ಮತ್ತೆ ಕಳುಹಿಸಲಾಗಿದೆ';
+
+  @override
+  String get thankYouForRating => 'ನಿಮ್ಮ ರೇಟಿಂಗ್‌ಗೆ ಧನ್ಯವಾದಗಳು!';
+
+  @override
+  String get voteCastSuccessfully => 'ಮತ ಯಶಸ್ವಿಯಾಗಿ ಚಲಾಯಿಸಲಾಗಿದೆ!';
+
+  @override
+  String get orderSummary => 'ಆರ್ಡರ್ ಸಾರಾಂಶ';
+
+  @override
+  String get personalInfo => 'ವೈಯಕ್ತಿಕ ಮಾಹಿತಿ';
+
+  @override
+  String get farmDetails => 'ಕೃಷಿ ವಿವರಗಳು';
+
+  @override
+  String get cropsGrown => 'ಬೆಳೆದ ಬೆಳೆಗಳು';
+
+  @override
+  String get preferredLanguage => 'ಆದ್ಯತೆಯ ಭಾಷೆ';
+
+  @override
+  String get howItWorks => 'ಇದು ಹೇಗೆ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ';
+
+  @override
+  String get howClustersWork => 'ಕ್ಲಸ್ಟರ್‌ಗಳು ಹೇಗೆ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತವೆ';
+
+  @override
+  String get chooseYourVendor => 'ನಿಮ್ಮ ಮಾರಾಟಗಾರರನ್ನು ಆರಿಸಿ';
+
+  @override
+  String get voteForVendor => 'ಮಾರಾಟಗಾರರಿಗೆ ಮತ ನೀಡಿ';
+
+  @override
+  String get submitRating => 'ರೇಟಿಂಗ್ ಸಲ್ಲಿಸಿ';
+
+  @override
+  String get rateYourExperience => 'ನಿಮ್ಮ ಅನುಭವವನ್ನು ರೇಟ್ ಮಾಡಿ';
+
+  @override
+  String get orderTimeline => 'ಆರ್ಡರ್ ಟೈಮ್‌ಲೈನ್';
+
+  @override
+  String get orderProgress => 'ಆರ್ಡರ್ ಪ್ರಗತಿ';
 }

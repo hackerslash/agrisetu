@@ -54,4 +54,85 @@ class AppLocalizationsTa extends AppLocalizations {
   @override
   String get voiceOrderHint =>
       '\'எனக்கு 50 கிலோ யூரியா தேவை\' என்று சொல்லவும்...';
+
+  @override
+  String get editProfile => 'சுயவிவரத்தைத் திருத்து';
+
+  @override
+  String get inviteNearbyFarmers => 'அருகிலுள்ள விவசாயிகளை அழைக்கவும்';
+
+  @override
+  String get signOut => 'வெளியேறு';
+
+  @override
+  String get placeAnOrder => 'ஆர்டர் செய்யவும்';
+
+  @override
+  String get trackOrder => 'ஆர்டரைக் கண்காணிக்கவும்';
+
+  @override
+  String get trackDelivery => 'டெலிவரியைக் கண்காணிக்கவும்';
+
+  @override
+  String get paySecurely => 'பாதுகாப்பாக பணம் செலுத்துங்கள்';
+
+  @override
+  String get confirm => 'உறுதிப்படுத்து';
+
+  @override
+  String get reRecord => 'மீண்டும் பதிவுசெய்';
+
+  @override
+  String get paymentCompleted => 'பணம் செலுத்தப்பட்டது';
+
+  @override
+  String get avatarUpdated => 'அவதார் புதுப்பிக்கப்பட்டது';
+
+  @override
+  String get otpSentAgain => 'OTP மீண்டும் அனுப்பப்பட்டது';
+
+  @override
+  String get thankYouForRating => 'உங்கள் மதிப்பீட்டிற்கு நன்றி!';
+
+  @override
+  String get voteCastSuccessfully => 'வெற்றிகரமாக வாக்களிக்கப்பட்டது!';
+
+  @override
+  String get orderSummary => 'ஆர்டர் சுருக்கம்';
+
+  @override
+  String get personalInfo => 'தனிப்பட்ட தகவல்';
+
+  @override
+  String get farmDetails => 'பண்ணை விவரங்கள்';
+
+  @override
+  String get cropsGrown => 'விளைவிக்கப்படும் பயிர்கள்';
+
+  @override
+  String get preferredLanguage => 'விருப்பமான மொழி';
+
+  @override
+  String get howItWorks => 'இது எப்படி வேலை செய்கிறது';
+
+  @override
+  String get howClustersWork => 'குழுக்கள் எப்படி வேலை செய்கின்றன';
+
+  @override
+  String get chooseYourVendor => 'உங்கள் விற்பனையாளரைத் தேர்வுசெய்க';
+
+  @override
+  String get voteForVendor => 'விற்பனையாளருக்கு வாக்களியுங்கள்';
+
+  @override
+  String get submitRating => 'மதிப்பீட்டை சமர்ப்பிக்கவும்';
+
+  @override
+  String get rateYourExperience => 'உங்கள் அனுபவத்தை மதிப்பிடுங்கள்';
+
+  @override
+  String get orderTimeline => 'ஆர்டர் காலக்கெடு';
+
+  @override
+  String get orderProgress => 'ஆர்டர் முன்னேற்றம்';
 }

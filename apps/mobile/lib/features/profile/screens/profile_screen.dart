@@ -7,6 +7,7 @@ import '../../../core/providers/auth_provider.dart';
 import '../../../core/models/farmer_model.dart';
 import '../../../core/utils/avatar_picker.dart';
 import '../../home/screens/home_screen.dart' show homeDashboardProvider;
+import '../../../l10n/app_localizations.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -380,7 +381,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   child: ElevatedButton.icon(
                     onPressed: () => context.push('/profile/edit'),
                     icon: const Icon(Icons.edit_outlined, size: 18),
-                    label: const Text('Edit Profile'),
+                    label: Text(AppLocalizations.of(context)!.editProfile),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       shape: const StadiumBorder(),
@@ -402,7 +403,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       if (context.mounted) context.go('/landing');
                     },
                     icon: const Icon(Icons.logout_outlined, size: 18),
-                    label: const Text('Sign Out'),
+                    label: Text(AppLocalizations.of(context)!.signOut),
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.inputBackground,
                       foregroundColor: AppColors.error,

@@ -53,4 +53,85 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get voiceOrderHint => 'Say \'I need 50kg urea\'...';
+
+  @override
+  String get editProfile => 'Edit Profile';
+
+  @override
+  String get inviteNearbyFarmers => 'Invite Nearby Farmers';
+
+  @override
+  String get signOut => 'Sign Out';
+
+  @override
+  String get placeAnOrder => 'Place an Order';
+
+  @override
+  String get trackOrder => 'Track Order';
+
+  @override
+  String get trackDelivery => 'Track Delivery';
+
+  @override
+  String get paySecurely => 'Pay Securely';
+
+  @override
+  String get confirm => 'Confirm';
+
+  @override
+  String get reRecord => 'Re-record';
+
+  @override
+  String get paymentCompleted => 'Payment Completed';
+
+  @override
+  String get avatarUpdated => 'Avatar updated';
+
+  @override
+  String get otpSentAgain => 'OTP sent again';
+
+  @override
+  String get thankYouForRating => 'Thank you for your rating!';
+
+  @override
+  String get voteCastSuccessfully => 'Vote cast successfully!';
+
+  @override
+  String get orderSummary => 'Order Summary';
+
+  @override
+  String get personalInfo => 'Personal Info';
+
+  @override
+  String get farmDetails => 'Farm Details';
+
+  @override
+  String get cropsGrown => 'Crops Grown';
+
+  @override
+  String get preferredLanguage => 'Preferred Language';
+
+  @override
+  String get howItWorks => 'How It Works';
+
+  @override
+  String get howClustersWork => 'How Clusters Work';
+
+  @override
+  String get chooseYourVendor => 'Choose Your Vendor';
+
+  @override
+  String get voteForVendor => 'Vote for Vendor';
+
+  @override
+  String get submitRating => 'Submit Rating';
+
+  @override
+  String get rateYourExperience => 'Rate Your Experience';
+
+  @override
+  String get orderTimeline => 'Order Timeline';
+
+  @override
+  String get orderProgress => 'Order Progress';
 }

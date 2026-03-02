@@ -54,4 +54,85 @@ class AppLocalizationsTe extends AppLocalizations {
   @override
   String get voiceOrderHint =>
       '\'నాకు 50 కిలోల యూరియా కావాలి\' అని చెప్పండి...';
+
+  @override
+  String get editProfile => 'ప్రొఫైల్‌ను సవరించండి';
+
+  @override
+  String get inviteNearbyFarmers => 'సమీప రైతులను ఆహ్వానించండి';
+
+  @override
+  String get signOut => 'సైన్ అవుట్';
+
+  @override
+  String get placeAnOrder => 'ఆర్డర్ ఉంచండి';
+
+  @override
+  String get trackOrder => 'ఆర్డర్‌ను ట్రాక్ చేయండి';
+
+  @override
+  String get trackDelivery => 'డెలివరీని ట్రాక్ చేయండి';
+
+  @override
+  String get paySecurely => 'సురక్షితంగా చెల్లించండి';
+
+  @override
+  String get confirm => 'నిర్ధారించండి';
+
+  @override
+  String get reRecord => 'మళ్లీ రికార్డ్ చేయండి';
+
+  @override
+  String get paymentCompleted => 'చెల్లింపు పూర్తయింది';
+
+  @override
+  String get avatarUpdated => 'అవతార్ నవీకరించబడింది';
+
+  @override
+  String get otpSentAgain => 'OTP మళ్లీ పంపబడింది';
+
+  @override
+  String get thankYouForRating => 'మీ రేటింగ్ కు ధన్యవాదాలు!';
+
+  @override
+  String get voteCastSuccessfully => 'ఓటు విజయవంతంగా వేయబడింది!';
+
+  @override
+  String get orderSummary => 'ఆర్డర్ సారాంశం';
+
+  @override
+  String get personalInfo => 'వ్యక్తిగత సమాచారం';
+
+  @override
+  String get farmDetails => 'వ్యవసాయ వివరాలు';
+
+  @override
+  String get cropsGrown => 'పండించిన పంటలు';
+
+  @override
+  String get preferredLanguage => 'ప్రాధాన్య భాష';
+
+  @override
+  String get howItWorks => 'ఇది ఎలా పని చేస్తుంది';
+
+  @override
+  String get howClustersWork => 'క్లస్టర్‌లు ఎలా పనిచేస్తాయి';
+
+  @override
+  String get chooseYourVendor => 'మీ విక్రేతను ఎంచుకోండి';
+
+  @override
+  String get voteForVendor => 'విక్రేతకు ఓటు వేయండి';
+
+  @override
+  String get submitRating => 'రేటింగ్ సమర్పించండి';
+
+  @override
+  String get rateYourExperience => 'మీ అనుభవాన్ని రేట్ చేయండి';
+
+  @override
+  String get orderTimeline => 'ఆర్డర్ కాలక్రమం';
+
+  @override
+  String get orderProgress => 'ఆర్డర్ పురోగతి';
 }

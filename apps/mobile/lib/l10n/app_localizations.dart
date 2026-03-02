@@ -195,6 +195,168 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Say \'I need 50kg urea\'...'**
   String get voiceOrderHint;
+
+  /// No description provided for @editProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Profile'**
+  String get editProfile;
+
+  /// No description provided for @inviteNearbyFarmers.
+  ///
+  /// In en, this message translates to:
+  /// **'Invite Nearby Farmers'**
+  String get inviteNearbyFarmers;
+
+  /// No description provided for @signOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign Out'**
+  String get signOut;
+
+  /// No description provided for @placeAnOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Place an Order'**
+  String get placeAnOrder;
+
+  /// No description provided for @trackOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Track Order'**
+  String get trackOrder;
+
+  /// No description provided for @trackDelivery.
+  ///
+  /// In en, this message translates to:
+  /// **'Track Delivery'**
+  String get trackDelivery;
+
+  /// No description provided for @paySecurely.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay Securely'**
+  String get paySecurely;
+
+  /// No description provided for @confirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get confirm;
+
+  /// No description provided for @reRecord.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-record'**
+  String get reRecord;
+
+  /// No description provided for @paymentCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment Completed'**
+  String get paymentCompleted;
+
+  /// No description provided for @avatarUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Avatar updated'**
+  String get avatarUpdated;
+
+  /// No description provided for @otpSentAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'OTP sent again'**
+  String get otpSentAgain;
+
+  /// No description provided for @thankYouForRating.
+  ///
+  /// In en, this message translates to:
+  /// **'Thank you for your rating!'**
+  String get thankYouForRating;
+
+  /// No description provided for @voteCastSuccessfully.
+  ///
+  /// In en, this message translates to:
+  /// **'Vote cast successfully!'**
+  String get voteCastSuccessfully;
+
+  /// No description provided for @orderSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Order Summary'**
+  String get orderSummary;
+
+  /// No description provided for @personalInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Personal Info'**
+  String get personalInfo;
+
+  /// No description provided for @farmDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Farm Details'**
+  String get farmDetails;
+
+  /// No description provided for @cropsGrown.
+  ///
+  /// In en, this message translates to:
+  /// **'Crops Grown'**
+  String get cropsGrown;
+
+  /// No description provided for @preferredLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'Preferred Language'**
+  String get preferredLanguage;
+
+  /// No description provided for @howItWorks.
+  ///
+  /// In en, this message translates to:
+  /// **'How It Works'**
+  String get howItWorks;
+
+  /// No description provided for @howClustersWork.
+  ///
+  /// In en, this message translates to:
+  /// **'How Clusters Work'**
+  String get howClustersWork;
+
+  /// No description provided for @chooseYourVendor.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose Your Vendor'**
+  String get chooseYourVendor;
+
+  /// No description provided for @voteForVendor.
+  ///
+  /// In en, this message translates to:
+  /// **'Vote for Vendor'**
+  String get voteForVendor;
+
+  /// No description provided for @submitRating.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit Rating'**
+  String get submitRating;
+
+  /// No description provided for @rateYourExperience.
+  ///
+  /// In en, this message translates to:
+  /// **'Rate Your Experience'**
+  String get rateYourExperience;
+
+  /// No description provided for @orderTimeline.
+  ///
+  /// In en, this message translates to:
+  /// **'Order Timeline'**
+  String get orderTimeline;
+
+  /// No description provided for @orderProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Order Progress'**
+  String get orderProgress;
 }
 
 class _AppLocalizationsDelegate

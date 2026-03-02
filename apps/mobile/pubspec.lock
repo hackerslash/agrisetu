@@ -1097,10 +1097,10 @@ packages:
     dependency: transitive
     description:
       name: protobuf
-      sha256: de9c9eb2c33f8e933a42932fe1dc504800ca45ebc3d673e6ed7f39754ee4053e
+      sha256: "68645b24e0716782e58948f8467fd42a880f255096a821f9e7d0ec625b00c84d"
       url: "https://pub.dev"
     source: hosted
-    version: "4.2.0"
+    version: "3.1.0"
   pub_semver:
     dependency: transitive
     description:
@@ -1185,18 +1185,18 @@ packages:
     dependency: "direct main"
     description:
       name: retrofit
-      sha256: "0f629ed26b2c48c66fe54bd548313c6fdf7955be18bff37e08a46dd3f97f8eaf"
+      sha256: c6cc9ad3374e6d07008343140a67afffaaa34cdf6bf08d4847d91417a99dcf45
       url: "https://pub.dev"
     source: hosted
-    version: "4.9.2"
+    version: "4.4.2"
   retrofit_generator:
     dependency: "direct dev"
     description:
       name: retrofit_generator
-      sha256: "9abcf21acb95bf7040546eafff87f60cf0aee20b05101d71f99876fc4df1f522"
+      sha256: da17daf8cfdf695a402c894e4eebf91d2e815a47368820dd7a0b41a027739a9c
       url: "https://pub.dev"
     source: hosted
-    version: "9.7.0"
+    version: "9.1.7"
   riverpod:
     dependency: transitive
     description:

@@ -8,6 +8,7 @@ import '../../../shared/widgets/app_header.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/models/order_model.dart';
 import '../../home/screens/home_screen.dart';
+import '../../../l10n/app_localizations.dart';
 
 final orderDetailProvider =
     FutureProvider.autoDispose.family<Order, String>((ref, id) async {
@@ -441,7 +442,8 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Order Summary', style: AppTextStyles.h5),
+                  Text(AppLocalizations.of(context)!.orderSummary, style: AppTextStyles.h5),
+                  Text(AppLocalizations.of(context)!.orderTimeline, style: AppTextStyles.h5),
                   const SizedBox(height: 14),
                   _SummaryRow(
                     label: 'Unit Price',
@@ -1067,7 +1069,7 @@ class _OrderTimeline extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Order Progress', style: AppTextStyles.h5),
+                  Text(AppLocalizations.of(context)!.orderProgress, style: AppTextStyles.h5),
         const SizedBox(height: 16),
         for (int i = 0; i < steps.length; i++) ...[
           Row(
