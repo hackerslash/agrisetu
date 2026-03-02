@@ -313,9 +313,13 @@ const bedrockAgentClient = new BedrockAgentRuntimeClient({ region: process.env.A
 
 async function fetchKnowledgeBaseContext(transcript: string): Promise<string> {
   const kbId = process.env.KNOWLEDGE_BASE_ID?.trim();
-  if (!kbId) return "";
+  if (!kbId) {
+    console.log("[ai-order-parser] KNOWLEDGE_BASE_ID not set, skipping KB retrieval.");
+    return "";
+  }
 
   try {
+    console.log(`[ai-order-parser] Fetching KB context for transcript: "${transcript}" using KB ID: ${kbId}`);
     const response = await bedrockAgentClient.send(
       new RetrieveCommand({
         knowledgeBaseId: kbId,
@@ -329,6 +333,7 @@ async function fetchKnowledgeBaseContext(transcript: string): Promise<string> {
     );
 
     const chunks = response.retrievalResults?.map(r => r.content?.text).filter(Boolean) ?? [];
+    console.log(`[ai-order-parser] Retrieved ${chunks.length} chunks from Knowledge Base.`);
     return chunks.join("\n\n");
   } catch (error) {
     console.error("[ai-order-parser] Error fetching Knowledge Base context:", error);
@@ -367,13 +372,16 @@ async function callModelForExtraction(params: {
   };
 
   const systemPrompt =
-    "You extract agricultural order intent based on the user transcript and available context. Respond with ONLY one JSON object and no extra text. " +
-    "JSON schema: { cropName: string|null, quantity: number|null, unit: 'kg'|'quintal'|'ton'|'bag'|'litre'|null, " +
-    "matchedGigId: string|null, confidence: number, needsClarification: boolean, clarificationQuestion: string|null }. " +
-    "Rules: prefer matching to availableGigs crop/unit/variety. Use matchedGigId only from availableGigs IDs. " +
-    "When multiple gigs share the same cropName, use variety mentioned in transcript to pick the right gig. " +
-    "If transcript is ambiguous or missing quantity/unit, set needsClarification=true and ask one short question. " +
-    "Use the knowledgeBaseContext to help resolve ambiguities in crop names, synonyms, or regional terms.";
+    "You are an AI order extraction assistant for agriculture. Extract agricultural order intent based on the user transcript and available context.\n\n" +
+    "CRITICAL RULES:\n" +
+    "1. Respond with ONLY one valid JSON object and absolutely no extra text, markdown formatting, or preamble.\n" +
+    "2. JSON schema: { \"cropName\": string|null, \"quantity\": number|null, \"unit\": \"kg\"|\"quintal\"|\"ton\"|\"bag\"|\"litre\"|null, " +
+    "\"matchedGigId\": string|null, \"confidence\": number, \"needsClarification\": boolean, \"clarificationQuestion\": string|null }\n" +
+    "3. Prefer matching to `availableGigs` crop/unit/variety. Use `matchedGigId` ONLY from `availableGigs` IDs.\n" +
+    "4. When multiple gigs share the same cropName, use variety mentioned in transcript to pick the right gig.\n" +
+    "5. If transcript is ambiguous or missing quantity/unit, set `needsClarification` to true and ask one short clarification question.\n" +
+    "6. MUST USE KNOWLEDGE BASE: You MUST strictly adhere to the rules, definitions, and domain constraints provided in the `knowledgeBaseContext` section of the user payload. It contains the ultimate source of truth for handling synonyms, policies, and unit rules.\n\n" +
+    "Use the `knowledgeBaseContext` to help resolve ambiguities in crop names, synonyms, or regional terms.";
 
   try {
     const response = await bedrockClient.send(
