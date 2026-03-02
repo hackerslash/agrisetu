@@ -169,65 +169,80 @@ async function autoCreateBidsForVotingCluster(
   cropName: string,
   unit: string,
   currentQuantity: number,
+  options?: {
+    matchingGigs?: any[];
+    clusterCoordinates?: { latitude: number | null; longitude: number | null };
+  },
 ) {
-  const cluster = await prisma.cluster.findUnique({
-    where: { id: clusterId },
-    select: { latitude: true, longitude: true },
-  });
+  let clusterLatitude = options?.clusterCoordinates?.latitude;
+  let clusterLongitude = options?.clusterCoordinates?.longitude;
 
-  const matchingGigs = await prisma.gig.findMany({
-    where: {
-      cropName: { equals: cropName, mode: "insensitive" },
-      unit: { equals: unit, mode: "insensitive" },
-      status: GigStatus.PUBLISHED,
-    },
-    include: {
-      vendor: {
-        select: {
-          latitude: true,
-          longitude: true,
-          serviceRadiusKm: true,
+  if (options?.clusterCoordinates === undefined) {
+    const cluster = await prisma.cluster.findUnique({
+      where: { id: clusterId },
+      select: { latitude: true, longitude: true },
+    });
+    clusterLatitude = cluster?.latitude ?? null;
+    clusterLongitude = cluster?.longitude ?? null;
+  }
+
+  const matchingGigs =
+    options?.matchingGigs ??
+    (await prisma.gig.findMany({
+      where: {
+        cropName: { equals: cropName, mode: "insensitive" },
+        unit: { equals: unit, mode: "insensitive" },
+        status: GigStatus.PUBLISHED,
+      },
+      include: {
+        vendor: {
+          select: {
+            latitude: true,
+            longitude: true,
+            serviceRadiusKm: true,
+          },
         },
       },
-    },
-  });
+    }));
 
-  for (const gig of matchingGigs) {
-    if (
-      !isClusterServiceableForVendor({
-        vendorLatitude: gig.vendor.latitude,
-        vendorLongitude: gig.vendor.longitude,
-        serviceRadiusKm: gig.vendor.serviceRadiusKm,
-        clusterLatitude: cluster?.latitude,
-        clusterLongitude: cluster?.longitude,
-      })
-    ) {
-      continue;
-    }
+  await Promise.all(
+    matchingGigs.map(async (gig) => {
+      if (
+        !isClusterServiceableForVendor({
+          vendorLatitude: gig.vendor.latitude,
+          vendorLongitude: gig.vendor.longitude,
+          serviceRadiusKm: gig.vendor.serviceRadiusKm,
+          clusterLatitude: clusterLatitude,
+          clusterLongitude: clusterLongitude,
+        })
+      ) {
+        return;
+      }
 
-    // Skip if this vendor already has a bid on this cluster
-    const existing = await prisma.vendorBid.findFirst({
-      where: { clusterId, vendorId: gig.vendorId },
-    });
-    if (existing) {
-      // Keep total in sync as quantity changes while still in voting phase
-      await prisma.vendorBid.update({
-        where: { id: existing.id },
-        data: { totalPrice: existing.pricePerUnit * currentQuantity },
+      // Skip if this vendor already has a bid on this cluster
+      const existing = await prisma.vendorBid.findFirst({
+        where: { clusterId, vendorId: gig.vendorId },
       });
-      continue;
-    }
+      if (existing) {
+        // Keep total in sync as quantity changes while still in voting phase
+        await prisma.vendorBid.update({
+          where: { id: existing.id },
+          data: { totalPrice: existing.pricePerUnit * currentQuantity },
+        });
+        return;
+      }
 
-    await prisma.vendorBid.create({
-      data: {
-        clusterId,
-        vendorId: gig.vendorId,
-        gigId: gig.id,
-        pricePerUnit: gig.pricePerUnit,
-        totalPrice: gig.pricePerUnit * currentQuantity,
-      },
-    });
-  }
+      await prisma.vendorBid.create({
+        data: {
+          clusterId,
+          vendorId: gig.vendorId,
+          gigId: gig.id,
+          pricePerUnit: gig.pricePerUnit,
+          totalPrice: gig.pricePerUnit * currentQuantity,
+        },
+      });
+    }),
+  );
 }
 
 async function syncBidTotals(clusterId: string, currentQuantity: number) {
@@ -398,6 +413,12 @@ export async function assignOrderToCluster(params: {
       updated.cropName,
       updated.unit,
       updated.currentQuantity,
+      {
+        clusterCoordinates: {
+          latitude: updated.latitude,
+          longitude: updated.longitude,
+        },
+      },
     );
     await syncBidTotals(updated.id, updated.currentQuantity);
   } else if (updated.currentQuantity >= updated.targetQuantity) {
@@ -410,6 +431,12 @@ export async function assignOrderToCluster(params: {
       updated.cropName,
       updated.unit,
       updated.currentQuantity,
+      {
+        clusterCoordinates: {
+          latitude: updated.latitude,
+          longitude: updated.longitude,
+        },
+      },
     );
   }
 
@@ -517,6 +544,24 @@ export async function syncClustersForPublishedGig(
 ) {
   unit = normalizeUnit(unit);
 
+  // Fetch all matching gigs once to avoid N+1 inside autoCreateBidsForVotingCluster
+  const matchingGigs = await prisma.gig.findMany({
+    where: {
+      cropName: { equals: cropName, mode: "insensitive" },
+      unit: { equals: unit, mode: "insensitive" },
+      status: GigStatus.PUBLISHED,
+    },
+    include: {
+      vendor: {
+        select: {
+          latitude: true,
+          longitude: true,
+          serviceRadiusKm: true,
+        },
+      },
+    },
+  });
+
   // Fix FORMING clusters whose targetQuantity is too high
   const formingClusters = await prisma.cluster.findMany({
     where: {
@@ -527,26 +572,35 @@ export async function syncClustersForPublishedGig(
     },
   });
 
-  for (const cluster of formingClusters) {
-    const updated = await prisma.cluster.update({
-      where: { id: cluster.id },
-      data: { targetQuantity: minQuantity },
-    });
-
-    // If current quantity already meets new (lower) target → go to VOTING
-    if (updated.currentQuantity >= minQuantity) {
-      await prisma.cluster.update({
+  await Promise.all(
+    formingClusters.map(async (cluster) => {
+      const updated = await prisma.cluster.update({
         where: { id: cluster.id },
-        data: { status: ClusterStatus.VOTING },
+        data: { targetQuantity: minQuantity },
       });
-      await autoCreateBidsForVotingCluster(
-        cluster.id,
-        cluster.cropName,
-        cluster.unit,
-        updated.currentQuantity,
-      );
-    }
-  }
+
+      // If current quantity already meets new (lower) target → go to VOTING
+      if (updated.currentQuantity >= minQuantity) {
+        await prisma.cluster.update({
+          where: { id: cluster.id },
+          data: { status: ClusterStatus.VOTING },
+        });
+        await autoCreateBidsForVotingCluster(
+          cluster.id,
+          cluster.cropName,
+          cluster.unit,
+          updated.currentQuantity,
+          {
+            matchingGigs,
+            clusterCoordinates: {
+              latitude: updated.latitude,
+              longitude: updated.longitude,
+            },
+          },
+        );
+      }
+    }),
+  );
 
   // Also auto-bid on already-VOTING clusters that match this gig
   const votingClusters = await prisma.cluster.findMany({
@@ -557,14 +611,23 @@ export async function syncClustersForPublishedGig(
     },
   });
 
-  for (const cluster of votingClusters) {
-    await autoCreateBidsForVotingCluster(
-      cluster.id,
-      cluster.cropName,
-      cluster.unit,
-      cluster.currentQuantity,
-    );
-  }
+  await Promise.all(
+    votingClusters.map((cluster) =>
+      autoCreateBidsForVotingCluster(
+        cluster.id,
+        cluster.cropName,
+        cluster.unit,
+        cluster.currentQuantity,
+        {
+          matchingGigs,
+          clusterCoordinates: {
+            latitude: cluster.latitude,
+            longitude: cluster.longitude,
+          },
+        },
+      ),
+    ),
+  );
 }
 
 export async function checkAndTransitionPayment(clusterId: string) {
