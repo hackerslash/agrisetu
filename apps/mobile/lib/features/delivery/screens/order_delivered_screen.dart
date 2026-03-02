@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../shared/theme/app_theme.dart';
@@ -10,7 +11,7 @@ import '../../clusters/screens/cluster_detail_screen.dart';
 class OrderDeliveredScreen extends ConsumerStatefulWidget {
   final String clusterId;
 
-  const OrderDeliveredScreen({super.key, required this.clusterId});
+  OrderDeliveredScreen({super.key, required this.clusterId});
 
   @override
   ConsumerState<OrderDeliveredScreen> createState() =>
@@ -159,9 +160,9 @@ class _OrderDeliveredScreenState extends ConsumerState<OrderDeliveredScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Rate Your Experience',
+                      Text(AppLocalizations.of(context)!.rateYourExperience,
                           style: AppTextStyles.h5),
-                      const SizedBox(height: 4),
+                      SizedBox(height: 4),
                       Text(
                         'Help other farmers make better choices',
                         style: AppTextStyles.caption,
@@ -306,7 +307,7 @@ class _OrderDeliveredScreenState extends ConsumerState<OrderDeliveredScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Your Impact This Order',
+                    Text(AppLocalizations.of(context)!.yourImpactThisOrder,
                         style: AppTextStyles.h5),
                     const SizedBox(height: 16),
                     Row(

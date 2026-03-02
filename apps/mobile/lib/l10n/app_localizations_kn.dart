@@ -134,4 +134,75 @@ class AppLocalizationsKn extends AppLocalizations {
 
   @override
   String get orderProgress => 'ಆರ್ಡರ್ ಪ್ರಗತಿ';
+
+  @override
+  String get yourImpactThisOrder => 'ಈ ಆರ್ಡರ್‌ನಲ್ಲಿ ನಿಮ್ಮ ಪ್ರಭಾವ';
+
+  @override
+  String get verifyOtp => 'OTP ಪರಿಶೀಲಿಸಿ';
+
+  @override
+  String get payment => 'ಪಾವತಿ';
+
+  @override
+  String get noOrdersYet => 'ಇನ್ನೂ ಯಾವುದೇ ಆರ್ಡರ್‌ಗಳಿಲ್ಲ';
+
+  @override
+  String get placeFirstOrder => 'ಪ್ರಾರಂಭಿಸಲು ನಿಮ್ಮ ಮೊದಲ ಆರ್ಡರ್ ಮಾಡಿ';
+
+  @override
+  String get howWasYourVendor => 'ನಿಮ್ಮ ಮಾರಾಟಗಾರರು ಹೇಗಿದ್ದರು?';
+
+  @override
+  String get quickTags => 'ತ್ವರಿತ ಟ್ಯಾಗ್‌ಗಳು';
+
+  @override
+  String get yourTotal => 'ನಿಮ್ಮ ಒಟ್ಟು';
+
+  @override
+  String get voteForPreferredSupplier => 'ನಿಮ್ಮ ಆದ್ಯತೆಯ ಪೂರೈಕೆದಾರರಿಗೆ ಮತ ನೀಡಿ';
+
+  @override
+  String get voteSubmitted => 'ಮತ ಸಲ್ಲಿಸಲಾಗಿದೆ!';
+
+  @override
+  String get waitingForOtherFarmers =>
+      'ಕ್ಲಸ್ಟರ್‌ನಲ್ಲಿರುವ ಇತರ ರೈತರ ಮತಕ್ಕಾಗಿ ಕಾಯಲಾಗುತ್ತಿದೆ';
+
+  @override
+  String get rateAndReview => 'ರೇಟ್ ಮಾಡಿ ಮತ್ತು ವಿಮರ್ಶಿಸಿ';
+
+  @override
+  String get yourRating => 'ನಿಮ್ಮ ರೇಟಿಂಗ್';
+
+  @override
+  String get voiceTranscript => 'ಧ್ವನಿ ಪ್ರತಿಲೇಖನ';
+
+  @override
+  String get matchedGig => 'ಹೊಂದಾಣಿಕೆಯಾದ ಗಿಗ್';
+
+  @override
+  String get confirmOrder => 'ಆರ್ಡರ್ ಖಚಿತಪಡಿಸಿ';
+
+  @override
+  String get editDetailsNextStep =>
+      'ಮುಂದಿನ ಹಂತದಲ್ಲಿ ನೀವು ವಿವರಗಳನ್ನು ಸಂಪಾದಿಸಬಹುದು';
+
+  @override
+  String get recommended => 'ಶಿಫಾರಸು ಮಾಡಲಾಗಿದೆ';
+
+  @override
+  String get voteForThisVendor => 'ಈ ಮಾರಾಟಗಾರರಿಗೆ ಮತ ನೀಡಿ';
+
+  @override
+  String get whatWeHeard => 'ನಾವು ಕೇಳಿದ್ದೇನು';
+
+  @override
+  String get noMatchingCluster => 'ಯಾವುದೇ ಹೊಂದಾಣಿಕೆಯ ಕ್ಲಸ್ಟರ್ ಕಂಡುಬಂದಿಲ್ಲ';
+
+  @override
+  String get noClustersYet => 'ಇನ್ನೂ ಯಾವುದೇ ಕ್ಲಸ್ಟರ್‌ಗಳಿಲ್ಲ';
+
+  @override
+  String get payViaUpi => 'UPI ಮೂಲಕ ಪಾವತಿಸಿ';
 }

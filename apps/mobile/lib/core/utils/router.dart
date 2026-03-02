@@ -161,14 +161,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/onboarding',
         pageBuilder: (_, state) => _smoothDissolvePage(
           state: state,
-          child: const OnboardingScreen(),
+          child: OnboardingScreen(),
         ),
       ),
       GoRoute(
         path: '/profile/edit',
         pageBuilder: (_, state) => _smoothDissolvePage(
           state: state,
-          child: const OnboardingScreen(isEditMode: true),
+          child: OnboardingScreen(isEditMode: true),
         ),
       ),
       ShellRoute(
@@ -236,7 +236,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/clusters-empty',
             pageBuilder: (_, state) => _smoothDissolvePage(
               state: state,
-              child: const ClusterEmptyScreen(),
+            child: ClusterEmptyScreen(),
             ),
           ),
           GoRoute(
@@ -292,14 +292,14 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/profile',
             pageBuilder: (_, state) => _smoothDissolvePage(
               state: state,
-              child: const ProfileScreen(),
+            child: ProfileScreen(),
             ),
           ),
           GoRoute(
             path: '/voice',
             pageBuilder: (_, state) => _smoothDissolvePage(
               state: state,
-              child: const VoiceOrderScreen(),
+            child: VoiceOrderScreen(),
             ),
           ),
         ],

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../../../l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/widgets/app_header.dart';
 
 class ClusterEmptyScreen extends StatelessWidget {
-  const ClusterEmptyScreen({super.key});
+  ClusterEmptyScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -56,8 +57,8 @@ class ClusterEmptyScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('How It Works', style: AppTextStyles.h5),
-                    const SizedBox(height: 16),
+                    Text(AppLocalizations.of(context)!.howItWorks, style: AppTextStyles.h5),
+                    SizedBox(height: 16),
                     _Step(
                       num: 1,
                       text: 'Place an order for any crop input',
@@ -106,10 +107,10 @@ class ClusterEmptyScreen extends StatelessWidget {
                 child: ElevatedButton.icon(
                   onPressed: () => context.push('/voice'),
                   icon: const Icon(Icons.add, size: 20),
-                  label: const Text('Place an Order'),
+                  label: Text(AppLocalizations.of(context)!.placeAnOrder),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
-                    shape: const StadiumBorder(),
+                    shape: StadiumBorder(),
                     elevation: 0,
                     textStyle: AppTextStyles.button,
                   ),
@@ -122,7 +123,7 @@ class ClusterEmptyScreen extends StatelessWidget {
                 child: OutlinedButton.icon(
                   onPressed: () {},
                   icon: const Icon(Icons.share_outlined, size: 18),
-                  label: const Text('Invite Nearby Farmers'),
+                  label: Text(AppLocalizations.of(context)!.inviteNearbyFarmers),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.primary,
                     side: const BorderSide(color: AppColors.primary),

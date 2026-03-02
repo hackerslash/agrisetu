@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../../l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pinput/pinput.dart';
@@ -10,7 +11,7 @@ import '../../../core/constants/app_constants.dart';
 class OtpVerifyScreen extends ConsumerStatefulWidget {
   final String phone;
 
-  const OtpVerifyScreen({super.key, required this.phone});
+  OtpVerifyScreen({super.key, required this.phone});
 
   @override
   ConsumerState<OtpVerifyScreen> createState() => _OtpVerifyScreenState();
@@ -55,7 +56,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
       _startResendTimer();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('OTP sent again')),
+          SnackBar(content: Text(AppLocalizations.of(context)!.otpSentAgain)),
         );
       }
     } catch (e) {
@@ -291,7 +292,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
                                 color: AppColors.surface,
                               ),
                             )
-                          : Text('Verify OTP', style: AppTextStyles.button),
+                          : Text(AppLocalizations.of(context)!.verifyOtp, style: AppTextStyles.button),
                     ),
                   ),
                 ],

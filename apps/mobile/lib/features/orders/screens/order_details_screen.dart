@@ -12,7 +12,7 @@ import '../../../l10n/app_localizations.dart';
 
 final orderDetailProvider =
     FutureProvider.autoDispose.family<Order, String>((ref, id) async {
-  final timer = Timer.periodic(const Duration(seconds: 6), (_) {
+  final timer = Timer.periodic(Duration(seconds: 6), (_) {
     ref.invalidateSelf();
   });
   ref.onDispose(timer.cancel);
@@ -190,9 +190,9 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              Text('Rate Your Experience', style: AppTextStyles.h4),
-              const SizedBox(height: 4),
-              Text('How was your vendor?', style: AppTextStyles.caption),
+              Text(AppLocalizations.of(context)!.rateYourExperience, style: AppTextStyles.h4),
+              SizedBox(height: 4),
+              Text(AppLocalizations.of(context)!.howWasYourVendor, style: AppTextStyles.caption),
               const SizedBox(height: 20),
               // Stars
               Row(
@@ -216,8 +216,8 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                         )),
               ),
               const SizedBox(height: 20),
-              Text('Quick tags', style: AppTextStyles.labelSmall),
-              const SizedBox(height: 10),
+              Text(AppLocalizations.of(context)!.quickTags, style: AppTextStyles.labelSmall),
+              SizedBox(height: 10),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -287,8 +287,8 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                             ref.invalidate(orderDetailProvider(widget.orderId));
                             ref.invalidate(homeDashboardProvider);
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text('Thank you for your rating!')),
+                              SnackBar(
+                                  content: Text(AppLocalizations.of(context)!.thankYouForRating)),
                             );
                           } catch (e) {
                             setSheetState(() => submitting = false);
@@ -300,7 +300,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                         },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
-                    shape: const StadiumBorder(),
+                    shape: StadiumBorder(),
                     elevation: 0,
                   ),
                   child: submitting
@@ -310,7 +310,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                           child: CircularProgressIndicator(
                               color: Colors.white, strokeWidth: 2),
                         )
-                      : Text('Submit Rating', style: AppTextStyles.button),
+                      : Text(AppLocalizations.of(context)!.submitRating, style: AppTextStyles.button),
                 ),
               ),
             ],
@@ -333,7 +333,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
       appBar: AppHeader(title: 'Order Details'),
       body: orderAsync.when(
         data: (order) => _buildOrderDetail(context, order),
-        loading: () => const Center(
+        loading: () => Center(
             child: CircularProgressIndicator(color: AppColors.primary)),
         error: (e, _) => Center(child: Text(e.toString())),
       ),
@@ -444,7 +444,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                 children: [
                   Text(AppLocalizations.of(context)!.orderSummary, style: AppTextStyles.h5),
                   Text(AppLocalizations.of(context)!.orderTimeline, style: AppTextStyles.h5),
-                  const SizedBox(height: 14),
+                  SizedBox(height: 14),
                   _SummaryRow(
                     label: 'Unit Price',
                     value: '₹${pricePerUnit.toStringAsFixed(0)}/${order.unit}',
@@ -460,7 +460,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Your Total', style: AppTextStyles.h5),
+                      Text(AppLocalizations.of(context)!.yourTotal, style: AppTextStyles.h5),
                       Text(
                         '₹${totalPrice.toStringAsFixed(0)}',
                         style:
@@ -471,7 +471,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
           ],
 
           // ── Order Progress Timeline ───────────────────────────────────
@@ -493,9 +493,9 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
           if (cluster?.status == ClusterStatus.voting &&
               !hasVoted &&
               cluster!.bids.isNotEmpty) ...[
-            Text('Choose Your Vendor', style: AppTextStyles.h5),
-            const SizedBox(height: 4),
-            Text('Vote for your preferred supplier',
+            Text(AppLocalizations.of(context)!.chooseYourVendor, style: AppTextStyles.h5),
+            SizedBox(height: 4),
+            Text(AppLocalizations.of(context)!.voteForPreferredSupplier,
                 style: AppTextStyles.caption),
             const SizedBox(height: 12),
             ...cluster.bids.asMap().entries.map((entry) => Padding(
@@ -529,8 +529,8 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Vote submitted!', style: AppTextStyles.label),
-                        Text('Waiting for other farmers in the cluster to vote',
+                        Text(AppLocalizations.of(context)!.voteSubmitted, style: AppTextStyles.label),
+                        Text(AppLocalizations.of(context)!.waitingForOtherFarmers,
                             style: AppTextStyles.caption),
                       ],
                     ),
@@ -538,7 +538,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
           ],
 
           // ── Pay Now ───────────────────────────────────────────────────
@@ -577,8 +577,8 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Delivery Tracking', style: AppTextStyles.h5),
-                  const SizedBox(height: 16),
+                  Text(AppLocalizations.of(context)!.trackDelivery, style: AppTextStyles.h5),
+                  SizedBox(height: 16),
                   ...cluster!.delivery!.trackingSteps.map((step) => Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: Row(
@@ -632,8 +632,8 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Rate Your Experience', style: AppTextStyles.h5),
-                  const SizedBox(height: 4),
+                  Text(AppLocalizations.of(context)!.rateYourExperience, style: AppTextStyles.h5),
+                  SizedBox(height: 4),
                   Text(
                     'How was ${displayVendor?.businessName ?? "your vendor"}?',
                     style: AppTextStyles.caption,
@@ -669,13 +669,13 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                         shape: const StadiumBorder(),
                         elevation: 0,
                       ),
-                      child: Text('Rate & Review', style: AppTextStyles.button),
+                      child: Text(AppLocalizations.of(context)!.rateAndReview, style: AppTextStyles.button),
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
           ],
 
           // ── Already Rated ─────────────────────────────────────────────
@@ -691,8 +691,8 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Your Rating', style: AppTextStyles.h5),
-                  const SizedBox(height: 12),
+                  Text(AppLocalizations.of(context)!.yourRating, style: AppTextStyles.h5),
+                  SizedBox(height: 12),
                   Row(
                     children: List.generate(
                       5,
@@ -752,9 +752,9 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Your Impact This Order',
+                  Text(AppLocalizations.of(context)!.yourImpactThisOrder,
                       style: AppTextStyles.h5.copyWith(fontSize: 14)),
-                  const SizedBox(height: 14),
+                  SizedBox(height: 14),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
@@ -827,8 +827,8 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if ((_voiceTranscript ?? '').isNotEmpty) ...[
-                      Text('Voice Transcript', style: AppTextStyles.caption),
-                      const SizedBox(height: 6),
+                      Text(AppLocalizations.of(context)!.voiceTranscript, style: AppTextStyles.caption),
+                      SizedBox(height: 6),
                       Text(
                         '"${_voiceTranscript!}"',
                         style: AppTextStyles.body.copyWith(
@@ -839,7 +839,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                     ],
                     if ((_matchedGigLabel ?? '').isNotEmpty) ...[
                       const SizedBox(height: 10),
-                      Text('Matched Gig', style: AppTextStyles.caption),
+                      Text(AppLocalizations.of(context)!.matchedGig, style: AppTextStyles.caption),
                       const SizedBox(height: 4),
                       Text(_matchedGigLabel!, style: AppTextStyles.bodySmall),
                     ],
@@ -935,12 +935,12 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                         child: CircularProgressIndicator(
                             strokeWidth: 2.5, color: AppColors.surface),
                       )
-                    : Text('Confirm Order', style: AppTextStyles.button),
+                    : Text(AppLocalizations.of(context)!.confirmOrder, style: AppTextStyles.button),
               ),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Center(
-              child: Text('You can edit details in the next step',
+              child: Text(AppLocalizations.of(context)!.editDetailsNextStep,
                   style: AppTextStyles.caption),
             ),
           ],
@@ -958,7 +958,7 @@ class _TimelineStep {
   final bool done;
   final bool active;
 
-  const _TimelineStep({
+  _TimelineStep({
     required this.label,
     this.sublabel = '',
     required this.done,
@@ -1070,7 +1070,7 @@ class _OrderTimeline extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
                   Text(AppLocalizations.of(context)!.orderProgress, style: AppTextStyles.h5),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         for (int i = 0; i < steps.length; i++) ...[
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1210,14 +1210,14 @@ class _VendorBidCard extends StatelessWidget {
                     color: AppColors.primary,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Text('Recommended',
+                  child: Text(AppLocalizations.of(context)!.recommended,
                       style: AppTextStyles.labelSmall
                           .copyWith(color: Colors.white)),
                 ),
               ],
             ],
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           // Vendor info + price
           Row(
             children: [
@@ -1294,7 +1294,7 @@ class _VendorBidCard extends StatelessWidget {
                       child: CircularProgressIndicator(
                           color: Colors.white, strokeWidth: 2))
                   : const Icon(Icons.thumb_up_alt_outlined, size: 18),
-              label: Text('Vote for this Vendor',
+              label: Text(AppLocalizations.of(context)!.voteForThisVendor,
                   style: AppTextStyles.buttonSmall),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,

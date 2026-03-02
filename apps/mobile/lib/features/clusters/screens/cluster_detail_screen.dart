@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../../../l10n/app_localizations.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,7 +14,7 @@ import '../../../core/providers/auth_provider.dart';
 
 final clusterDetailProvider =
     FutureProvider.autoDispose.family<Cluster, String>((ref, id) async {
-  final timer = Timer.periodic(const Duration(seconds: 6), (_) {
+  final timer = Timer.periodic(Duration(seconds: 6), (_) {
     ref.invalidateSelf();
   });
   ref.onDispose(timer.cancel);
@@ -89,7 +90,7 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
       ref.invalidate(clusterDetailProvider(widget.clusterId));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Vote cast successfully!')),
+          SnackBar(content: Text(AppLocalizations.of(context)!.voteCastSuccessfully)),
         );
       }
     } catch (e) {
@@ -245,14 +246,14 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Vote for Vendor', style: AppTextStyles.h5),
+                      Text(AppLocalizations.of(context)!.voteForVendor, style: AppTextStyles.h5),
                       Text(
                         'Swipe left/right to compare vendors',
                         style: AppTextStyles.caption,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
                   ...cluster.bids.asMap().entries.map((entry) {
                     final i = entry.key;
                     final bid = entry.value;
@@ -360,10 +361,10 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
                       child: ElevatedButton.icon(
                         onPressed: () => context.push('/payment/${cluster.id}'),
                         icon: const Icon(Icons.lock_outline, size: 20),
-                        label: const Text('Pay Securely'),
+                        label: Text(AppLocalizations.of(context)!.paySecurely),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
-                          shape: const StadiumBorder(),
+                          shape: StadiumBorder(),
                           elevation: 0,
                           textStyle: AppTextStyles.button,
                         ),
@@ -376,10 +377,10 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
                       child: OutlinedButton.icon(
                         onPressed: null,
                         icon: const Icon(Icons.check_circle_outline, size: 20),
-                        label: const Text('Payment Completed'),
+                        label: Text(AppLocalizations.of(context)!.paymentCompleted),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.success,
-                          side: const BorderSide(
+                          side: BorderSide(
                             color: AppColors.success,
                             width: 1.3,
                           ),
@@ -398,7 +399,7 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
                     child: ElevatedButton.icon(
                       onPressed: () => context.push('/delivery/${cluster.id}'),
                       icon: const Icon(Icons.local_shipping_outlined, size: 20),
-                      label: const Text('Track Delivery'),
+                      label: Text(AppLocalizations.of(context)!.trackDelivery),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         shape: const StadiumBorder(),

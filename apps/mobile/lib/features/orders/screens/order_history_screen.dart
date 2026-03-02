@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../../../l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../shared/theme/app_theme.dart';
@@ -10,7 +11,7 @@ import '../../../core/api/api_client.dart';
 import '../../../core/models/order_model.dart';
 
 final allOrdersProvider = FutureProvider.autoDispose<List<Order>>((ref) async {
-  final timer = Timer.periodic(const Duration(seconds: 8), (_) {
+  final timer = Timer.periodic(Duration(seconds: 8), (_) {
     ref.invalidateSelf();
   });
   ref.onDispose(timer.cancel);
@@ -66,10 +67,10 @@ class OrderHistoryScreen extends ConsumerWidget {
               child: ElevatedButton.icon(
                 onPressed: () => context.push('/orders/new'),
                 icon: const Icon(Icons.add, size: 20),
-                label: const Text('Place New Order'),
+                label: Text(AppLocalizations.of(context)!.placeAnOrder),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
-                  shape: const StadiumBorder(),
+                  shape: StadiumBorder(),
                   elevation: 0,
                   textStyle: AppTextStyles.button,
                 ),
@@ -90,11 +91,11 @@ class OrderHistoryScreen extends ConsumerWidget {
                         const Icon(Icons.receipt_long_outlined,
                             size: 60, color: AppColors.textMuted),
                         const SizedBox(height: 16),
-                        Text('No orders yet',
+                        Text(AppLocalizations.of(context)!.noOrdersYet,
                             style: AppTextStyles.h5
                                 .copyWith(color: AppColors.textMuted)),
                         const SizedBox(height: 8),
-                        Text('Place your first order to get started',
+                        Text(AppLocalizations.of(context)!.placeFirstOrder,
                             style: AppTextStyles.body
                                 .copyWith(color: AppColors.textMuted)),
                       ],

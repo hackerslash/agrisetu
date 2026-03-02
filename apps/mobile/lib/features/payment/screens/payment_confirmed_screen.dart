@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/models/order_model.dart';
@@ -10,7 +11,7 @@ class PaymentConfirmedScreen extends ConsumerStatefulWidget {
   final String clusterId;
   final bool allPaid;
 
-  const PaymentConfirmedScreen({
+  PaymentConfirmedScreen({
     super.key,
     required this.clusterId,
     required this.allPaid,
@@ -156,7 +157,7 @@ class _PaymentConfirmedScreenState
                     onPressed: () =>
                         context.go('/delivery/${widget.clusterId}'),
                     icon: const Icon(Icons.local_shipping_outlined, size: 20),
-                    label: const Text('Track Order'),
+                    label: Text(AppLocalizations.of(context)!.trackOrder),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       shape: const StadiumBorder(),

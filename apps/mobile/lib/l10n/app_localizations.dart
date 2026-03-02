@@ -357,6 +357,144 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Order Progress'**
   String get orderProgress;
+
+  /// No description provided for @yourImpactThisOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Your Impact This Order'**
+  String get yourImpactThisOrder;
+
+  /// No description provided for @verifyOtp.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify OTP'**
+  String get verifyOtp;
+
+  /// No description provided for @payment.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment'**
+  String get payment;
+
+  /// No description provided for @noOrdersYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No orders yet'**
+  String get noOrdersYet;
+
+  /// No description provided for @placeFirstOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Place your first order to get started'**
+  String get placeFirstOrder;
+
+  /// No description provided for @howWasYourVendor.
+  ///
+  /// In en, this message translates to:
+  /// **'How was your vendor?'**
+  String get howWasYourVendor;
+
+  /// No description provided for @quickTags.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick tags'**
+  String get quickTags;
+
+  /// No description provided for @yourTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Your Total'**
+  String get yourTotal;
+
+  /// No description provided for @voteForPreferredSupplier.
+  ///
+  /// In en, this message translates to:
+  /// **'Vote for your preferred supplier'**
+  String get voteForPreferredSupplier;
+
+  /// No description provided for @voteSubmitted.
+  ///
+  /// In en, this message translates to:
+  /// **'Vote submitted!'**
+  String get voteSubmitted;
+
+  /// No description provided for @waitingForOtherFarmers.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for other farmers in the cluster to vote'**
+  String get waitingForOtherFarmers;
+
+  /// No description provided for @rateAndReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Rate & Review'**
+  String get rateAndReview;
+
+  /// No description provided for @yourRating.
+  ///
+  /// In en, this message translates to:
+  /// **'Your Rating'**
+  String get yourRating;
+
+  /// No description provided for @voiceTranscript.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice Transcript'**
+  String get voiceTranscript;
+
+  /// No description provided for @matchedGig.
+  ///
+  /// In en, this message translates to:
+  /// **'Matched Gig'**
+  String get matchedGig;
+
+  /// No description provided for @confirmOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm Order'**
+  String get confirmOrder;
+
+  /// No description provided for @editDetailsNextStep.
+  ///
+  /// In en, this message translates to:
+  /// **'You can edit details in the next step'**
+  String get editDetailsNextStep;
+
+  /// No description provided for @recommended.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommended'**
+  String get recommended;
+
+  /// No description provided for @voteForThisVendor.
+  ///
+  /// In en, this message translates to:
+  /// **'Vote for this Vendor'**
+  String get voteForThisVendor;
+
+  /// No description provided for @whatWeHeard.
+  ///
+  /// In en, this message translates to:
+  /// **'What we heard'**
+  String get whatWeHeard;
+
+  /// No description provided for @noMatchingCluster.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching cluster found'**
+  String get noMatchingCluster;
+
+  /// No description provided for @noClustersYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No clusters yet'**
+  String get noClustersYet;
+
+  /// No description provided for @payViaUpi.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay via UPI'**
+  String get payViaUpi;
 }
 
 class _AppLocalizationsDelegate

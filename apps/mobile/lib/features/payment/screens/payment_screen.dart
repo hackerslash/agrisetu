@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../../l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -13,7 +14,7 @@ import '../../clusters/screens/cluster_detail_screen.dart';
 class PaymentScreen extends ConsumerStatefulWidget {
   final String clusterId;
 
-  const PaymentScreen({super.key, required this.clusterId});
+  PaymentScreen({super.key, required this.clusterId});
 
   @override
   ConsumerState<PaymentScreen> createState() => _PaymentScreenState();
@@ -238,8 +239,8 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                Text('Order Summary', style: AppTextStyles.h5),
-                const SizedBox(height: 12),
+                Text(AppLocalizations.of(context)!.orderSummary, style: AppTextStyles.h5),
+                SizedBox(height: 12),
 
                 // Order card
                 Container(
@@ -302,7 +303,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Your Total', style: AppTextStyles.label),
+                          Text(AppLocalizations.of(context)!.yourTotal, style: AppTextStyles.label),
                           Text(
                             '₹${amount != null ? fmt.format(amount) : '—'}',
                             style: AppTextStyles.price.copyWith(fontSize: 18),
@@ -312,7 +313,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: 16),
 
                 // Cluster payment status
                 Container(
@@ -347,7 +348,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                Text('Pay via UPI', style: AppTextStyles.h5),
+                Text(AppLocalizations.of(context)!.payViaUpi, style: AppTextStyles.h5),
                 const SizedBox(height: 12),
 
                 // UPI apps grid

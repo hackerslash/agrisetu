@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../l10n/app_localizations.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
@@ -12,7 +13,7 @@ import '../../../core/providers/auth_provider.dart';
 class OnboardingScreen extends ConsumerStatefulWidget {
   final bool isEditMode;
 
-  const OnboardingScreen({super.key, this.isEditMode = false});
+  OnboardingScreen({super.key, this.isEditMode = false});
 
   @override
   ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -767,8 +768,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    Text('Personal Info', style: AppTextStyles.h5),
-                    const SizedBox(height: 16),
+                    Text(AppLocalizations.of(context)!.personalInfo, style: AppTextStyles.h5),
+                    SizedBox(height: 16),
 
                     _buildField(
                       label: 'Full Name',
@@ -778,7 +779,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     const SizedBox(height: 16),
 
                     // Language
-                    Text('Preferred Language', style: AppTextStyles.label),
+                    Text(AppLocalizations.of(context)!.preferredLanguage, style: AppTextStyles.label),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
@@ -821,8 +822,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    Text('Farm Details', style: AppTextStyles.h5),
-                    const SizedBox(height: 16),
+                    Text(AppLocalizations.of(context)!.farmDetails, style: AppTextStyles.h5),
+                    SizedBox(height: 16),
 
                     _buildField(
                       label: 'Village / Town',
@@ -951,8 +952,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     const SizedBox(height: 16),
 
                     // Crops grown
-                    Text('Crops Grown', style: AppTextStyles.label),
-                    const SizedBox(height: 8),
+                    Text(AppLocalizations.of(context)!.cropsGrown, style: AppTextStyles.label),
+                    SizedBox(height: 8),
                     Text(
                       'Select all that apply',
                       style: AppTextStyles.caption,
@@ -990,7 +991,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    Text('Payment', style: AppTextStyles.h5),
+                    Text(AppLocalizations.of(context)!.payment, style: AppTextStyles.h5),
                     const SizedBox(height: 16),
 
                     _buildField(

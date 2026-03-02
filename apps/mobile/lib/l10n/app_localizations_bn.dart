@@ -134,4 +134,75 @@ class AppLocalizationsBn extends AppLocalizations {
 
   @override
   String get orderProgress => 'অর্ডারের অগ্রগতি';
+
+  @override
+  String get yourImpactThisOrder => 'এই অর্ডারে আপনার প্রভাব';
+
+  @override
+  String get verifyOtp => 'OTP যাচাই করুন';
+
+  @override
+  String get payment => 'পেমেন্ট';
+
+  @override
+  String get noOrdersYet => 'এখনও কোনও অর্ডার নেই';
+
+  @override
+  String get placeFirstOrder => 'শুরু করতে আপনার প্রথম অর্ডার দিন';
+
+  @override
+  String get howWasYourVendor => 'আপনার বিক্রেতা কেমন ছিল?';
+
+  @override
+  String get quickTags => 'দ্রুত ট্যাগ';
+
+  @override
+  String get yourTotal => 'আপনার মোট';
+
+  @override
+  String get voteForPreferredSupplier => 'আপনার পছন্দের সরবরাহকারীকে ভোট দিন';
+
+  @override
+  String get voteSubmitted => 'ভোট জমা দেওয়া হয়েছে!';
+
+  @override
+  String get waitingForOtherFarmers =>
+      'ক্লাস্টারের অন্যান্য কৃষকদের ভোটের জন্য অপেক্ষা করা হচ্ছে';
+
+  @override
+  String get rateAndReview => 'রেট করুন এবং পর্যালোচনা করুন';
+
+  @override
+  String get yourRating => 'আপনার রেটিং';
+
+  @override
+  String get voiceTranscript => 'ভয়েস ট্রান্সক্রিপ্ট';
+
+  @override
+  String get matchedGig => 'মেলে এমন গিগ';
+
+  @override
+  String get confirmOrder => 'অর্ডার নিশ্চিত করুন';
+
+  @override
+  String get editDetailsNextStep =>
+      'আপনি পরবর্তী ধাপে বিবরণ সম্পাদনা করতে পারেন';
+
+  @override
+  String get recommended => 'প্রস্তাবিত';
+
+  @override
+  String get voteForThisVendor => 'এই বিক্রেতার জন্য ভোট দিন';
+
+  @override
+  String get whatWeHeard => 'আমরা যা শুনেছি';
+
+  @override
+  String get noMatchingCluster => 'কোনও মিলে যাওয়া ক্লাস্টার পাওয়া যায়নি';
+
+  @override
+  String get noClustersYet => 'এখনও কোনও ক্লাস্টার নেই';
+
+  @override
+  String get payViaUpi => 'UPI এর মাধ্যমে পেমেন্ট করুন';
 }

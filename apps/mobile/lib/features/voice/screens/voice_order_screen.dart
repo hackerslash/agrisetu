@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../../../l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:record/record.dart';
@@ -12,7 +13,7 @@ import '../../../shared/theme/app_theme.dart';
 import '../../../shared/widgets/app_header.dart';
 
 class VoiceOrderScreen extends ConsumerStatefulWidget {
-  const VoiceOrderScreen({super.key});
+  VoiceOrderScreen({super.key});
 
   @override
   ConsumerState<VoiceOrderScreen> createState() => _VoiceOrderScreenState();
@@ -381,10 +382,10 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
                         const Icon(Icons.text_fields,
                             size: 16, color: AppColors.textMuted),
                         const SizedBox(width: 6),
-                        Text('What we heard', style: AppTextStyles.caption),
+                        Text(AppLocalizations.of(context)!.whatWeHeard, style: AppTextStyles.caption),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: 8),
                     Text(
                       '"${_voiceResult!.transcript}"',
                       style: AppTextStyles.body.copyWith(
@@ -473,10 +474,10 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
                     child: OutlinedButton.icon(
                       onPressed: _isProcessing ? null : _reset,
                       icon: const Icon(Icons.refresh, size: 18),
-                      label: const Text('Re-record'),
+                      label: Text(AppLocalizations.of(context)!.reRecord),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.primary,
-                        side: const BorderSide(
+                        side: BorderSide(
                             color: AppColors.primary, width: 1.5),
                         shape: const StadiumBorder(),
                         padding: const EdgeInsets.symmetric(vertical: 14),
@@ -511,7 +512,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
                             }
                           : null,
                       icon: const Icon(Icons.check, size: 18),
-                      label: const Text('Confirm'),
+                      label: Text(AppLocalizations.of(context)!.confirm),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         shape: const StadiumBorder(),

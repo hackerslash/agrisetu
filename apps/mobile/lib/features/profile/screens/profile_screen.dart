@@ -10,7 +10,7 @@ import '../../home/screens/home_screen.dart' show homeDashboardProvider;
 import '../../../l10n/app_localizations.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
-  const ProfileScreen({super.key});
+  ProfileScreen({super.key});
 
   @override
   ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
@@ -30,7 +30,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       await ref.read(authProvider.notifier).uploadAvatarDataUrl(dataUrl);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Avatar updated')),
+        SnackBar(content: Text(AppLocalizations.of(context)!.avatarUpdated)),
       );
     } catch (e) {
       if (!mounted) return;
@@ -384,7 +384,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     label: Text(AppLocalizations.of(context)!.editProfile),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
-                      shape: const StadiumBorder(),
+                      shape: StadiumBorder(),
                       elevation: 0,
                       textStyle: AppTextStyles.buttonSmall.copyWith(
                         color: AppColors.surface,

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import '../../../../l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../shared/theme/app_theme.dart';
@@ -18,7 +19,7 @@ typedef ClusterQuery = ({
 
 final availableClustersProvider = FutureProvider.autoDispose
     .family<List<Cluster>, ClusterQuery>((ref, query) async {
-  final timer = Timer.periodic(const Duration(seconds: 8), (_) {
+  final timer = Timer.periodic(Duration(seconds: 8), (_) {
     ref.invalidateSelf();
   });
   ref.onDispose(timer.cancel);
@@ -680,9 +681,9 @@ class _SelectionEmptyState extends StatelessWidget {
                 size: 40, color: AppColors.textMuted),
           ),
           const SizedBox(height: 20),
-          Text('No matching cluster found',
+          Text(AppLocalizations.of(context)!.noMatchingCluster,
               style: AppTextStyles.h3.copyWith(color: AppColors.textPrimary)),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Text(
             'No active FORMING/VOTING cluster matches your order right now. Create a new cluster to get started.',
             style: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
@@ -742,9 +743,9 @@ class _EmptyState extends StatelessWidget {
                 size: 40, color: AppColors.textMuted),
           ),
           const SizedBox(height: 20),
-          Text('No clusters yet',
+          Text(AppLocalizations.of(context)!.noClustersYet,
               style: AppTextStyles.h3.copyWith(color: AppColors.textPrimary)),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           Text(
             'Place an order first. AgriSetu will help you join nearby farmers with similar demand.',
             style: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
@@ -760,8 +761,8 @@ class _EmptyState extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('How Clusters Work', style: AppTextStyles.h5),
-                const SizedBox(height: 12),
+                Text(AppLocalizations.of(context)!.howClustersWork, style: AppTextStyles.h5),
+                SizedBox(height: 12),
                 _Step(num: 1, text: 'You place an order for a crop input'),
                 const SizedBox(height: 8),
                 _Step(num: 2, text: 'You choose to join an active cluster'),
@@ -777,7 +778,7 @@ class _EmptyState extends StatelessWidget {
             child: ElevatedButton.icon(
               onPressed: onCreateOrder,
               icon: const Icon(Icons.add, size: 20),
-              label: const Text('Place an Order'),
+              label: Text(AppLocalizations.of(context)!.placeAnOrder),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 shape: const StadiumBorder(),

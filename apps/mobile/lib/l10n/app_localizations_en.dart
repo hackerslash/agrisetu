@@ -134,4 +134,74 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get orderProgress => 'Order Progress';
+
+  @override
+  String get yourImpactThisOrder => 'Your Impact This Order';
+
+  @override
+  String get verifyOtp => 'Verify OTP';
+
+  @override
+  String get payment => 'Payment';
+
+  @override
+  String get noOrdersYet => 'No orders yet';
+
+  @override
+  String get placeFirstOrder => 'Place your first order to get started';
+
+  @override
+  String get howWasYourVendor => 'How was your vendor?';
+
+  @override
+  String get quickTags => 'Quick tags';
+
+  @override
+  String get yourTotal => 'Your Total';
+
+  @override
+  String get voteForPreferredSupplier => 'Vote for your preferred supplier';
+
+  @override
+  String get voteSubmitted => 'Vote submitted!';
+
+  @override
+  String get waitingForOtherFarmers =>
+      'Waiting for other farmers in the cluster to vote';
+
+  @override
+  String get rateAndReview => 'Rate & Review';
+
+  @override
+  String get yourRating => 'Your Rating';
+
+  @override
+  String get voiceTranscript => 'Voice Transcript';
+
+  @override
+  String get matchedGig => 'Matched Gig';
+
+  @override
+  String get confirmOrder => 'Confirm Order';
+
+  @override
+  String get editDetailsNextStep => 'You can edit details in the next step';
+
+  @override
+  String get recommended => 'Recommended';
+
+  @override
+  String get voteForThisVendor => 'Vote for this Vendor';
+
+  @override
+  String get whatWeHeard => 'What we heard';
+
+  @override
+  String get noMatchingCluster => 'No matching cluster found';
+
+  @override
+  String get noClustersYet => 'No clusters yet';
+
+  @override
+  String get payViaUpi => 'Pay via UPI';
 }

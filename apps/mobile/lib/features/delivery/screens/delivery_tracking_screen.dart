@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../../../l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../shared/theme/app_theme.dart';
@@ -11,7 +12,7 @@ import '../../clusters/screens/cluster_detail_screen.dart';
 
 final deliveryProvider =
     FutureProvider.autoDispose.family<Delivery, String>((ref, clusterId) async {
-  final timer = Timer.periodic(const Duration(seconds: 6), (_) {
+  final timer = Timer.periodic(Duration(seconds: 6), (_) {
     ref.invalidateSelf();
   });
   ref.onDispose(timer.cancel);
@@ -168,8 +169,8 @@ class _DeliveryTrackingScreenState
             ),
             const SizedBox(height: 20),
 
-            Text('Order Timeline', style: AppTextStyles.h5),
-            const SizedBox(height: 12),
+            Text(AppLocalizations.of(context)!.orderTimeline, style: AppTextStyles.h5),
+            SizedBox(height: 12),
 
             // Timeline
             Container(
@@ -254,7 +255,7 @@ class _DeliveryTrackingScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Your Impact This Order', style: AppTextStyles.h5),
+                  Text(AppLocalizations.of(context)!.yourImpactThisOrder, style: AppTextStyles.h5),
                   const SizedBox(height: 16),
                   Row(
                     children: [

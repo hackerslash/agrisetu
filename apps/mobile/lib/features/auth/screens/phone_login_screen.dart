@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,7 +9,7 @@ import '../../../core/providers/auth_provider.dart';
 class PhoneLoginScreen extends ConsumerStatefulWidget {
   final String? initialPhone;
 
-  const PhoneLoginScreen({super.key, this.initialPhone});
+  PhoneLoginScreen({super.key, this.initialPhone});
 
   @override
   ConsumerState<PhoneLoginScreen> createState() => _PhoneLoginScreenState();
@@ -81,7 +82,7 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
                     child: const Icon(Icons.eco, color: AppColors.surface, size: 32),
                   ),
                   const SizedBox(height: 16),
-                  Text('AgriSetu', style: AppTextStyles.h1.copyWith(color: AppColors.surface)),
+                  Text(AppLocalizations.of(context)!.appTitle, style: AppTextStyles.h1.copyWith(color: AppColors.surface)),
                   const SizedBox(height: 8),
                   Text(
                     'Enter your mobile number to continue',

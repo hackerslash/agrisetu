@@ -135,4 +135,76 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get orderProgress => 'ஆர்டர் முன்னேற்றம்';
+
+  @override
+  String get yourImpactThisOrder => 'இந்த ஆர்டரில் உங்கள் தாக்கம்';
+
+  @override
+  String get verifyOtp => 'OTP ஐ சரிபார்க்கவும்';
+
+  @override
+  String get payment => 'பணம் செலுத்துதல்';
+
+  @override
+  String get noOrdersYet => 'இதுவரை ஆர்டர்கள் இல்லை';
+
+  @override
+  String get placeFirstOrder => 'தொடங்க உங்கள் முதல் ஆர்டரைச் செய்யவும்';
+
+  @override
+  String get howWasYourVendor => 'உங்கள் விற்பனையாளர் எப்படி இருந்தார்?';
+
+  @override
+  String get quickTags => 'விரைவான குறிச்சொற்கள்';
+
+  @override
+  String get yourTotal => 'உங்கள் மொத்தம்';
+
+  @override
+  String get voteForPreferredSupplier =>
+      'உங்களுக்கு விருப்பமான சப்ளையருக்கு வாக்களியுங்கள்';
+
+  @override
+  String get voteSubmitted => 'வாக்கு சமர்ப்பிக்கப்பட்டது!';
+
+  @override
+  String get waitingForOtherFarmers =>
+      'குழுவில் உள்ள மற்ற விவசாயிகளின் வாக்கிற்காக காத்திருக்கிறது';
+
+  @override
+  String get rateAndReview => 'மதிப்பிடு & விமர்சி';
+
+  @override
+  String get yourRating => 'உங்கள் மதிப்பீடு';
+
+  @override
+  String get voiceTranscript => 'குரல் படியெடுத்தல்';
+
+  @override
+  String get matchedGig => 'பொருத்தப்பட்ட கிக்';
+
+  @override
+  String get confirmOrder => 'ஆர்டரை உறுதிப்படுத்தவும்';
+
+  @override
+  String get editDetailsNextStep =>
+      'அடுத்த படியில் நீங்கள் விவரங்களைத் திருத்தலாம்';
+
+  @override
+  String get recommended => 'பரிந்துரைக்கப்படுகிறது';
+
+  @override
+  String get voteForThisVendor => 'இந்த விற்பனையாளருக்கு வாக்களியுங்கள்';
+
+  @override
+  String get whatWeHeard => 'நாங்கள் கேட்டது';
+
+  @override
+  String get noMatchingCluster => 'பொருத்தமான குழு இல்லை';
+
+  @override
+  String get noClustersYet => 'இதுவரை குழுக்கள் இல்லை';
+
+  @override
+  String get payViaUpi => 'UPI மூலம் பணம் செலுத்துங்கள்';
 }
