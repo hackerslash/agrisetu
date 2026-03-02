@@ -382,8 +382,7 @@ async function callModelForExtraction(params: {
     "3. Prefer matching to `availableGigs` crop/unit/variety. Use `matchedGigId` ONLY from `availableGigs` IDs.\n" +
     "4. When multiple gigs share the same cropName, use variety mentioned in transcript to pick the right gig.\n" +
     "5. If transcript is ambiguous or missing quantity/unit, set `needsClarification` to true and ask one short clarification question.\n" +
-    "6. MUST USE KNOWLEDGE BASE: You MUST strictly adhere to the rules, definitions, and domain constraints provided in the <knowledge_base> section below. It contains the ultimate source of truth for handling synonyms, policies, translating colloquial names, and unit rules.\n" +
-    "7. UNAVAILABLE ITEMS OVERRIDE: If the `<knowledge_base>` states that an item is currently not available, cannot be fulfilled, or explicitly instructs not to match it with any gig (even if it appears in `availableGigs`), you MUST set `cropName`, `quantity`, and `matchedGigId` to null, set `needsClarification` to true, and provide the rejection reason in `clarificationQuestion` exactly as instructed by the Knowledge Base.\n\n" +
+    "6. MUST USE KNOWLEDGE BASE: You MUST strictly adhere to the rules, definitions, policies, and unavailability constraints provided in the <knowledge_base> section below. It overrides all other information.\n\n" +
     "<knowledge_base>\n" +
     (kbContext || "No knowledge base context available for this request.") +
     "\n</knowledge_base>";
