@@ -201,28 +201,36 @@ async function autoCreateBidsForVotingCluster(
   cropName: string,
   unit: string,
   currentQuantity: number,
+  options?: {
+    clusterCoordinates?: { latitude: number | null; longitude: number | null } | null;
+    matchingGigs?: any[];
+  }
 ) {
-  const cluster = await prisma.cluster.findUnique({
-    where: { id: clusterId },
-    select: { latitude: true, longitude: true },
-  });
+  const cluster = options?.clusterCoordinates !== undefined
+    ? options.clusterCoordinates
+    : await prisma.cluster.findUnique({
+        where: { id: clusterId },
+        select: { latitude: true, longitude: true },
+      });
 
-  const matchingGigs = await prisma.gig.findMany({
-    where: {
-      cropName: { equals: cropName, mode: "insensitive" },
-      unit: { equals: unit, mode: "insensitive" },
-      status: GigStatus.PUBLISHED,
-    },
-    include: {
-      vendor: {
-        select: {
-          latitude: true,
-          longitude: true,
-          serviceRadiusKm: true,
+  const matchingGigs = options?.matchingGigs !== undefined
+    ? options.matchingGigs
+    : await prisma.gig.findMany({
+        where: {
+          cropName: { equals: cropName, mode: "insensitive" },
+          unit: { equals: unit, mode: "insensitive" },
+          status: GigStatus.PUBLISHED,
         },
-      },
-    },
-  });
+        include: {
+          vendor: {
+            select: {
+              latitude: true,
+              longitude: true,
+              serviceRadiusKm: true,
+            },
+          },
+        },
+      });
 
   for (const gig of matchingGigs) {
     if (
@@ -571,6 +579,24 @@ export async function syncClustersForPublishedGig(
 ) {
   unit = normalizeUnit(unit);
 
+  // Pre-fetch matching gigs to prevent N+1 queries during batch operations
+  const matchingGigs = await prisma.gig.findMany({
+    where: {
+      cropName: { equals: cropName, mode: "insensitive" },
+      unit: { equals: unit, mode: "insensitive" },
+      status: GigStatus.PUBLISHED,
+    },
+    include: {
+      vendor: {
+        select: {
+          latitude: true,
+          longitude: true,
+          serviceRadiusKm: true,
+        },
+      },
+    },
+  });
+
   // Fix FORMING clusters whose targetQuantity is too high
   const formingClusters = await prisma.cluster.findMany({
     where: {
@@ -579,28 +605,44 @@ export async function syncClustersForPublishedGig(
       status: ClusterStatus.FORMING,
       targetQuantity: { gt: minQuantity },
     },
+    select: {
+      id: true,
+      cropName: true,
+      unit: true,
+      latitude: true,
+      longitude: true,
+    }
   });
 
-  for (const cluster of formingClusters) {
-    const updated = await prisma.cluster.update({
-      where: { id: cluster.id },
-      data: { targetQuantity: minQuantity },
-    });
-
-    // If current quantity already meets new (lower) target → go to VOTING
-    if (updated.currentQuantity >= minQuantity) {
-      await prisma.cluster.update({
+  await Promise.all(
+    formingClusters.map(async (cluster) => {
+      const updated = await prisma.cluster.update({
         where: { id: cluster.id },
-        data: { status: ClusterStatus.VOTING },
+        data: { targetQuantity: minQuantity },
       });
-      await autoCreateBidsForVotingCluster(
-        cluster.id,
-        cluster.cropName,
-        cluster.unit,
-        updated.currentQuantity,
-      );
-    }
-  }
+
+      // If current quantity already meets new (lower) target → go to VOTING
+      if (updated.currentQuantity >= minQuantity) {
+        await prisma.cluster.update({
+          where: { id: cluster.id },
+          data: { status: ClusterStatus.VOTING },
+        });
+        await autoCreateBidsForVotingCluster(
+          cluster.id,
+          cluster.cropName,
+          cluster.unit,
+          updated.currentQuantity,
+          {
+            clusterCoordinates: {
+              latitude: cluster.latitude,
+              longitude: cluster.longitude,
+            },
+            matchingGigs,
+          }
+        );
+      }
+    })
+  );
 
   // Also auto-bid on already-VOTING clusters that match this gig
   const votingClusters = await prisma.cluster.findMany({
@@ -609,16 +651,33 @@ export async function syncClustersForPublishedGig(
       unit: { equals: unit, mode: "insensitive" },
       status: ClusterStatus.VOTING,
     },
+    select: {
+      id: true,
+      cropName: true,
+      unit: true,
+      currentQuantity: true,
+      latitude: true,
+      longitude: true,
+    }
   });
 
-  for (const cluster of votingClusters) {
-    await autoCreateBidsForVotingCluster(
-      cluster.id,
-      cluster.cropName,
-      cluster.unit,
-      cluster.currentQuantity,
-    );
-  }
+  await Promise.all(
+    votingClusters.map((cluster) =>
+      autoCreateBidsForVotingCluster(
+        cluster.id,
+        cluster.cropName,
+        cluster.unit,
+        cluster.currentQuantity,
+        {
+          clusterCoordinates: {
+            latitude: cluster.latitude,
+            longitude: cluster.longitude,
+          },
+          matchingGigs,
+        }
+      )
+    )
+  );
 }
 
 export async function ensureClusterPaymentDeadline(clusterId: string) {
