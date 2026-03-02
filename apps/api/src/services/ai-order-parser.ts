@@ -1,3 +1,6 @@
+import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
+import { BedrockAgentRuntimeClient, RetrieveCommand } from "@aws-sdk/client-bedrock-agent-runtime";
+
 type GigContext = {
   id: string;
   cropName: string;
@@ -305,21 +308,58 @@ function fallbackExtraction(
   };
 }
 
+const bedrockClient = new BedrockRuntimeClient({ region: process.env.AWS_REGION || "us-east-1" });
+const bedrockAgentClient = new BedrockAgentRuntimeClient({ region: process.env.AWS_REGION || "us-east-1" });
+
+async function fetchKnowledgeBaseContext(transcript: string): Promise<string> {
+  const kbId = process.env.KNOWLEDGE_BASE_ID?.trim();
+  if (!kbId) {
+    console.log("[ai-order-parser] KNOWLEDGE_BASE_ID not set, skipping KB retrieval.");
+    return "";
+  }
+
+  try {
+    console.log(`[ai-order-parser] Fetching KB context for transcript: "${transcript}" using KB ID: ${kbId}`);
+    const response = await bedrockAgentClient.send(
+      new RetrieveCommand({
+        knowledgeBaseId: kbId,
+        retrievalQuery: { text: transcript },
+        retrievalConfiguration: {
+          vectorSearchConfiguration: {
+            numberOfResults: 5,
+          },
+        },
+      })
+    );
+
+    const chunks = response.retrievalResults?.map(r => r.content?.text).filter(Boolean) ?? [];
+    console.log(`[ai-order-parser] Retrieved ${chunks.length} chunks from Knowledge Base.`);
+    if (chunks.length > 0) {
+      console.log(`[ai-order-parser] KB Chunk 1 Preview: ${chunks[0]?.substring(0, 150)}...`);
+    }
+    return chunks.join("\n\n");
+  } catch (error) {
+    console.error("[ai-order-parser] Error fetching Knowledge Base context:", error);
+    return "";
+  }
+}
+
 async function callModelForExtraction(params: {
   transcript: string;
   gigs: GigContext[];
   farmerLanguage?: string | null;
 }) {
-  const baseUrl = process.env.BASE_URL?.trim();
-  const apiKey = process.env.API_KEY?.trim();
-  const modelId = process.env.MODEL_ID?.trim();
+  const modelId = process.env.BEDROCK_MODEL_ID?.trim() || "anthropic.claude-3-sonnet-20240229-v1:0";
 
-  if (!baseUrl || !apiKey || !modelId) {
-    return null;
-  }
+  // Step A: Normalize transcript and metadata
+  const normalizedTranscript = normalizeTextForMatch(params.transcript);
+
+  // Step B: Fetch retrieval context from Knowledge Base
+  const kbContext = await fetchKnowledgeBaseContext(normalizedTranscript);
 
   const promptPayload = {
     transcript: params.transcript,
+    normalizedTranscript,
     farmerLanguage: params.farmerLanguage ?? "unknown",
     availableGigs: params.gigs.map((gig) => ({
       id: gig.id,
@@ -334,63 +374,53 @@ async function callModelForExtraction(params: {
   };
 
   const systemPrompt =
-    "You extract agricultural order intent. Respond with ONLY one JSON object and no extra text. " +
-    "JSON schema: { cropName: string|null, quantity: number|null, unit: 'kg'|'quintal'|'ton'|'bag'|'litre'|null, " +
-    "matchedGigId: string|null, confidence: number, needsClarification: boolean, clarificationQuestion: string|null }. " +
-    "Rules: prefer matching to availableGigs crop/unit/variety. Use matchedGigId only from availableGigs IDs. " +
-    "When multiple gigs share the same cropName, use variety mentioned in transcript to pick the right gig. " +
-    "If transcript is ambiguous or missing quantity/unit, set needsClarification=true and ask one short question.";
+    "You are an AI order extraction assistant for agriculture. Extract agricultural order intent based on the user transcript and available context.\n\n" +
+    "CRITICAL RULES:\n" +
+    "1. Respond with ONLY one valid JSON object and absolutely no extra text, markdown formatting, or preamble.\n" +
+    "2. JSON schema: { \"cropName\": string|null, \"quantity\": number|null, \"unit\": \"kg\"|\"quintal\"|\"ton\"|\"bag\"|\"litre\"|null, " +
+    "\"matchedGigId\": string|null, \"confidence\": number, \"needsClarification\": boolean, \"clarificationQuestion\": string|null }\n" +
+    "3. Prefer matching to `availableGigs` crop/unit/variety. Use `matchedGigId` ONLY from `availableGigs` IDs.\n" +
+    "4. When multiple gigs share the same cropName, use variety mentioned in transcript to pick the right gig.\n" +
+    "5. If transcript is ambiguous or missing quantity/unit, set `needsClarification` to true and ask one short clarification question.\n" +
+    "6. MUST USE KNOWLEDGE BASE: You MUST strictly adhere to the rules, definitions, policies, and unavailability constraints provided in the <knowledge_base> section below. It overrides all other information.\n\n" +
+    "<knowledge_base>\n" +
+    (kbContext || "No knowledge base context available for this request.") +
+    "\n</knowledge_base>";
 
-  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-      "x-api-key": apiKey,
-    },
-    body: JSON.stringify({
-      model: modelId,
-      temperature: 0.1,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: JSON.stringify(promptPayload) },
-      ],
-    }),
-  });
+  try {
+    const response = await bedrockClient.send(
+      new ConverseCommand({
+        modelId,
+        system: [{ text: systemPrompt }],
+        messages: [
+          {
+            role: "user",
+            content: [{ text: JSON.stringify(promptPayload) }],
+          },
+        ],
+        inferenceConfig: {
+          temperature: 0.1,
+          maxTokens: 1000,
+        },
+      })
+    );
 
-  if (!response.ok) {
+    let contentText = "";
+    if (response.output?.message?.content) {
+      for (const part of response.output.message.content) {
+        if (part.text) {
+          contentText += part.text;
+        }
+      }
+    }
+
+    const parsed = extractJsonObject(contentText);
+    logAiJson("parsed-model-json", parsed);
+    return parsed;
+  } catch (error) {
+    console.error("[ai-order-parser] Error calling Bedrock model:", error);
     return null;
   }
-
-  const data = (await response.json()) as Record<string, unknown>;
-  const choices = Array.isArray(data.choices) ? data.choices : [];
-  const firstChoice = choices[0] as Record<string, unknown> | undefined;
-  const message = firstChoice?.message as Record<string, unknown> | undefined;
-  const content = message?.content;
-  let contentText = "";
-
-  if (typeof content === "string") {
-    contentText = content;
-  } else if (Array.isArray(content)) {
-    const textParts = content
-      .map((part) =>
-        typeof part === "string"
-          ? part
-          : typeof part === "object" &&
-              part &&
-              "text" in part &&
-              typeof (part as Record<string, unknown>).text === "string"
-            ? ((part as Record<string, unknown>).text as string)
-            : "",
-      )
-      .filter((part) => part.length > 0);
-    contentText = textParts.join("\n");
-  }
-
-  const parsed = extractJsonObject(contentText);
-  logAiJson("parsed-model-json", parsed);
-  return parsed;
 }
 
 export async function extractVoiceOrderFromTranscript(params: {
