@@ -1,0 +1,17 @@
+{
+  "appTitle": "AgriSetu",
+  "appTagline": "సామూహిక వ్యవసాయ శక్తి",
+  "costSavings": "ఖర్చు ఆదా",
+  "farmersServed": "రైతులకు సేవలు",
+  "carbonSaved": "కార్బన్ ఆదా",
+  "welcomeTitle": "AgriSetu కి స్వాగతం",
+  "welcomeSubtitle": "సామూహిక కొనుగోలు శక్తితో రైతులను సన్నద్ధం చేయడం.\nప్రారంభించడానికి మీ ఆధార్‌తో లాగిన్ చేయండి.",
+  "selectLanguage": "భాషను ఎంచుకోండి / Select Language",
+  "loginWithAadhaar": "ఆధార్‌తో లాగిన్ చేయండి",
+  "useOtpInstead": "బదులుగా OTP ని ఉపయోగించండి →",
+  "navHome": "హోమ్",
+  "navClusters": "క్లస్టర్‌లు",
+  "navOrders": "ఆర్డర్లు",
+  "navProfile": "ప్రొఫైల్",
+  "voiceOrderHint": "'నాకు 50 కిలోల యూరియా కావాలి' అని చెప్పండి..."
+}

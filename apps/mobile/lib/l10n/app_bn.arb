@@ -1,0 +1,17 @@
+{
+  "appTitle": "AgriSetu",
+  "appTagline": "যৌথ কৃষিশক্তি",
+  "costSavings": "খরচ বাঁচানো",
+  "farmersServed": "কৃষকদের সেবা দেওয়া হয়েছে",
+  "carbonSaved": "কার্বন সাশ্রয়",
+  "welcomeTitle": "AgriSetu তে স্বাগতম",
+  "welcomeSubtitle": "যৌথ ক্রয় ক্ষমতার মাধ্যমে কৃষকদের ক্ষমতায়ন।\nশুরু করতে আপনার আধার দিয়ে লগইন করুন।",
+  "selectLanguage": "ভাষা নির্বাচন করুন / Select Language",
+  "loginWithAadhaar": "আধার দিয়ে লগইন করুন",
+  "useOtpInstead": "পরিবর্তে OTP ব্যবহার করুন →",
+  "navHome": "হোম",
+  "navClusters": "ক্লাস্টার",
+  "navOrders": "অর্ডার",
+  "navProfile": "প্রোফাইল",
+  "voiceOrderHint": "বলুন 'আমার ৫০ কেজি ইউরিয়া দরকার'..."
+}

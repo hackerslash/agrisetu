@@ -1,45 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/providers/locale_provider.dart';
+import '../../../l10n/app_localizations.dart';
 
-class LandingScreen extends StatefulWidget {
+class LandingScreen extends ConsumerStatefulWidget {
   const LandingScreen({super.key});
 
   @override
-  State<LandingScreen> createState() => _LandingScreenState();
+  ConsumerState<LandingScreen> createState() => _LandingScreenState();
 }
 
-class _LandingScreenState extends State<LandingScreen> {
-  String _selectedLanguage = 'en';
-
+class _LandingScreenState extends ConsumerState<LandingScreen> {
   @override
   void initState() {
     super.initState();
-    _loadLanguage();
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.light,
     ));
   }
 
-  Future<void> _loadLanguage() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _selectedLanguage = prefs.getString(AppConstants.languageKey) ?? 'en';
-    });
-  }
-
   Future<void> _selectLanguage(String code) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(AppConstants.languageKey, code);
-    setState(() => _selectedLanguage = code);
+    await ref.read(localeProvider.notifier).setLocale(code);
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final currentLocale = ref.watch(localeProvider);
+    final selectedLanguage = currentLocale.languageCode;
+
     return Scaffold(
       backgroundColor: AppColors.primary,
       body: Column(
@@ -50,14 +44,15 @@ class _LandingScreenState extends State<LandingScreen> {
             child: Container(
               color: AppColors.primary,
               padding: EdgeInsets.only(
-                top: MediaQuery.of(context).padding.top + 60,
+                top: MediaQuery.of(context).padding.top + 30,
                 left: 32,
                 right: 32,
-                bottom: 40,
+                bottom: 20,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                   // Logo
                   Container(
                     width: 72,
@@ -74,29 +69,30 @@ class _LandingScreenState extends State<LandingScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'AgriSetu',
+                    l10n.appTitle,
                     style: AppTextStyles.display,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Collective Farming Power',
+                    l10n.appTagline,
                     style: AppTextStyles.bodyLarge.copyWith(
                       color: AppColors.textOnPrimaryMuted,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const Spacer(),
-                  // Stats row
-                  Row(
-                    children: [
-                      _StatItem(value: '10–25%', label: 'Cost Savings'),
-                      const SizedBox(width: 12),
-                      _StatItem(value: '86%', label: 'Farmers Served'),
-                      const SizedBox(width: 12),
-                      _StatItem(value: '40–50%', label: 'Carbon Saved'),
-                    ],
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    // Stats row
+                    Row(
+                      children: [
+                        _StatItem(value: '10–25%', label: l10n.costSavings),
+                        const SizedBox(width: 12),
+                        _StatItem(value: '86%', label: l10n.farmersServed),
+                        const SizedBox(width: 12),
+                        _StatItem(value: '40–50%', label: l10n.carbonSaved),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -132,12 +128,12 @@ class _LandingScreenState extends State<LandingScreen> {
                       const SizedBox(height: 24),
 
                       Text(
-                        'Welcome to AgriSetu',
+                        l10n.welcomeTitle,
                         style: AppTextStyles.h1.copyWith(color: AppColors.primary),
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Empowering farmers with collective buying power.\nLogin with your Aadhaar to get started.',
+                        l10n.welcomeSubtitle,
                         style: AppTextStyles.body.copyWith(
                           color: AppColors.primary,
                           height: 1.5,
@@ -147,7 +143,7 @@ class _LandingScreenState extends State<LandingScreen> {
 
                       // Language selector
                       Text(
-                        'Select Language / भाषा चुनें',
+                        l10n.selectLanguage,
                         style: AppTextStyles.label.copyWith(
                           color: AppColors.textSecondary,
                           fontSize: 13,
@@ -158,7 +154,7 @@ class _LandingScreenState extends State<LandingScreen> {
                         spacing: 8,
                         runSpacing: 8,
                         children: AppConstants.supportedLanguages.map((lang) {
-                          final isSelected = _selectedLanguage == lang['code'];
+                          final isSelected = selectedLanguage == lang['code'];
                           return GestureDetector(
                             onTap: () => _selectLanguage(lang['code']!),
                             child: Container(
@@ -201,7 +197,7 @@ class _LandingScreenState extends State<LandingScreen> {
                         child: ElevatedButton.icon(
                           onPressed: () => context.push('/login'),
                           icon: const Icon(Icons.verified_user_outlined, size: 20),
-                          label: const Text('Login with Aadhaar'),
+                          label: Text(l10n.loginWithAadhaar),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
                             foregroundColor: AppColors.surface,
@@ -218,7 +214,7 @@ class _LandingScreenState extends State<LandingScreen> {
                         child: GestureDetector(
                           onTap: () => context.push('/login'),
                           child: Text(
-                            'Use OTP instead →',
+                            l10n.useOtpInstead,
                             style: AppTextStyles.label.copyWith(
                               color: AppColors.primary,
                               decoration: TextDecoration.underline,

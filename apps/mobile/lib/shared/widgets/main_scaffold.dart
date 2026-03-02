@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../theme/app_theme.dart';
+import '../../l10n/app_localizations.dart';
 
 class MainScaffold extends StatelessWidget {
   final Widget child;
@@ -86,7 +87,7 @@ class _AgriBottomNav extends StatelessWidget {
                       child: _NavItem(
                         icon: Icons.home_outlined,
                         activeIcon: Icons.home,
-                        label: 'Home',
+                        label: AppLocalizations.of(context)!.navHome,
                         isActive: currentIndex == 0,
                         onTap: () => onTap(0),
                       ),
@@ -97,7 +98,7 @@ class _AgriBottomNav extends StatelessWidget {
                       child: _NavItem(
                         icon: Icons.receipt_long_outlined,
                         activeIcon: Icons.receipt_long,
-                        label: 'Orders',
+                        label: AppLocalizations.of(context)!.navOrders,
                         isActive: currentIndex == 1,
                         onTap: () => onTap(1),
                       ),
@@ -109,7 +110,7 @@ class _AgriBottomNav extends StatelessWidget {
                       child: _NavItem(
                         icon: Icons.people_outline,
                         activeIcon: Icons.people,
-                        label: 'Cluster',
+                        label: AppLocalizations.of(context)!.navClusters,
                         isActive: currentIndex == 3,
                         onTap: () => onTap(3),
                       ),
@@ -120,7 +121,7 @@ class _AgriBottomNav extends StatelessWidget {
                       child: _NavItem(
                         icon: Icons.person_outline,
                         activeIcon: Icons.person,
-                        label: 'Profile',
+                        label: AppLocalizations.of(context)!.navProfile,
                         isActive: currentIndex == 4,
                         onTap: () => onTap(4),
                       ),

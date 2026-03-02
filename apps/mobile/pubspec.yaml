@@ -37,7 +37,7 @@ dependencies:
   pinput: ^5.0.0
 
   # Utilities
-  intl: ^0.20.0
+  intl: ^0.20.2
   url_launcher: ^6.3.1
   share_plus: ^10.1.2
   package_info_plus: ^8.1.2
@@ -54,6 +54,9 @@ dependencies:
 
   # Local storage
   shared_preferences: ^2.3.4
+  flutter_localizations:
+    sdk: flutter
+  flutter_localization: ^0.3.3
 
 dev_dependencies:
   flutter_test:
@@ -68,6 +71,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  generate: true
 
   assets:
     - assets/images/

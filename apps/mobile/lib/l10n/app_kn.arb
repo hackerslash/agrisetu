@@ -1,0 +1,17 @@
+{
+  "appTitle": "AgriSetu",
+  "appTagline": "ಸಾಮೂಹಿಕ ಕೃಷಿ ಶಕ್ತಿ",
+  "costSavings": "ವೆಚ್ಚ ಉಳಿತಾಯ",
+  "farmersServed": "ರೈತರ ಸೇವೆ",
+  "carbonSaved": "ಇಂಗಾಲ ಉಳಿತಾಯ",
+  "welcomeTitle": "AgriSetu ಗೆ ಸ್ವಾಗತ",
+  "welcomeSubtitle": "ಸಾಮೂಹಿಕ ಖರೀದಿ ಶಕ್ತಿಯೊಂದಿಗೆ ರೈತರನ್ನು ಸಬಲೀಕರಣಗೊಳಿಸುವುದು.\nಪ್ರಾರಂಭಿಸಲು ನಿಮ್ಮ ಆಧಾರ್‌ನೊಂದಿಗೆ ಲಾಗಿನ್ ಮಾಡಿ.",
+  "selectLanguage": "ಭಾಷೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ / Select Language",
+  "loginWithAadhaar": "ಆಧಾರ್‌ನೊಂದಿಗೆ ಲಾಗಿನ್ ಮಾಡಿ",
+  "useOtpInstead": "ಬದಲಿಗೆ OTP ಬಳಸಿ →",
+  "navHome": "ಮುಖಪುಟ",
+  "navClusters": "ಕ್ಲಸ್ಟರ್‌ಗಳು",
+  "navOrders": "ಆರ್ಡರ್‌ಗಳು",
+  "navProfile": "ಪ್ರೊಫೈಲ್",
+  "voiceOrderHint": "'ನನಗೆ 50 ಕೆಜಿ ಯೂರಿಯಾ ಬೇಕು' ಎಂದು ಹೇಳಿ..."
+}

@@ -1,0 +1,17 @@
+{
+  "appTitle": "AgriSetu",
+  "appTagline": "सामूहिक कृषि शक्ति",
+  "costSavings": "लागत में बचत",
+  "farmersServed": "किसान जुड़े",
+  "carbonSaved": "कार्बन बचत",
+  "welcomeTitle": "AgriSetu में आपका स्वागत है",
+  "welcomeSubtitle": "सामूहिक खरीद शक्ति के साथ किसानों को सशक्त बनाना।\nशुरू करने के लिए अपने आधार से लॉगिन करें।",
+  "selectLanguage": "Select Language / भाषा चुनें",
+  "loginWithAadhaar": "आधार से लॉगिन करें",
+  "useOtpInstead": "इसके बजाय OTP का उपयोग करें →",
+  "navHome": "होम",
+  "navClusters": "समूह",
+  "navOrders": "ऑर्डर",
+  "navProfile": "प्रोफ़ाइल",
+  "voiceOrderHint": "बोलें 'मुझे 50 किलो यूरिया चाहिए'..."
+}

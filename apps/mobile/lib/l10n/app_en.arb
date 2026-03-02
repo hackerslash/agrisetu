@@ -1,0 +1,17 @@
+{
+  "appTitle": "AgriSetu",
+  "appTagline": "Collective Farming Power",
+  "costSavings": "Cost Savings",
+  "farmersServed": "Farmers Served",
+  "carbonSaved": "Carbon Saved",
+  "welcomeTitle": "Welcome to AgriSetu",
+  "welcomeSubtitle": "Empowering farmers with collective buying power.\nLogin with your Aadhaar to get started.",
+  "selectLanguage": "Select Language / भाषा चुनें",
+  "loginWithAadhaar": "Login with Aadhaar",
+  "useOtpInstead": "Use OTP instead →",
+  "navHome": "Home",
+  "navClusters": "Clusters",
+  "navOrders": "Orders",
+  "navProfile": "Profile",
+  "voiceOrderHint": "Say 'I need 50kg urea'..."
+}

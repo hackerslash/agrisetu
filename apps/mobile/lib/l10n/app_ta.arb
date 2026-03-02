@@ -1,0 +1,17 @@
+{
+  "appTitle": "AgriSetu",
+  "appTagline": "கூட்டு விவசாய சக்தி",
+  "costSavings": "செலவு சேமிப்பு",
+  "farmersServed": "பயனடைந்த விவசாயிகள்",
+  "carbonSaved": "கார்பன் சேமிப்பு",
+  "welcomeTitle": "AgriSetu-க்கு வரவேற்கிறோம்",
+  "welcomeSubtitle": "கூட்டு வாங்கும் சக்தியுடன் விவசாயிகளை மேம்படுத்துதல்.\nதொடங்க உங்கள் ஆதார் மூலம் உள்நுழைக.",
+  "selectLanguage": "மொழியைத் தேர்ந்தெடுக்கவும் / Select Language",
+  "loginWithAadhaar": "ஆதார் மூலம் உள்நுழைக",
+  "useOtpInstead": "மாற்றாக OTP ஐப் பயன்படுத்தவும் →",
+  "navHome": "முகப்பு",
+  "navClusters": "குழுக்கள்",
+  "navOrders": "ஆர்டர்கள்",
+  "navProfile": "சுயவிவரம்",
+  "voiceOrderHint": "'எனக்கு 50 கிலோ யூரியா தேவை' என்று சொல்லவும்..."
+}
