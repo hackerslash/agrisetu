@@ -39,6 +39,11 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
   final _cropCtrl = TextEditingController();
   final _quantityCtrl = TextEditingController();
   final _unitCtrl = TextEditingController();
+  String? _voiceTranscript;
+  double? _voiceConfidence;
+  String? _matchedGigId;
+  String? _matchedGigLabel;
+  String? _extractionSource;
   bool _isCreating = false;
   bool _voting = false;
 
@@ -47,8 +52,13 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     super.initState();
     if (widget.orderId == 'new') {
       _cropCtrl.text = widget.prefill?['crop'] as String? ?? '';
-      _quantityCtrl.text = widget.prefill?['quantity'] as String? ?? '';
+      _quantityCtrl.text = widget.prefill?['quantity']?.toString() ?? '';
       _unitCtrl.text = widget.prefill?['unit'] as String? ?? 'kg';
+      _voiceTranscript = widget.prefill?['transcript'] as String?;
+      _voiceConfidence = (widget.prefill?['confidence'] as num?)?.toDouble();
+      _matchedGigId = widget.prefill?['matchedGigId'] as String?;
+      _matchedGigLabel = widget.prefill?['matchedGigLabel'] as String?;
+      _extractionSource = widget.prefill?['extractionSource'] as String?;
     }
   }
 
@@ -65,11 +75,17 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     setState(() => _isCreating = true);
     try {
       final api = ref.read(apiClientProvider);
-      final createRes = await api.createOrder({
+      final payload = <String, dynamic>{
         'cropName': _cropCtrl.text.trim(),
         'quantity': double.parse(_quantityCtrl.text),
         'unit': _unitCtrl.text.trim(),
-      });
+      };
+      final matchedGigId = _matchedGigId?.trim();
+      if (matchedGigId != null && matchedGigId.isNotEmpty) {
+        payload['matchedGigId'] = matchedGigId;
+      }
+
+      final createRes = await api.createOrder(payload);
 
       final orderData = (createRes['order'] is Map<String, dynamic>)
           ? createRes['order'] as Map<String, dynamic>
@@ -79,10 +95,16 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
         throw FormatException('Order creation failed: missing order ID');
       }
 
-      final options = await api.getOrderClusterOptions(orderId);
+      final options = await api.getOrderClusterOptions(
+        orderId,
+        matchedGigId: matchedGigId,
+      );
       if (options.isEmpty) {
-        final assigned =
-            await api.assignOrderToCluster(orderId, createNew: true);
+        final assigned = await api.assignOrderToCluster(
+          orderId,
+          createNew: true,
+          matchedGigId: matchedGigId,
+        );
         ref.invalidate(homeDashboardProvider);
         final clusterId = (assigned['clusterMember']
             as Map<String, dynamic>?)?['cluster']?['id'] as String?;
@@ -101,6 +123,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
         context.go('/clusters', extra: {
           'orderId': orderId,
           'cropName': orderData['cropName'] as String? ?? _cropCtrl.text.trim(),
+          'matchedGigId': matchedGigId,
         });
       }
     } catch (e) {
@@ -755,9 +778,11 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     );
   }
 
-  // ── New Order Form (unchanged) ──────────────────────────────────────────
   Widget _buildNewOrderForm(BuildContext context) {
     final units = ['kg', 'quintal', 'ton', 'bag', 'litre'];
+    final hasVoiceContext = (_voiceTranscript?.trim().isNotEmpty ?? false) ||
+        _matchedGigLabel != null;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppHeader(title: 'Confirm Your Order'),
@@ -778,13 +803,61 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                       color: AppColors.surface, size: 18),
                   const SizedBox(width: 10),
                   Text(
-                    'AI detected your order details. Please verify.',
+                    hasVoiceContext
+                        ? 'AI detected your order details. Please verify.'
+                        : 'Enter your order details to continue.',
                     style: AppTextStyles.bodySmall
                         .copyWith(color: AppColors.surface),
                   ),
                 ],
               ),
             ),
+            if (hasVoiceContext) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.inputBackground,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if ((_voiceTranscript ?? '').isNotEmpty) ...[
+                      Text('Voice Transcript', style: AppTextStyles.caption),
+                      const SizedBox(height: 6),
+                      Text(
+                        '"${_voiceTranscript!}"',
+                        style: AppTextStyles.body.copyWith(
+                          color: AppColors.primary,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                    if ((_matchedGigLabel ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Text('Matched Gig', style: AppTextStyles.caption),
+                      const SizedBox(height: 4),
+                      Text(_matchedGigLabel!, style: AppTextStyles.bodySmall),
+                    ],
+                    if (_voiceConfidence != null ||
+                        (_extractionSource ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        [
+                          if (_voiceConfidence != null)
+                            'Confidence ${(_voiceConfidence! * 100).toStringAsFixed(0)}%',
+                          if ((_extractionSource ?? '').isNotEmpty)
+                            (_extractionSource ?? '').toUpperCase(),
+                        ].join(' · '),
+                        style: AppTextStyles.caption,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
             Container(
               decoration: BoxDecoration(

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import {
@@ -24,8 +25,18 @@ import { MetricCard } from "../../components/ui/Card";
 import { StatusBadge } from "../../components/ui/StatusBadge";
 import { formatCurrency, formatDate, formatShortDate } from "../../lib/utils";
 
+type Period = "7d" | "30d" | "90d";
+
+function getGreetingByHour(hour: number): string {
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
 export function DashboardContent() {
   const router = useRouter();
+  const [period, setPeriod] = useState<Period>("30d");
+  const greeting = getGreetingByHour(new Date().getHours());
 
   const { data: vendor } = useQuery({
     queryKey: ["vendor-me"],
@@ -33,8 +44,13 @@ export function DashboardContent() {
   });
 
   const { data: analytics } = useQuery({
-    queryKey: ["analytics", "30d"],
-    queryFn: () => vendorApi.getAnalytics("30d"),
+    queryKey: ["analytics", period],
+    queryFn: () => vendorApi.getAnalytics(period),
+  });
+
+  const { data: paymentSummary } = useQuery({
+    queryKey: ["vendor-payment-summary"],
+    queryFn: () => vendorApi.getPaymentSummary(),
   });
 
   const { data: orders = [] } = useQuery({
@@ -82,7 +98,7 @@ export function DashboardContent() {
               color: "#2C5F2D",
             }}
           >
-            Good morning, {vendor?.businessName ?? "Vendor"}
+            {greeting}, {vendor?.businessName ?? "Vendor"}
           </h2>
           <p style={{ fontSize: 14, color: "#A0A0A0", marginTop: 4 }}>
             Here&apos;s what&apos;s happening with your orders today.
@@ -121,7 +137,7 @@ export function DashboardContent() {
         <MetricCard
           label="Total Revenue"
           value={formatCurrency(analytics?.totalRevenue ?? 0)}
-          sub={`₹${((analytics?.totalRevenue ?? 0) * 0.02).toFixed(0)} in escrow`}
+          sub={`${formatCurrency(paymentSummary?.inEscrow ?? 0)} in escrow`}
           icon={<IndianRupee size={16} color="#2C5F2D" />}
         />
         <MetricCard
@@ -151,14 +167,28 @@ export function DashboardContent() {
                 color: "#1A1A1A",
               }}
             >
-              Monthly Revenue
+              Revenue Over Time
             </p>
-            <span style={{ fontSize: 12, color: "#A0A0A0" }}>
-              {new Date().toLocaleDateString("en-IN", {
-                month: "short",
-                year: "numeric",
-              })}
-            </span>
+            <div
+              className="flex gap-1 rounded-xl p-1"
+              style={{ backgroundColor: "#EDE8DF" }}
+            >
+              {(["7d", "30d", "90d"] as Period[]).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPeriod(p)}
+                  className="rounded-lg font-medium transition-all"
+                  style={{
+                    padding: "4px 10px",
+                    fontSize: 12,
+                    backgroundColor: period === p ? "#2C5F2D" : "transparent",
+                    color: period === p ? "white" : "#A0A0A0",
+                  }}
+                >
+                  {p === "7d" ? "7D" : p === "30d" ? "30D" : "90D"}
+                </button>
+              ))}
+            </div>
           </div>
           <ResponsiveContainer width="100%" height={190}>
             <BarChart data={analytics?.revenueChart ?? []} barSize={24}>

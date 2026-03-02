@@ -13,9 +13,30 @@ import {
 
 const DEFAULT_TARGET_QUANTITY = 1000;
 const DEFAULT_FARMER_CLUSTER_RADIUS_KM = 50;
+const DEFAULT_CLUSTER_PAYMENT_WINDOW_MINUTES = 2;
+const parsedPaymentWindowMinutes = Number(
+  process.env.CLUSTER_PAYMENT_WINDOW_MINUTES,
+);
+const parsedPaymentWindowHours = Number(process.env.CLUSTER_PAYMENT_WINDOW_HOURS);
+const CLUSTER_PAYMENT_WINDOW_MINUTES =
+  Number.isFinite(parsedPaymentWindowMinutes) && parsedPaymentWindowMinutes > 0
+    ? parsedPaymentWindowMinutes
+    : Number.isFinite(parsedPaymentWindowHours) && parsedPaymentWindowHours > 0
+      ? parsedPaymentWindowHours * 60
+      : DEFAULT_CLUSTER_PAYMENT_WINDOW_MINUTES;
+const CLUSTER_PAYMENT_WINDOW_MS =
+  CLUSTER_PAYMENT_WINDOW_MINUTES * 60 * 1000;
 
 function normalizeUnit(unit: string) {
   return unit.toLowerCase().trim();
+}
+
+function normalizeVariety(value?: string | null) {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+export function buildClusterPaymentDeadline(start = new Date()) {
+  return new Date(start.getTime() + CLUSTER_PAYMENT_WINDOW_MS);
 }
 
 export function isClusterServiceableForVendor(params: {
@@ -68,24 +89,35 @@ async function findBestMatchingGig(
   unit: string,
   clusterLatitude?: number,
   clusterLongitude?: number,
+  preferredVariety?: string,
 ) {
-  const gigs = await prisma.gig.findMany({
-    where: {
-      cropName: { equals: cropName, mode: "insensitive" },
-      unit: { equals: unit, mode: "insensitive" },
-      status: GigStatus.PUBLISHED,
-    },
-    include: {
-      vendor: {
-        select: {
-          latitude: true,
-          longitude: true,
-          serviceRadiusKm: true,
+  const normalizedVariety = normalizeVariety(preferredVariety);
+  const loadGigs = (withVariety: boolean) =>
+    prisma.gig.findMany({
+      where: {
+        cropName: { equals: cropName, mode: "insensitive" },
+        unit: { equals: unit, mode: "insensitive" },
+        status: GigStatus.PUBLISHED,
+        ...(withVariety && normalizedVariety
+          ? { variety: { equals: normalizedVariety, mode: "insensitive" } }
+          : {}),
+      },
+      include: {
+        vendor: {
+          select: {
+            latitude: true,
+            longitude: true,
+            serviceRadiusKm: true,
+          },
         },
       },
-    },
-    orderBy: [{ minQuantity: "asc" }, { createdAt: "asc" }],
-  });
+      orderBy: [{ minQuantity: "asc" }, { createdAt: "asc" }],
+    });
+
+  let gigs = await loadGigs(true);
+  if (gigs.length === 0 && normalizedVariety) {
+    gigs = await loadGigs(false);
+  }
 
   if (!isValidCoordinate(clusterLatitude, clusterLongitude)) {
     return gigs[0] ?? null;
@@ -252,9 +284,11 @@ export async function findJoinableClusters(
   district?: string,
   latitude?: number,
   longitude?: number,
+  preferredVariety?: string,
 ) {
   const normalizedUnit = normalizeUnit(unit);
-  const clusters = await prisma.cluster.findMany({
+  const normalizedVariety = normalizeVariety(preferredVariety);
+  const allCandidateClusters = await prisma.cluster.findMany({
     where: {
       cropName: { equals: cropName, mode: "insensitive" },
       unit: { equals: normalizedUnit, mode: "insensitive" },
@@ -262,13 +296,26 @@ export async function findJoinableClusters(
     },
     include: {
       members: { include: { farmer: true, order: true } },
-      bids: { include: { vendor: true, vendorVotes: true } },
+      bids: { include: { vendor: true, vendorVotes: true, gig: true } },
       delivery: true,
       vendor: true,
+      gig: true,
       ratings: true,
     },
     orderBy: { createdAt: "asc" },
   });
+  const clusters =
+    normalizedVariety.length === 0
+      ? allCandidateClusters
+      : allCandidateClusters.filter((cluster) => {
+          const clusterVarieties = [
+            cluster.gig?.variety,
+            ...cluster.bids.map((bid) => bid.gig?.variety),
+          ]
+            .map((value) => normalizeVariety(value))
+            .filter((value) => value.length > 0);
+          return clusterVarieties.includes(normalizedVariety);
+        });
 
   if (isValidCoordinate(latitude, longitude)) {
     const farmerPoint = {
@@ -314,6 +361,7 @@ async function createClusterForOrder(
   locationAddress?: string,
   latitude?: number,
   longitude?: number,
+  preferredVariety?: string,
 ) {
   const normalizedUnit = normalizeUnit(unit);
   const matchingGig = await findBestMatchingGig(
@@ -321,6 +369,7 @@ async function createClusterForOrder(
     normalizedUnit,
     latitude,
     longitude,
+    preferredVariety,
   );
   const targetQuantity = matchingGig?.minQuantity ?? DEFAULT_TARGET_QUANTITY;
 
@@ -431,6 +480,7 @@ export async function createNewClusterAndAssignOrder(params: {
   cropName: string;
   quantity: number;
   unit: string;
+  preferredVariety?: string;
   district?: string;
   state?: string;
   locationAddress?: string;
@@ -445,6 +495,7 @@ export async function createNewClusterAndAssignOrder(params: {
     params.locationAddress,
     params.latitude,
     params.longitude,
+    params.preferredVariety,
   );
 
   return assignOrderToCluster({
@@ -465,6 +516,7 @@ export async function autoAssignCluster(
   cropName: string,
   quantity: number,
   unit: string,
+  preferredVariety?: string,
   district?: string,
   state?: string,
   locationAddress?: string,
@@ -478,6 +530,7 @@ export async function autoAssignCluster(
     district,
     latitude,
     longitude,
+    preferredVariety,
   );
   const chosen = joinable[0];
 
@@ -496,6 +549,7 @@ export async function autoAssignCluster(
     cropName,
     quantity,
     unit: normalizedUnit,
+    preferredVariety,
     district,
     state,
     locationAddress,
@@ -565,6 +619,118 @@ export async function syncClustersForPublishedGig(
       cluster.currentQuantity,
     );
   }
+}
+
+export async function ensureClusterPaymentDeadline(clusterId: string) {
+  const expectedDeadline = buildClusterPaymentDeadline();
+  await prisma.cluster.updateMany({
+    where: {
+      id: clusterId,
+      status: ClusterStatus.PAYMENT,
+      paymentDeadlineAt: null,
+    },
+    data: {
+      paymentDeadlineAt: expectedDeadline,
+    },
+  });
+
+  const cluster = await prisma.cluster.findUnique({
+    where: { id: clusterId },
+    select: { status: true, paymentDeadlineAt: true },
+  });
+
+  if (!cluster || cluster.status !== ClusterStatus.PAYMENT) {
+    return null;
+  }
+
+  return cluster.paymentDeadlineAt;
+}
+
+export async function expireClusterIfPaymentWindowElapsed(
+  clusterId: string,
+  now = new Date(),
+) {
+  const deadline = await ensureClusterPaymentDeadline(clusterId);
+  if (!deadline || deadline.getTime() > now.getTime()) {
+    return false;
+  }
+
+  const timedOutCluster = await prisma.cluster.findFirst({
+    where: {
+      id: clusterId,
+      status: ClusterStatus.PAYMENT,
+      paymentDeadlineAt: { lte: now },
+    },
+    select: {
+      id: true,
+      members: {
+        select: {
+          orderId: true,
+        },
+      },
+    },
+  });
+
+  if (!timedOutCluster) {
+    return false;
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const statusUpdate = await tx.cluster.updateMany({
+      where: {
+        id: clusterId,
+        status: ClusterStatus.PAYMENT,
+        paymentDeadlineAt: { lte: now },
+      },
+      data: {
+        status: ClusterStatus.FAILED,
+      },
+    });
+
+    if (statusUpdate.count === 0) {
+      return;
+    }
+
+    const orderIds = timedOutCluster.members.map((member) => member.orderId);
+    if (orderIds.length > 0) {
+      await tx.order.updateMany({
+        where: { id: { in: orderIds } },
+        data: { status: OrderStatus.FAILED },
+      });
+    }
+
+    await tx.payment.updateMany({
+      where: {
+        clusterId,
+        status: PaymentStatus.SUCCESS,
+      },
+      data: {
+        status: PaymentStatus.REFUNDED,
+      },
+    });
+
+    await tx.payment.updateMany({
+      where: {
+        clusterId,
+        status: PaymentStatus.PENDING,
+      },
+      data: {
+        status: PaymentStatus.FAILED,
+      },
+    });
+  });
+
+  return true;
+}
+
+export async function reconcileClusterPaymentTimeouts(clusterIds: string[]) {
+  if (clusterIds.length === 0) return;
+  const uniqueClusterIds = Array.from(new Set(clusterIds));
+  await Promise.all(
+    uniqueClusterIds.map((clusterId) =>
+      expireClusterIfPaymentWindowElapsed(clusterId),
+    ),
+  );
 }
 
 export async function checkAndTransitionPayment(clusterId: string) {

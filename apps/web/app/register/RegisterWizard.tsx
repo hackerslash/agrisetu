@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { authApi } from "@repo/api-client";
+import { authApi, vendorApi } from "@repo/api-client";
+import { LocateFixed } from "lucide-react";
 
 // ─── Step 1 Schema ────────────────────────────────────────────────────────────
 
@@ -33,6 +34,12 @@ const step1Schema = z.object({
 });
 type Step1Data = z.infer<typeof step1Schema>;
 type Step1FormInput = z.input<typeof step1Schema>;
+type ReverseGeocodeResult = {
+  display_name?: string;
+  address?: {
+    state?: string;
+  };
+};
 
 // ─── Step 2 Schema ────────────────────────────────────────────────────────────
 
@@ -49,12 +56,11 @@ type Step2Data = z.infer<typeof step2Schema>;
 
 // ─── Step 3 Schema ────────────────────────────────────────────────────────────
 
-const step3Schema = z.object({
-  panUrl: z.string().min(1, "PAN document is required"),
-  gstUrl: z.string().min(1, "GST document is required"),
-  qualityUrl: z.string().optional(),
-});
-type Step3Data = z.infer<typeof step3Schema>;
+type Step3Data = {
+  panFile?: FileList;
+  gstFile?: FileList;
+  qualityFile?: FileList;
+};
 
 // ─── Progress Bar ─────────────────────────────────────────────────────────────
 
@@ -128,7 +134,7 @@ export function RegisterWizard() {
     resolver: zodResolver(step1Schema),
   });
   const form2 = useForm<Step2Data>({ resolver: zodResolver(step2Schema) });
-  const form3 = useForm<Step3Data>({ resolver: zodResolver(step3Schema) });
+  const form3 = useForm<Step3Data>();
 
   async function onStep1(data: Step1Data) {
     setApiError("");
@@ -141,36 +147,60 @@ export function RegisterWizard() {
     }
   }
 
-  function setCurrentLocationForStep1() {
+  async function setCurrentLocationForStep1() {
     if (!navigator.geolocation) {
       setApiError("Browser geolocation is not available");
       return;
     }
     setApiError("");
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        form1.setValue("latitude", Number(position.coords.latitude.toFixed(6)));
-        form1.setValue(
-          "longitude",
-          Number(position.coords.longitude.toFixed(6)),
+    try {
+      const position = await new Promise<GeolocationPosition>(
+        (resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 10000,
+          });
+        },
+      );
+
+      const latitude = Number(position.coords.latitude.toFixed(6));
+      const longitude = Number(position.coords.longitude.toFixed(6));
+      form1.setValue("latitude", latitude);
+      form1.setValue("longitude", longitude);
+
+      let resolvedAddress: string | undefined;
+      try {
+        const reverseGeocode = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=jsonv2`,
         );
-        if (!form1.getValues("locationAddress")) {
-          form1.setValue(
-            "locationAddress",
-            `Lat ${position.coords.latitude.toFixed(6)}, Lng ${position.coords.longitude.toFixed(6)}`,
-          );
+        if (reverseGeocode.ok) {
+          const data = (await reverseGeocode.json()) as ReverseGeocodeResult;
+          if (data.display_name?.trim()) {
+            resolvedAddress = data.display_name.trim();
+          }
+          if (!form1.getValues("state")?.trim() && data.address?.state) {
+            form1.setValue("state", data.address.state.trim());
+          }
         }
-        setLocating(false);
-      },
-      () => {
+      } catch {
+        // Coordinates remain captured even if reverse geocoding fails.
+      }
+
+      if (resolvedAddress) {
+        form1.setValue("locationAddress", resolvedAddress);
+      } else if (!form1.getValues("locationAddress")?.trim()) {
         setApiError(
-          "Unable to fetch your location. Please allow location permission.",
+          "Location captured, but address could not be resolved. Please enter address manually.",
         );
-        setLocating(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
+      }
+    } catch {
+      setApiError(
+        "Unable to fetch your location. Please allow location permission.",
+      );
+    } finally {
+      setLocating(false);
+    }
   }
 
   async function onStep2(data: Step2Data) {
@@ -186,15 +216,27 @@ export function RegisterWizard() {
 
   async function onStep3(data: Step3Data) {
     setApiError("");
+    form3.clearErrors();
+
+    let hasErrors = false;
+    if (!data.panFile || data.panFile.length === 0) {
+      form3.setError("panFile", { message: "PAN document is required" });
+      hasErrors = true;
+    }
+    if (!data.gstFile || data.gstFile.length === 0) {
+      form3.setError("gstFile", { message: "GST document is required" });
+      hasErrors = true;
+    }
+    if (hasErrors) return;
+
     try {
-      const docs = [
-        { docType: "PAN" as const, fileUrl: data.panUrl },
-        { docType: "GST" as const, fileUrl: data.gstUrl },
-        ...(data.qualityUrl
-          ? [{ docType: "QUALITY_CERT" as const, fileUrl: data.qualityUrl }]
-          : []),
-      ];
-      await authApi.registerStep3({ documents: docs });
+      await vendorApi.uploadDocument("PAN", data.panFile![0]!);
+      await vendorApi.uploadDocument("GST", data.gstFile![0]!);
+
+      if (data.qualityFile && data.qualityFile.length > 0) {
+        await vendorApi.uploadDocument("QUALITY_CERT", data.qualityFile[0]!);
+      }
+
       router.push("/dashboard");
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: string } } };
@@ -356,28 +398,8 @@ export function RegisterWizard() {
             error={form1.formState.errors.locationAddress?.message}
             {...form1.register("locationAddress")}
           />
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <FormInput
-                label="Latitude"
-                type="number"
-                placeholder="12.9716"
-                step="0.000001"
-                error={form1.formState.errors.latitude?.message}
-                {...form1.register("latitude")}
-              />
-            </div>
-            <div className="flex-1">
-              <FormInput
-                label="Longitude"
-                type="number"
-                placeholder="77.5946"
-                step="0.000001"
-                error={form1.formState.errors.longitude?.message}
-                {...form1.register("longitude")}
-              />
-            </div>
-          </div>
+          <input type="hidden" {...form1.register("latitude")} />
+          <input type="hidden" {...form1.register("longitude")} />
           <div className="flex items-end gap-3">
             <div className="flex-1">
               <FormInput
@@ -392,7 +414,7 @@ export function RegisterWizard() {
             <button
               type="button"
               onClick={setCurrentLocationForStep1}
-              className="flex items-center justify-center font-semibold rounded-xl"
+              className="flex items-center justify-center gap-2 font-semibold rounded-xl"
               style={{
                 backgroundColor: "#EDE8DF",
                 color: "#1A1A1A",
@@ -401,7 +423,8 @@ export function RegisterWizard() {
                 fontSize: 13,
               }}
             >
-              {locating ? "Fetching…" : "Use current location"}
+              <LocateFixed size={16} />
+              {locating ? "Fetching..." : "Use current location"}
             </button>
           </div>
           <button
@@ -496,25 +519,28 @@ export function RegisterWizard() {
           className="flex flex-col gap-4"
         >
           <p style={{ fontSize: 13, color: "#A0A0A0" }}>
-            Upload document URLs or base64 strings for verification.
+            Upload your verification files (PDF/JPG/PNG/WEBP).
           </p>
           <FormInput
-            label="PAN Document (URL or base64)"
-            placeholder="https://... or data:image/..."
-            error={form3.formState.errors.panUrl?.message}
-            {...form3.register("panUrl")}
+            label="PAN Card Document"
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,.webp"
+            error={form3.formState.errors.panFile?.message}
+            {...form3.register("panFile")}
           />
           <FormInput
-            label="GST Certificate (URL or base64)"
-            placeholder="https://... or data:image/..."
-            error={form3.formState.errors.gstUrl?.message}
-            {...form3.register("gstUrl")}
+            label="GST Certificate"
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,.webp"
+            error={form3.formState.errors.gstFile?.message}
+            {...form3.register("gstFile")}
           />
           <FormInput
             label="Quality Certificate (optional)"
-            placeholder="https://... or data:image/..."
-            error={form3.formState.errors.qualityUrl?.message}
-            {...form3.register("qualityUrl")}
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,.webp"
+            error={form3.formState.errors.qualityFile?.message}
+            {...form3.register("qualityFile")}
           />
           <div className="flex gap-3">
             <button

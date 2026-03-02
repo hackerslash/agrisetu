@@ -153,6 +153,7 @@ class ClusterMember {
 class ClusterFarmer {
   final String id;
   final String? name;
+  final String? phone;
   final String? village;
   final String? district;
   final String? state;
@@ -163,6 +164,7 @@ class ClusterFarmer {
   const ClusterFarmer({
     required this.id,
     this.name,
+    this.phone,
     this.village,
     this.district,
     this.state,
@@ -175,6 +177,7 @@ class ClusterFarmer {
     return ClusterFarmer(
       id: json['id'] as String,
       name: json['name'] as String?,
+      phone: json['phone'] as String?,
       village: json['village'] as String?,
       district: json['district'] as String?,
       state: json['state'] as String?,
@@ -254,6 +257,7 @@ class Cluster {
   final double? longitude;
   final String? vendorId;
   final String? gigId;
+  final DateTime? paymentDeadlineAt;
   final DateTime createdAt;
   final List<ClusterMember> members;
   final List<VendorBid> bids;
@@ -275,6 +279,7 @@ class Cluster {
     this.longitude,
     this.vendorId,
     this.gigId,
+    this.paymentDeadlineAt,
     required this.createdAt,
     this.members = const [],
     this.bids = const [],
@@ -303,6 +308,9 @@ class Cluster {
       longitude: (json['longitude'] as num?)?.toDouble(),
       vendorId: json['vendorId'] as String?,
       gigId: json['gigId'] as String?,
+      paymentDeadlineAt: json['paymentDeadlineAt'] != null
+          ? DateTime.parse(json['paymentDeadlineAt'] as String)
+          : null,
       createdAt: DateTime.parse(json['createdAt'] as String),
       members: (json['members'] as List<dynamic>?)
               ?.map((e) => ClusterMember.fromJson(e as Map<String, dynamic>))

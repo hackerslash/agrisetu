@@ -1,9 +1,11 @@
 import { Router } from "express";
+import multer from "multer";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { authenticate, requireVendor } from "../middleware/auth.js";
 import { success, error } from "../lib/response.js";
 import {
+  buildClusterPaymentDeadline,
   isClusterServiceableForVendor,
   syncClustersForPublishedGig,
 } from "../services/cluster.js";
@@ -14,9 +16,19 @@ import {
   PaymentStatus,
 } from "@prisma/client";
 import { isValidCoordinate } from "../lib/geo.js";
+import {
+  deleteVendorDocumentIfManaged,
+  uploadVendorDocumentBuffer,
+  withVendorDocumentForClient,
+  withVendorDocumentsForClient,
+} from "../services/vendor-documents.js";
 
 const router = Router();
 router.use(authenticate, requireVendor);
+const vendorDocUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 12 * 1024 * 1024 },
+});
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
 
@@ -47,7 +59,7 @@ router.get("/profile", async (req, res) => {
       error(res, "Vendor not found", 404);
       return;
     }
-    success(res, vendor);
+    success(res, await withVendorDocumentsForClient(vendor));
   } catch {
     error(res, "Internal server error", 500);
   }
@@ -134,6 +146,88 @@ router.patch("/profile/password", async (req, res) => {
     error(res, "Internal server error", 500);
   }
 });
+
+const uploadDocumentSchema = z.object({
+  docType: z.enum(["PAN", "GST", "QUALITY_CERT"]),
+});
+
+router.post(
+  "/documents/upload",
+  vendorDocUpload.single("file"),
+  async (req, res) => {
+    const file = req.file;
+    if (!file) {
+      error(res, "Document file is required", 422);
+      return;
+    }
+
+    const parsed = uploadDocumentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      error(res, "Invalid request", 422, parsed.error.flatten());
+      return;
+    }
+
+    const mimeType = file.mimetype?.toLowerCase();
+    if (
+      mimeType !== "application/pdf" &&
+      mimeType !== "image/jpeg" &&
+      mimeType !== "image/jpg" &&
+      mimeType !== "image/png" &&
+      mimeType !== "image/webp"
+    ) {
+      error(res, "Only PDF, JPG, PNG, and WEBP files are supported", 422);
+      return;
+    }
+
+    try {
+      const uploaded = await uploadVendorDocumentBuffer({
+        vendorId: req.user!.id,
+        docType: parsed.data.docType,
+        fileBuffer: file.buffer,
+        fileName: file.originalname,
+        mimeType: file.mimetype,
+      });
+
+      const existingDocs = await prisma.vendorDocument.findMany({
+        where: {
+          vendorId: req.user!.id,
+          docType: parsed.data.docType,
+        },
+      });
+
+      const document = await prisma.$transaction(async (tx) => {
+        await tx.vendorDocument.deleteMany({
+          where: {
+            vendorId: req.user!.id,
+            docType: parsed.data.docType,
+          },
+        });
+
+        return tx.vendorDocument.create({
+          data: {
+            vendorId: req.user!.id,
+            docType: parsed.data.docType,
+            fileUrl: uploaded.fileUrl,
+          },
+        });
+      });
+
+      if (existingDocs.length > 0) {
+        await Promise.all(
+          existingDocs.map((doc) =>
+            deleteVendorDocumentIfManaged(doc.fileUrl).catch(() => null),
+          ),
+        );
+      }
+
+      success(res, await withVendorDocumentForClient(document), 201);
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Unable to upload vendor document";
+      error(res, message, 500);
+    }
+  },
+);
 
 // ─── Gigs ─────────────────────────────────────────────────────────────────────
 
@@ -441,9 +535,27 @@ router.get("/orders", async (req, res) => {
     const clusters = await prisma.cluster.findMany({
       where: {
         vendorId: req.user!.id,
-        status: {
-          notIn: [ClusterStatus.FORMING, ClusterStatus.VOTING],
-        },
+        ...(status ? { status: status as ClusterStatus } : {}),
+        OR: [
+          {
+            status: {
+              in: [
+                ClusterStatus.PROCESSING,
+                ClusterStatus.OUT_FOR_DELIVERY,
+                ClusterStatus.DISPATCHED,
+                ClusterStatus.COMPLETED,
+                ClusterStatus.FAILED,
+              ],
+            },
+          },
+          {
+            status: ClusterStatus.PAYMENT,
+            members: {
+              some: {},
+              every: { hasPaid: true },
+            },
+          },
+        ],
       },
       include: {
         members: {
@@ -481,6 +593,13 @@ router.get("/orders/:id", async (req, res) => {
       error(res, "Order not found", 404);
       return;
     }
+    if (
+      cluster.status === ClusterStatus.PAYMENT &&
+      cluster.members.some((member) => !member.hasPaid)
+    ) {
+      error(res, "Order is not ready yet. Waiting for all farmer payments", 400);
+      return;
+    }
     success(res, cluster);
   } catch {
     error(res, "Internal server error", 500);
@@ -491,7 +610,10 @@ router.patch("/orders/:id/accept", async (req, res) => {
   try {
     const cluster = await prisma.cluster.updateMany({
       where: { id: req.params.id, vendorId: req.user!.id },
-      data: { status: ClusterStatus.PAYMENT },
+      data: {
+        status: ClusterStatus.PAYMENT,
+        paymentDeadlineAt: buildClusterPaymentDeadline(),
+      },
     });
     if (cluster.count === 0) {
       error(res, "Order not found", 404);
@@ -627,6 +749,17 @@ router.patch("/orders/:id/process", async (req, res) => {
       error(
         res,
         "Order must be in PAYMENT or PROCESSING status to mark as processing",
+        400,
+      );
+      return;
+    }
+    if (
+      cluster.status === ClusterStatus.PAYMENT &&
+      cluster.members.some((member) => !member.hasPaid)
+    ) {
+      error(
+        res,
+        "Order is not ready yet. Waiting for all farmers to complete payment",
         400,
       );
       return;
@@ -991,15 +1124,26 @@ router.get("/payments/summary", async (req, res) => {
 // ─── Analytics ────────────────────────────────────────────────────────────────
 
 router.get("/analytics", async (req, res) => {
-  const { period = "30d" } = req.query;
+  const period =
+    typeof req.query.period === "string" ? req.query.period : "30d";
   const days = period === "7d" ? 7 : period === "90d" ? 90 : 30;
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const now = new Date();
+  const since = new Date(now);
+  since.setHours(0, 0, 0, 0);
+  since.setDate(since.getDate() - (days - 1));
+
+  const toDateKey = (value: Date) => {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
 
   try {
     const clusters = await prisma.cluster.findMany({
       where: {
         vendorId: req.user!.id,
-        createdAt: { gte: since },
+        updatedAt: { gte: since },
       },
       include: {
         payments: true,
@@ -1048,15 +1192,16 @@ router.get("/analytics", async (req, res) => {
     // Revenue by day
     const revenueByDay: Record<string, number> = {};
     for (let i = 0; i < days; i++) {
-      const d = new Date(since.getTime() + i * 24 * 60 * 60 * 1000);
-      const key = d.toISOString().split("T")[0] as string;
+      const d = new Date(since);
+      d.setDate(since.getDate() + i);
+      const key = toDateKey(d);
       revenueByDay[key] = 0;
     }
 
     clusters
       .filter((c) => c.status === ClusterStatus.COMPLETED)
       .forEach((cluster) => {
-        const key = cluster.updatedAt.toISOString().split("T")[0] as string;
+        const key = toDateKey(cluster.updatedAt);
         if (Object.prototype.hasOwnProperty.call(revenueByDay, key)) {
           const amount = cluster.payments
             .filter((p) => p.status === PaymentStatus.SUCCESS)

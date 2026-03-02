@@ -9,8 +9,8 @@ import {
   Wallet,
   BarChart2,
   Settings,
-  Sprout,
 } from "lucide-react";
+import { BrandLogo } from "../ui/BrandLogo";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -40,31 +40,8 @@ export function Sidebar({ vendorName }: SidebarProps) {
       {/* Top */}
       <div className="flex flex-col gap-8 px-5">
         {/* Logo */}
-        <div className="flex items-center gap-2.5 pb-5">
-          <div
-            className="flex items-center justify-center rounded-xl"
-            style={{ width: 36, height: 36, backgroundColor: "#2C5F2D" }}
-          >
-            <Sprout size={18} color="white" />
-          </div>
-          <div>
-            <p
-              className="font-bold leading-none"
-              style={{
-                fontFamily: "Plus Jakarta Sans",
-                fontSize: 16,
-                color: "#1A1A1A",
-              }}
-            >
-              AgriSetu
-            </p>
-            <p
-              className="leading-none mt-0.5"
-              style={{ fontSize: 11, color: "#A0A0A0" }}
-            >
-              Vendor Portal
-            </p>
-          </div>
+        <div className="pb-5">
+          <BrandLogo theme="light" titleSize={16} badgeSize={36} iconSize={18} />
         </div>
 
         {/* Nav */}

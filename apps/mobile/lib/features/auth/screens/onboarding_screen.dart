@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
@@ -60,6 +61,342 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     super.dispose();
   }
 
+  String? _firstNonEmpty(List<String?> candidates) {
+    for (final candidate in candidates) {
+      final value = candidate?.trim();
+      if (value != null && value.isNotEmpty) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  bool _looksLikeCoordinateAddress(String value) {
+    final input = value.trim();
+    final coordinatePattern = RegExp(
+      r'^Lat\s*-?\d+(\.\d+)?,\s*Lng\s*-?\d+(\.\d+)?$',
+      caseSensitive: false,
+    );
+    return coordinatePattern.hasMatch(input);
+  }
+
+  String? _buildAddressFromPlacemark(Placemark placemark) {
+    final rawParts = [
+      placemark.name,
+      placemark.street,
+      placemark.subLocality,
+      placemark.locality,
+      placemark.subAdministrativeArea,
+      placemark.administrativeArea,
+      placemark.postalCode,
+    ];
+
+    final seen = <String>{};
+    final cleanedParts = <String>[];
+    for (final part in rawParts) {
+      final value = part?.trim();
+      if (value == null || value.isEmpty) continue;
+      final key = value.toLowerCase();
+      if (seen.add(key)) {
+        cleanedParts.add(value);
+      }
+    }
+
+    if (cleanedParts.isEmpty) return null;
+    return cleanedParts.join(', ');
+  }
+
+  String? _toStringValue(dynamic value) {
+    if (value == null) return null;
+    if (value is! String) return null;
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+    return trimmed;
+  }
+
+  Future<Map<String, dynamic>?> _reverseGeocodeFromNominatim({
+    required double latitude,
+    required double longitude,
+  }) async {
+    final dio = Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 8),
+        receiveTimeout: const Duration(seconds: 8),
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'AgriSetu-Mobile/1.0',
+        },
+      ),
+    );
+
+    final response = await dio.get(
+      'https://nominatim.openstreetmap.org/reverse',
+      queryParameters: {
+        'lat': latitude,
+        'lon': longitude,
+        'format': 'jsonv2',
+        'addressdetails': 1,
+      },
+    );
+
+    if (response.data is Map<String, dynamic>) {
+      return response.data as Map<String, dynamic>;
+    }
+    if (response.data is Map) {
+      return Map<String, dynamic>.from(response.data as Map);
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> _reverseGeocodeFromBigDataCloud({
+    required double latitude,
+    required double longitude,
+  }) async {
+    final dio = Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 8),
+        receiveTimeout: const Duration(seconds: 8),
+        headers: {
+          'Accept': 'application/json',
+        },
+      ),
+    );
+
+    final response = await dio.get(
+      'https://api.bigdatacloud.net/data/reverse-geocode-client',
+      queryParameters: {
+        'latitude': latitude,
+        'longitude': longitude,
+        'localityLanguage': 'en',
+      },
+    );
+
+    if (response.data is Map<String, dynamic>) {
+      return response.data as Map<String, dynamic>;
+    }
+    if (response.data is Map) {
+      return Map<String, dynamic>.from(response.data as Map);
+    }
+    return null;
+  }
+
+  String? _buildAddressFromNominatim(Map<String, dynamic> data) {
+    final displayName = _toStringValue(data['display_name']);
+    if (displayName != null) return displayName;
+
+    final rawAddress = data['address'];
+    if (rawAddress is! Map) return null;
+    final address = Map<String, dynamic>.from(rawAddress);
+
+    final parts = [
+      _toStringValue(address['road']),
+      _toStringValue(address['neighbourhood']),
+      _toStringValue(address['suburb']),
+      _toStringValue(address['village']),
+      _toStringValue(address['town']),
+      _toStringValue(address['city']),
+      _toStringValue(address['county']),
+      _toStringValue(address['state']),
+      _toStringValue(address['postcode']),
+      _toStringValue(address['country']),
+    ];
+
+    final seen = <String>{};
+    final cleanedParts = <String>[];
+    for (final part in parts) {
+      if (part == null) continue;
+      final key = part.toLowerCase();
+      if (seen.add(key)) cleanedParts.add(part);
+    }
+
+    if (cleanedParts.isEmpty) return null;
+    return cleanedParts.join(', ');
+  }
+
+  String? _extractDistrictFromBigDataCloud(Map<String, dynamic> data) {
+    final localityInfo = data['localityInfo'];
+    if (localityInfo is! Map) return null;
+
+    final administrative = localityInfo['administrative'];
+    if (administrative is! List) return null;
+
+    for (final entry in administrative) {
+      if (entry is! Map) continue;
+      final item = Map<String, dynamic>.from(entry);
+      final name = _toStringValue(item['name']);
+      final description = _toStringValue(item['description'])?.toLowerCase();
+
+      if (name == null) continue;
+      if (description != null && description.contains('district')) {
+        return name;
+      }
+      if (name.toLowerCase().contains(' district')) {
+        return name;
+      }
+    }
+
+    return null;
+  }
+
+  String? _buildAddressFromBigDataCloud(Map<String, dynamic> data) {
+    final locality = _firstNonEmpty([
+      _toStringValue(data['locality']),
+      _toStringValue(data['city']),
+    ]);
+    final district = _extractDistrictFromBigDataCloud(data);
+    final state = _toStringValue(data['principalSubdivision']);
+    final postcode = _toStringValue(data['postcode']);
+    final country = _toStringValue(data['countryName']);
+
+    final parts = [locality, district, state, postcode, country];
+    final seen = <String>{};
+    final cleanedParts = <String>[];
+    for (final part in parts) {
+      if (part == null) continue;
+      final key = part.toLowerCase();
+      if (seen.add(key)) cleanedParts.add(part);
+    }
+
+    if (cleanedParts.isEmpty) return null;
+    return cleanedParts.join(', ');
+  }
+
+  void _prefillLocationFieldsFromNominatim(Map<String, dynamic> data) {
+    final rawAddress = data['address'];
+    if (rawAddress is! Map) return;
+    final address = Map<String, dynamic>.from(rawAddress);
+
+    final village = _firstNonEmpty([
+      _toStringValue(address['village']),
+      _toStringValue(address['town']),
+      _toStringValue(address['city']),
+      _toStringValue(address['hamlet']),
+      _toStringValue(address['suburb']),
+      _toStringValue(address['neighbourhood']),
+    ]);
+    final district = _firstNonEmpty([
+      _toStringValue(address['state_district']),
+      _toStringValue(address['county']),
+      _toStringValue(address['district']),
+      _toStringValue(address['city_district']),
+    ]);
+    final state = _firstNonEmpty([
+      _toStringValue(address['state']),
+      _toStringValue(address['region']),
+    ]);
+
+    if (_villageCtrl.text.trim().isEmpty && village != null) {
+      _villageCtrl.text = village;
+    }
+    if (_districtCtrl.text.trim().isEmpty && district != null) {
+      _districtCtrl.text = district;
+    }
+    if (_stateCtrl.text.trim().isEmpty && state != null) {
+      _stateCtrl.text = state;
+    }
+  }
+
+  void _prefillLocationFieldsFromBigDataCloud(Map<String, dynamic> data) {
+    final village = _firstNonEmpty([
+      _toStringValue(data['locality']),
+      _toStringValue(data['city']),
+    ]);
+    final district = _firstNonEmpty([
+      _extractDistrictFromBigDataCloud(data),
+      _toStringValue(data['locality']),
+      _toStringValue(data['city']),
+    ]);
+    final state = _toStringValue(data['principalSubdivision']);
+
+    if (_villageCtrl.text.trim().isEmpty && village != null) {
+      _villageCtrl.text = village;
+    }
+    if (_districtCtrl.text.trim().isEmpty && district != null) {
+      _districtCtrl.text = district;
+    }
+    if (_stateCtrl.text.trim().isEmpty && state != null) {
+      _stateCtrl.text = state;
+    }
+  }
+
+  void _prefillLocationFieldsFromPlacemark(Placemark placemark) {
+    final village = _firstNonEmpty([
+      placemark.locality,
+      placemark.subLocality,
+      placemark.name,
+    ]);
+    final district = _firstNonEmpty([
+      placemark.subAdministrativeArea,
+      placemark.locality,
+      placemark.subLocality,
+    ]);
+    final state = _firstNonEmpty([placemark.administrativeArea]);
+
+    if (_villageCtrl.text.trim().isEmpty && village != null) {
+      _villageCtrl.text = village;
+    }
+    if (_districtCtrl.text.trim().isEmpty && district != null) {
+      _districtCtrl.text = district;
+    }
+    if (_stateCtrl.text.trim().isEmpty && state != null) {
+      _stateCtrl.text = state;
+    }
+  }
+
+  bool _isPostalCodeToken(String token) {
+    final digitsOnly = token.replaceAll(RegExp(r'[^0-9]'), '');
+    return digitsOnly.length >= 5 && digitsOnly.length <= 6;
+  }
+
+  bool _isCountryToken(String token) {
+    final normalized = token.trim().toLowerCase();
+    return normalized == 'india' || normalized == 'bharat';
+  }
+
+  void _prefillLocationFieldsFromAddress(String address) {
+    if (_looksLikeCoordinateAddress(address)) return;
+
+    final parts = address
+        .split(',')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.length < 2) return;
+
+    final areaParts = parts
+        .where((part) => !_isCountryToken(part) && !_isPostalCodeToken(part))
+        .toList();
+    if (areaParts.isEmpty) return;
+
+    String? stateCandidate =
+        _stateCtrl.text.trim().isNotEmpty ? _stateCtrl.text.trim() : null;
+    if (stateCandidate == null) {
+      stateCandidate = areaParts.last;
+      _stateCtrl.text = stateCandidate;
+    }
+
+    if (_districtCtrl.text.trim().isEmpty) {
+      for (var index = areaParts.length - 1; index >= 0; index--) {
+        final candidate = areaParts[index];
+        if (candidate != stateCandidate) {
+          _districtCtrl.text = candidate;
+          break;
+        }
+      }
+    }
+
+    if (_villageCtrl.text.trim().isEmpty) {
+      final districtValue = _districtCtrl.text.trim();
+      for (var index = areaParts.length - 1; index >= 0; index--) {
+        final candidate = areaParts[index];
+        if (candidate != stateCandidate && candidate != districtValue) {
+          _villageCtrl.text = candidate;
+          break;
+        }
+      }
+    }
+  }
+
   Future<void> _captureCurrentLocation() async {
     if (_locating) return;
     setState(() {
@@ -93,41 +430,81 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       _longitude = position.longitude;
 
       String? resolvedAddress;
+      var shouldShowAddressManualEntryError = false;
       try {
         final placemarks = await placemarkFromCoordinates(
             position.latitude, position.longitude);
         if (placemarks.isNotEmpty) {
           final p = placemarks.first;
-          final addressParts = [
-            p.street,
-            p.subLocality,
-            p.locality,
-            p.subAdministrativeArea,
-            p.administrativeArea,
-            p.postalCode,
-          ].where((value) => value != null && value.trim().isNotEmpty).toList();
-          resolvedAddress = addressParts.join(', ');
-
-          if (_villageCtrl.text.trim().isEmpty &&
-              (p.locality ?? '').isNotEmpty) {
-            _villageCtrl.text = p.locality!;
-          }
-          if (_districtCtrl.text.trim().isEmpty &&
-              (p.subAdministrativeArea ?? '').isNotEmpty) {
-            _districtCtrl.text = p.subAdministrativeArea!;
-          }
-          if (_stateCtrl.text.trim().isEmpty &&
-              (p.administrativeArea ?? '').isNotEmpty) {
-            _stateCtrl.text = p.administrativeArea!;
+          resolvedAddress = _buildAddressFromPlacemark(p);
+          _prefillLocationFieldsFromPlacemark(p);
+          if (resolvedAddress != null) {
+            _prefillLocationFieldsFromAddress(resolvedAddress);
           }
         }
       } catch (_) {
-        // Keep coordinates even when reverse geocoding fails.
+        // Fall back to network reverse geocode below.
       }
 
-      _locationAddressCtrl.text = resolvedAddress ??
-          'Lat ${position.latitude.toStringAsFixed(6)}, Lng ${position.longitude.toStringAsFixed(6)}';
-      setState(() {});
+      try {
+        final nominatim = await _reverseGeocodeFromNominatim(
+          latitude: position.latitude,
+          longitude: position.longitude,
+        );
+        if (nominatim != null) {
+          _prefillLocationFieldsFromNominatim(nominatim);
+          final nominatimAddress = _buildAddressFromNominatim(nominatim);
+          if (nominatimAddress != null) {
+            _prefillLocationFieldsFromAddress(nominatimAddress);
+            if (resolvedAddress == null || resolvedAddress.trim().isEmpty) {
+              resolvedAddress = nominatimAddress;
+            }
+          }
+        }
+      } catch (_) {
+        // If both reverse geocoders fail, ask user to enter address manually.
+      }
+
+      if (resolvedAddress == null || resolvedAddress.trim().isEmpty) {
+        try {
+          final bigDataCloud = await _reverseGeocodeFromBigDataCloud(
+            latitude: position.latitude,
+            longitude: position.longitude,
+          );
+          if (bigDataCloud != null) {
+            _prefillLocationFieldsFromBigDataCloud(bigDataCloud);
+            final bigDataAddress = _buildAddressFromBigDataCloud(bigDataCloud);
+            if (bigDataAddress != null) {
+              _prefillLocationFieldsFromAddress(bigDataAddress);
+              resolvedAddress = bigDataAddress;
+            }
+          }
+        } catch (_) {
+          // If this fallback also fails, user can still enter address manually.
+        }
+      }
+
+      if (resolvedAddress != null && resolvedAddress.trim().isNotEmpty) {
+        _locationAddressCtrl.text = resolvedAddress;
+      } else {
+        final currentAddress = _locationAddressCtrl.text.trim();
+        if (_looksLikeCoordinateAddress(currentAddress)) {
+          _locationAddressCtrl.clear();
+        }
+      }
+
+      if (_locationAddressCtrl.text.trim().isEmpty) {
+        shouldShowAddressManualEntryError = true;
+      }
+
+      if (shouldShowAddressManualEntryError) {
+        setState(() {
+          _error =
+              'Location captured, but address could not be resolved. Please enter the address manually.';
+        });
+      } else {
+        setState(() {});
+      }
     } catch (e) {
       setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
     } finally {
@@ -244,6 +621,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       _districtCtrl.text = farmer.district ?? '';
       _stateCtrl.text = farmer.state ?? '';
       _locationAddressCtrl.text = farmer.locationAddress ?? '';
+      if (_locationAddressCtrl.text.trim().isNotEmpty &&
+          !_looksLikeCoordinateAddress(_locationAddressCtrl.text.trim())) {
+        _prefillLocationFieldsFromAddress(_locationAddressCtrl.text.trim());
+      }
       _latitude = farmer.latitude;
       _longitude = farmer.longitude;
       _landAreaCtrl.text =
@@ -254,7 +635,28 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         ..clear()
         ..addAll(farmer.cropsGrown);
     }
-    final headerLeftPadding = widget.isEditMode ? 72.0 : 24.0;
+    final headerLeftPadding = widget.isEditMode ? 24.0 : 24.0;
+    final headerExpandedHeight = widget.isEditMode ? 120.0 : 160.0;
+    final headerTopPadding = widget.isEditMode ? 10.0 : 16.0;
+    final headerBottomPadding = widget.isEditMode ? 12.0 : 16.0;
+    final headerTitleStyle = widget.isEditMode
+        ? AppTextStyles.h2.copyWith(
+            color: AppColors.surface,
+            fontWeight: FontWeight.w700,
+            fontSize: 24,
+            height: 1.15,
+          )
+        : AppTextStyles.h2.copyWith(color: AppColors.surface);
+    final headerSubtitleStyle = widget.isEditMode
+        ? AppTextStyles.body.copyWith(
+            color: AppColors.textOnPrimaryMuted,
+            fontSize: 14,
+            height: 1.35,
+            fontWeight: FontWeight.w500,
+          )
+        : AppTextStyles.bodySmall.copyWith(
+            color: AppColors.textOnPrimaryMuted,
+          );
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -262,50 +664,56 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         slivers: [
           SliverAppBar(
             backgroundColor: AppColors.primary,
-            expandedHeight: 160,
+            expandedHeight: headerExpandedHeight,
             pinned: true,
             flexibleSpace: FlexibleSpaceBar(
               background: SafeArea(
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(headerLeftPadding, 16, 24, 16),
+                  padding: EdgeInsets.fromLTRB(
+                    headerLeftPadding,
+                    headerTopPadding,
+                    24,
+                    headerBottomPadding,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: AppColors.surface.withOpacity(0.15),
-                              shape: BoxShape.circle,
+                      if (!widget.isEditMode) ...[
+                        Row(
+                          children: [
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: AppColors.surface.withOpacity(0.15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.eco,
+                                  color: AppColors.surface, size: 18),
                             ),
-                            child: const Icon(Icons.eco,
-                                color: AppColors.surface, size: 18),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'AgriSetu',
-                            style: AppTextStyles.h5
-                                .copyWith(color: AppColors.surface),
-                          ),
-                        ],
-                      ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'AgriSetu',
+                              style: AppTextStyles.h5
+                                  .copyWith(color: AppColors.surface),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                      ],
                       const Spacer(),
                       Text(
                         widget.isEditMode
                             ? 'Edit your profile'
                             : 'Complete your profile',
-                        style:
-                            AppTextStyles.h2.copyWith(color: AppColors.surface),
+                        style: headerTitleStyle,
                       ),
+                      const SizedBox(height: 4),
                       Text(
                         widget.isEditMode
                             ? 'Update your details and preferences'
                             : 'Help us personalise your experience',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.textOnPrimaryMuted,
-                        ),
+                        style: headerSubtitleStyle,
                       ),
                     ],
                   ),

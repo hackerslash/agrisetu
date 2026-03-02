@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Upload, AlertTriangle } from "lucide-react";
+import { Upload, AlertTriangle, LocateFixed } from "lucide-react";
 
 function Toggle({ defaultChecked = true }: { defaultChecked?: boolean }) {
   const [on, setOn] = useState(defaultChecked);
@@ -35,7 +35,13 @@ function Toggle({ defaultChecked = true }: { defaultChecked?: boolean }) {
   );
 }
 import { vendorApi, authApi } from "@repo/api-client";
-import type { Vendor } from "@repo/api-client";
+import type { Vendor, DocType, VendorDocument } from "@repo/api-client";
+
+const VENDOR_DOC_CONFIG: Array<{ docType: DocType; label: string }> = [
+  { docType: "PAN", label: "PAN Card" },
+  { docType: "GST", label: "GST Certificate" },
+  { docType: "QUALITY_CERT", label: "Quality Certificate" },
+];
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -61,6 +67,12 @@ const profileSchema = z.object({
 });
 type ProfileFormData = z.infer<typeof profileSchema>;
 type ProfileFormInput = z.input<typeof profileSchema>;
+type ReverseGeocodeResult = {
+  display_name?: string;
+  address?: {
+    state?: string;
+  };
+};
 
 const passwordSchema = z
   .object({
@@ -122,6 +134,11 @@ export function SettingsContent() {
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [documentError, setDocumentError] = useState("");
+  const [documentSuccess, setDocumentSuccess] = useState("");
+  const [uploadingDocType, setUploadingDocType] = useState<DocType | null>(
+    null,
+  );
   const [locating, setLocating] = useState(false);
 
   const { data: vendor, isLoading } = useQuery({
@@ -170,6 +187,15 @@ export function SettingsContent() {
     },
   });
 
+  const uploadDocumentMutation = useMutation({
+    mutationFn: ({ docType, file }: { docType: DocType; file: File }) =>
+      vendorApi.uploadDocument(docType, file),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["vendor-profile"] });
+      void queryClient.invalidateQueries({ queryKey: ["vendor-me"] });
+    },
+  });
+
   async function onProfileSubmit(data: ProfileFormData) {
     setProfileError("");
     try {
@@ -203,24 +229,31 @@ export function SettingsContent() {
       profileForm.setValue("latitude", latitude);
       profileForm.setValue("longitude", longitude);
 
-      let address = `Lat ${latitude}, Lng ${longitude}`;
+      let resolvedAddress: string | undefined;
       try {
         const reverseGeocode = await fetch(
           `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=jsonv2`,
         );
         if (reverseGeocode.ok) {
-          const data = (await reverseGeocode.json()) as {
-            display_name?: string;
-          };
+          const data = (await reverseGeocode.json()) as ReverseGeocodeResult;
           if (data.display_name?.trim()) {
-            address = data.display_name.trim();
+            resolvedAddress = data.display_name.trim();
+          }
+          if (!profileForm.getValues("state")?.trim() && data.address?.state) {
+            profileForm.setValue("state", data.address.state.trim());
           }
         }
       } catch {
-        // Keep coordinate-based fallback address.
+        // Coordinates remain captured even if reverse geocoding fails.
       }
 
-      profileForm.setValue("locationAddress", address);
+      if (resolvedAddress) {
+        profileForm.setValue("locationAddress", resolvedAddress);
+      } else if (!profileForm.getValues("locationAddress")?.trim()) {
+        setProfileError(
+          "Location captured, but address could not be resolved. Please enter address manually.",
+        );
+      }
     } catch {
       setProfileError(
         "Unable to fetch your location. Please allow browser location permission.",
@@ -240,6 +273,25 @@ export function SettingsContent() {
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: string } } };
       setPasswordError(e.response?.data?.error ?? "Password change failed");
+    }
+  }
+
+  async function onDocumentSelected(docType: DocType, file?: File) {
+    if (!file) return;
+    setDocumentError("");
+    setDocumentSuccess("");
+    setUploadingDocType(docType);
+    try {
+      await uploadDocumentMutation.mutateAsync({ docType, file });
+      setDocumentSuccess(
+        `${docType === "PAN" ? "PAN Card" : docType === "GST" ? "GST Certificate" : "Quality Certificate"} uploaded successfully.`,
+      );
+      setTimeout(() => setDocumentSuccess(""), 3000);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
+      setDocumentError(e.response?.data?.error ?? "Document upload failed");
+    } finally {
+      setUploadingDocType(null);
     }
   }
 
@@ -393,28 +445,8 @@ export function SettingsContent() {
               error={profileForm.formState.errors.locationAddress?.message}
               {...profileForm.register("locationAddress")}
             />
-            <div className="flex gap-4">
-              <div className="flex-1">
-                <FormInput
-                  label="Latitude"
-                  type="number"
-                  placeholder="12.9716"
-                  error={profileForm.formState.errors.latitude?.message}
-                  step="0.000001"
-                  {...profileForm.register("latitude")}
-                />
-              </div>
-              <div className="flex-1">
-                <FormInput
-                  label="Longitude"
-                  type="number"
-                  placeholder="77.5946"
-                  error={profileForm.formState.errors.longitude?.message}
-                  step="0.000001"
-                  {...profileForm.register("longitude")}
-                />
-              </div>
-            </div>
+            <input type="hidden" {...profileForm.register("latitude")} />
+            <input type="hidden" {...profileForm.register("longitude")} />
             <div className="flex gap-4 items-end">
               <div className="flex-1">
                 <FormInput
@@ -429,7 +461,7 @@ export function SettingsContent() {
               <button
                 type="button"
                 onClick={useCurrentLocation}
-                className="rounded-xl font-semibold"
+                className="flex items-center justify-center gap-2 rounded-xl font-semibold"
                 style={{
                   backgroundColor: "#EDE8DF",
                   color: "#1A1A1A",
@@ -438,7 +470,8 @@ export function SettingsContent() {
                   fontSize: 13,
                 }}
               >
-                {locating ? "Fetching…" : "Fetch location"}
+                <LocateFixed size={16} />
+                {locating ? "Fetching..." : "Fetch location"}
               </button>
             </div>
             <div className="flex flex-col gap-1.5">
@@ -491,15 +524,39 @@ export function SettingsContent() {
           >
             Documents & Certifications
           </h3>
+          {documentSuccess && (
+            <div
+              className="mb-4 rounded-xl p-3"
+              style={{
+                backgroundColor: "#D1FAE5",
+                color: "#065F46",
+                fontSize: 13,
+              }}
+            >
+              {documentSuccess}
+            </div>
+          )}
+          {documentError && (
+            <div
+              className="mb-4 rounded-xl p-3"
+              style={{
+                backgroundColor: "#FEF2F2",
+                color: "#B03A2E",
+                fontSize: 13,
+              }}
+            >
+              {documentError}
+            </div>
+          )}
           <div className="flex flex-col gap-3">
-            {(vendor?.documents ?? []).length === 0 ? (
-              <p style={{ fontSize: 13, color: "#A0A0A0" }}>
-                No documents uploaded.
-              </p>
-            ) : (
-              vendor?.documents?.map((doc) => (
+            {VENDOR_DOC_CONFIG.map(({ docType, label }) => {
+              const existing = (vendor?.documents ?? []).find(
+                (doc) => doc.docType === docType,
+              ) as VendorDocument | undefined;
+
+              return (
                 <div
-                  key={doc.id}
+                  key={docType}
                   className="flex items-center justify-between rounded-xl"
                   style={{ padding: "12px 16px", backgroundColor: "#F7F5F0" }}
                 >
@@ -511,31 +568,55 @@ export function SettingsContent() {
                         color: "#1A1A1A",
                       }}
                     >
-                      {doc.docType === "PAN"
-                        ? "PAN Card"
-                        : doc.docType === "GST"
-                          ? "GST Certificate"
-                          : "Quality Certificate"}
+                      {label}
                     </p>
                     <p style={{ fontSize: 12, color: "#A0A0A0" }}>
-                      Uploaded {new Date(doc.uploadedAt).toLocaleDateString()}
+                      {existing
+                        ? `Uploaded ${new Date(existing.uploadedAt).toLocaleDateString()}`
+                        : "Not uploaded yet"}
                     </p>
                   </div>
-                  <button
+                  <label
                     className="flex items-center gap-1.5 rounded-lg"
                     style={{
                       fontSize: 12,
                       color: "#2C5F2D",
                       padding: "6px 12px",
                       backgroundColor: "#D1FAE5",
+                      cursor:
+                        uploadingDocType && uploadingDocType !== docType
+                          ? "not-allowed"
+                          : "pointer",
+                      opacity:
+                        uploadingDocType && uploadingDocType !== docType
+                          ? 0.5
+                          : 1,
                     }}
                   >
                     <Upload size={13} />
-                    Re-upload
-                  </button>
+                    {uploadingDocType === docType
+                      ? "Uploading…"
+                      : existing
+                        ? "Re-upload"
+                        : "Upload"}
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp"
+                      disabled={
+                        uploadDocumentMutation.isPending &&
+                        uploadingDocType !== docType
+                      }
+                      style={{ display: "none" }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        void onDocumentSelected(docType, file);
+                        e.currentTarget.value = "";
+                      }}
+                    />
+                  </label>
                 </div>
-              ))
-            )}
+              );
+            })}
           </div>
         </div>
       </div>

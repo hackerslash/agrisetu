@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/models/order_model.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/widgets/app_header.dart';
+import '../../clusters/screens/cluster_detail_screen.dart';
 
-class PaymentConfirmedScreen extends StatelessWidget {
+class PaymentConfirmedScreen extends ConsumerStatefulWidget {
   final String clusterId;
   final bool allPaid;
 
@@ -14,7 +17,38 @@ class PaymentConfirmedScreen extends StatelessWidget {
   });
 
   @override
+  ConsumerState<PaymentConfirmedScreen> createState() =>
+      _PaymentConfirmedScreenState();
+}
+
+class _PaymentConfirmedScreenState
+    extends ConsumerState<PaymentConfirmedScreen> {
+  bool _navigatedToFailed = false;
+
+  bool _isPaymentTimedOut(Cluster cluster) {
+    if (cluster.status == ClusterStatus.failed) return true;
+    if (cluster.status != ClusterStatus.payment) return false;
+    final deadline = cluster.paymentDeadlineAt;
+    return deadline != null && !deadline.isAfter(DateTime.now());
+  }
+
+  void _goToFailedScreen() {
+    if (!mounted || _navigatedToFailed) return;
+    _navigatedToFailed = true;
+    context.go('/payment-failed/${widget.clusterId}');
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final clusterAsync = ref.watch(clusterDetailProvider(widget.clusterId));
+    clusterAsync.whenData((cluster) {
+      if (_isPaymentTimedOut(cluster)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _goToFailedScreen();
+        });
+      }
+    });
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppHeader(
@@ -39,7 +73,9 @@ class PaymentConfirmedScreen extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: allPaid ? AppColors.successLight : AppColors.infoLight,
+                  color: widget.allPaid
+                      ? AppColors.successLight
+                      : AppColors.infoLight,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Column(
@@ -48,33 +84,35 @@ class PaymentConfirmedScreen extends StatelessWidget {
                       width: 64,
                       height: 64,
                       decoration: BoxDecoration(
-                        color: allPaid
+                        color: widget.allPaid
                             ? AppColors.success.withOpacity(0.2)
                             : AppColors.info.withOpacity(0.2),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
-                        allPaid ? Icons.check_circle : Icons.check,
-                        color: allPaid ? AppColors.success : AppColors.info,
+                        widget.allPaid ? Icons.check_circle : Icons.check,
+                        color:
+                            widget.allPaid ? AppColors.success : AppColors.info,
                         size: 36,
                       ),
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      allPaid
+                      widget.allPaid
                           ? 'All Farmers Paid!'
                           : 'Payment Confirmed!',
                       style: AppTextStyles.h3.copyWith(
-                        color: allPaid ? AppColors.success : AppColors.info,
+                        color:
+                            widget.allPaid ? AppColors.success : AppColors.info,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      allPaid
+                      widget.allPaid
                           ? 'Your order has been confirmed. The vendor will start preparing your shipment.'
                           : 'Your payment is in escrow. Waiting for other farmers to pay.',
                       style: AppTextStyles.body.copyWith(
-                        color: allPaid
+                        color: widget.allPaid
                             ? AppColors.success.withOpacity(0.7)
                             : AppColors.info.withOpacity(0.7),
                       ),
@@ -99,7 +137,7 @@ class PaymentConfirmedScreen extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        allPaid
+                        widget.allPaid
                             ? 'Your order is confirmed and will be dispatched soon.'
                             : 'We\'ll notify you when everyone has paid and the order is confirmed.',
                         style: AppTextStyles.bodySmall,
@@ -110,12 +148,13 @@ class PaymentConfirmedScreen extends StatelessWidget {
               ),
               const SizedBox(height: 24),
 
-              if (allPaid)
+              if (widget.allPaid)
                 SizedBox(
                   width: double.infinity,
                   height: 52,
                   child: ElevatedButton.icon(
-                    onPressed: () => context.go('/delivery/$clusterId'),
+                    onPressed: () =>
+                        context.go('/delivery/${widget.clusterId}'),
                     icon: const Icon(Icons.local_shipping_outlined, size: 20),
                     label: const Text('Track Order'),
                     style: ElevatedButton.styleFrom(
@@ -146,13 +185,13 @@ class PaymentConfirmedScreen extends StatelessWidget {
                   ),
                 ),
               const SizedBox(height: 16),
-              if (!allPaid)
+              if (!widget.allPaid)
                 GestureDetector(
-                  onTap: () => context.go('/clusters/$clusterId'),
+                  onTap: () => context.go('/clusters/${widget.clusterId}'),
                   child: Text(
                     'View Cluster Status →',
-                    style: AppTextStyles.label
-                        .copyWith(color: AppColors.primary),
+                    style:
+                        AppTextStyles.label.copyWith(color: AppColors.primary),
                   ),
                 ),
             ],

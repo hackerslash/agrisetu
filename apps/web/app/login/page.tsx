@@ -1,5 +1,6 @@
 import { LoginForm } from "./LoginForm";
-import { Sprout, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
+import { BrandLogo } from "../../components/ui/BrandLogo";
 
 export default function LoginPage() {
   return (
@@ -17,29 +18,7 @@ export default function LoginPage() {
         {/* Top section */}
         <div className="flex flex-col gap-12">
           {/* Logo row */}
-          <div className="flex items-center gap-2.5">
-            <div
-              className="flex items-center justify-center rounded-xl"
-              style={{
-                width: 40,
-                height: 40,
-                backgroundColor: "rgba(255,255,255,0.15)",
-              }}
-            >
-              <Sprout size={20} color="white" />
-            </div>
-            <div>
-              <p
-                className="font-bold text-white"
-                style={{ fontFamily: "Plus Jakarta Sans", fontSize: 18 }}
-              >
-                AgriSetu
-              </p>
-              <p style={{ fontSize: 12, color: "rgba(252,246,245,0.7)" }}>
-                Vendor Portal
-              </p>
-            </div>
-          </div>
+          <BrandLogo theme="dark" titleSize={18} badgeSize={40} iconSize={20} />
 
           {/* Hero text */}
           <div className="flex flex-col gap-4">

@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../constants/app_constants.dart';
+import '../models/voice_order_model.dart';
 
 class ApiException implements Exception {
   final String message;
@@ -88,6 +90,47 @@ class ApiClient {
     return ApiException(message, statusCode: e.response?.statusCode);
   }
 
+  ({String mimeType, List<int> bytes}) _decodeBase64DataUrl(String dataUrl) {
+    final match =
+        RegExp(r'^data:([^;]+);base64,(.+)$', dotAll: true).firstMatch(dataUrl);
+    if (match == null) {
+      throw const ApiException('Invalid avatar format.');
+    }
+
+    final mimeType = match.group(1)!.trim().toLowerCase();
+    final rawBase64 = match.group(2)!;
+    try {
+      return (mimeType: mimeType, bytes: base64Decode(rawBase64));
+    } catch (_) {
+      throw const ApiException('Invalid avatar image data.');
+    }
+  }
+
+  String _avatarExtensionForMime(String mimeType) {
+    switch (mimeType) {
+      case 'image/png':
+        return 'png';
+      case 'image/webp':
+        return 'webp';
+      case 'image/jpeg':
+      case 'image/jpg':
+        return 'jpg';
+      default:
+        throw const ApiException(
+            'Only JPG, PNG, and WEBP avatars are supported.');
+    }
+  }
+
+  DioMediaType _multipartContentTypeForMime(String mimeType) {
+    final parts = mimeType.split('/');
+    if (parts.length != 2 ||
+        parts[0].trim().isEmpty ||
+        parts[1].trim().isEmpty) {
+      throw const ApiException('Invalid avatar format.');
+    }
+    return DioMediaType(parts[0].trim(), parts[1].trim());
+  }
+
   // ─── Auth ───────────────────────────────────────────────────────────────────
 
   Future<Map<String, dynamic>> farmerRequestOtp(String phone) async {
@@ -144,9 +187,72 @@ class ApiClient {
     }
   }
 
-  Future<List<dynamic>> getOrderClusterOptions(String orderId) async {
+  Future<VoiceOrderResult> parseVoiceOrder({
+    String? audioFilePath,
+    List<int>? audioBytes,
+    String? audioFileName,
+    String? transcript,
+    String? languageCode,
+  }) async {
+    final hasAudioFile = audioFilePath != null && audioFilePath.isNotEmpty;
+    final hasAudioBytes = audioBytes != null && audioBytes.isNotEmpty;
+    if (!hasAudioFile &&
+        !hasAudioBytes &&
+        (transcript == null || transcript.trim().isEmpty)) {
+      throw const ApiException('Provide either audio file or transcript.');
+    }
+
     try {
-      final res = await _dio.get('/farmer/orders/$orderId/cluster-options');
+      final formData = FormData();
+      if (hasAudioBytes) {
+        final bytes = audioBytes;
+        formData.files.add(
+          MapEntry(
+            'audio',
+            MultipartFile.fromBytes(
+              bytes,
+              filename: audioFileName ?? 'agrisetu_voice.webm',
+            ),
+          ),
+        );
+      } else if (hasAudioFile) {
+        final audioPath = audioFilePath;
+        final segments = audioPath.split(RegExp(r'[\\/]'));
+        final fileName = segments.isNotEmpty ? segments.last : 'voice.m4a';
+        formData.files.add(
+          MapEntry(
+            'audio',
+            await MultipartFile.fromFile(audioPath, filename: fileName),
+          ),
+        );
+      }
+      if (transcript != null && transcript.trim().isNotEmpty) {
+        formData.fields.add(MapEntry('transcript', transcript.trim()));
+      }
+      if (languageCode != null && languageCode.trim().isNotEmpty) {
+        formData.fields.add(MapEntry('languageCode', languageCode.trim()));
+      }
+
+      final res = await _dio.post('/farmer/voice/parse-order', data: formData);
+      final data = _handleResponse(res) as Map<String, dynamic>;
+      return VoiceOrderResult.fromJson(data);
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<List<dynamic>> getOrderClusterOptions(
+    String orderId, {
+    String? matchedGigId,
+  }) async {
+    try {
+      final res = await _dio.get(
+        '/farmer/orders/$orderId/cluster-options',
+        queryParameters:
+            (matchedGigId != null && matchedGigId.trim().isNotEmpty)
+                ? {'matchedGigId': matchedGigId.trim()}
+                : null,
+      );
       return _handleResponse(res) as List<dynamic>;
     } on DioException catch (e) {
       throw _handleError(e);
@@ -157,6 +263,7 @@ class ApiClient {
     String orderId, {
     String? clusterId,
     bool createNew = false,
+    String? matchedGigId,
   }) async {
     try {
       final payload = <String, dynamic>{};
@@ -165,6 +272,9 @@ class ApiClient {
       }
       if (createNew) {
         payload['createNew'] = true;
+      }
+      if (matchedGigId != null && matchedGigId.trim().isNotEmpty) {
+        payload['matchedGigId'] = matchedGigId.trim();
       }
 
       final res = await _dio.post(
@@ -334,6 +444,29 @@ class ApiClient {
   Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> data) async {
     try {
       final res = await _dio.patch('/farmer/profile', data: data);
+      return _handleResponse(res) as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> uploadFarmerAvatarDataUrl(String dataUrl) async {
+    try {
+      final decoded = _decodeBase64DataUrl(dataUrl);
+      final extension = _avatarExtensionForMime(decoded.mimeType);
+      final formData = FormData();
+      formData.files.add(
+        MapEntry(
+          'avatar',
+          MultipartFile.fromBytes(
+            decoded.bytes,
+            filename: 'farmer_avatar.$extension',
+            contentType: _multipartContentTypeForMime(decoded.mimeType),
+          ),
+        ),
+      );
+
+      final res = await _dio.post('/farmer/profile/avatar', data: formData);
       return _handleResponse(res) as Map<String, dynamic>;
     } on DioException catch (e) {
       throw _handleError(e);

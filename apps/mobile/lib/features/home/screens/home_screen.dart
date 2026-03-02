@@ -48,7 +48,7 @@ class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   String _greeting() {
-    final hour = DateTime.now().hour;
+    final hour = DateTime.now().toLocal().hour;
     if (hour < 12) return 'Good morning 🌾';
     if (hour < 17) return 'Good afternoon ☀️';
     return 'Good evening 🌙';
@@ -103,6 +103,31 @@ class HomeScreen extends ConsumerWidget {
                 ),
                 child: Column(
                   children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: AppColors.surface.withOpacity(0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.eco,
+                            color: AppColors.surface,
+                            size: 18,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'AgriSetu',
+                          style: AppTextStyles.h5.copyWith(
+                            color: AppColors.surface,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
                     // Top row
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -148,12 +173,15 @@ class HomeScreen extends ConsumerWidget {
                               color: AppColors.surface.withOpacity(0.2),
                               shape: BoxShape.circle,
                             ),
-                            child: const Center(
-                              child: Icon(
-                                Icons.person_outline,
-                                size: 24,
-                                color: AppColors.surface,
-                              ),
+                            child: ClipOval(
+                              child: (farmer?.avatarUrl ?? '').isNotEmpty
+                                  ? Image.network(
+                                      farmer!.avatarUrl!,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) =>
+                                          const _HomeAvatarFallback(),
+                                    )
+                                  : const _HomeAvatarFallback(),
                             ),
                           ),
                         ),
@@ -817,6 +845,21 @@ class _ClusterFarmerAvatar extends StatelessWidget {
           size: 13,
           color: AppColors.surface,
         ),
+      ),
+    );
+  }
+}
+
+class _HomeAvatarFallback extends StatelessWidget {
+  const _HomeAvatarFallback();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Icon(
+        Icons.person_outline,
+        size: 24,
+        color: AppColors.surface,
       ),
     );
   }

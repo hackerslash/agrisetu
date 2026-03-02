@@ -30,7 +30,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${inter.variable} ${plusJakartaSans.variable}`}>
-      <body>
+      <body suppressHydrationWarning>
         <Providers>
           <RootProviders>{children}</RootProviders>
         </Providers>

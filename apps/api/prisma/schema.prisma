@@ -11,6 +11,7 @@ model Farmer {
   id             String          @id @default(cuid())
   phone          String          @unique
   name           String?
+  avatarUrl      String?
   village        String?
   district       String?
   state          String?
@@ -129,6 +130,7 @@ model Cluster {
   targetQuantity  Float
   currentQuantity Float           @default(0)
   status          ClusterStatus   @default(FORMING)
+  paymentDeadlineAt DateTime?
   district        String?
   state           String?
   locationAddress String?
