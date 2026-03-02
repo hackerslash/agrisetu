@@ -63,6 +63,11 @@ class _PaymentFailedContent extends StatelessWidget {
     final rows = _buildRows(cluster, currentFarmerId);
     final paidCount = rows.where((row) => row.paid).length;
     final defaultedCount = rows.length - paidCount;
+    final defaultedNames = rows
+        .where((row) => !row.paid)
+        .map((row) => row.label)
+        .where((name) => name.trim().isNotEmpty)
+        .toList();
     final pricePerUnit = _winningPrice(cluster);
     final myRow = rows.firstWhere(
       (row) => row.isCurrentFarmer,
@@ -78,7 +83,10 @@ class _PaymentFailedContent extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _FailureBanner(defaultedCount: defaultedCount),
+            _FailureBanner(
+              defaultedCount: defaultedCount,
+              defaultedNames: defaultedNames,
+            ),
             const SizedBox(height: 16),
             _RefundCard(
               refundAmount: refundAmount,
@@ -145,12 +153,23 @@ class _PaymentFailedContent extends StatelessWidget {
 
 class _FailureBanner extends StatelessWidget {
   final int defaultedCount;
+  final List<String> defaultedNames;
 
-  const _FailureBanner({required this.defaultedCount});
+  const _FailureBanner({
+    required this.defaultedCount,
+    required this.defaultedNames,
+  });
 
   @override
   Widget build(BuildContext context) {
     final failedFarmers = defaultedCount <= 0 ? 1 : defaultedCount;
+    final shownNames = defaultedNames.take(3).toList();
+    final remainingNames = defaultedNames.length - shownNames.length;
+    final defaulterSummary = shownNames.isEmpty
+        ? null
+        : (remainingNames > 0
+            ? '${shownNames.join(', ')} +$remainingNames more'
+            : shownNames.join(', '));
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
@@ -186,6 +205,12 @@ class _FailureBanner extends StatelessWidget {
                   style: AppTextStyles.caption
                       .copyWith(color: AppColors.textOnPrimaryMuted),
                 ),
+                if (defaulterSummary != null)
+                  Text(
+                    'Defaulted: $defaulterSummary',
+                    style: AppTextStyles.caption
+                        .copyWith(color: AppColors.textOnPrimaryMuted),
+                  ),
               ],
             ),
           ),
@@ -541,11 +566,13 @@ List<_FarmerPaymentRow> _buildRows(Cluster? cluster, String? currentFarmerId) {
   for (final member in cluster.members) {
     final existing = byFarmer[member.farmerId];
     final displayName = (member.farmer?.name ?? '').trim();
+    final displayPhone = (member.farmer?.phone ?? '').trim();
+    final identityLabel = displayName.isNotEmpty ? displayName : displayPhone;
     final isCurrentFarmer =
         currentFarmerId != null && member.farmerId == currentFarmerId;
     final fallbackLabel = isCurrentFarmer ? 'You' : 'Farmer';
-    final label = displayName.isNotEmpty
-        ? (isCurrentFarmer ? '$displayName (You)' : displayName)
+    final label = identityLabel.isNotEmpty
+        ? (isCurrentFarmer ? '$identityLabel (You)' : identityLabel)
         : fallbackLabel;
     final amount = member.quantity * pricePerUnit;
 

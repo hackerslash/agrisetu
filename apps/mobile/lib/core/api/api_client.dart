@@ -241,9 +241,18 @@ class ApiClient {
     }
   }
 
-  Future<List<dynamic>> getOrderClusterOptions(String orderId) async {
+  Future<List<dynamic>> getOrderClusterOptions(
+    String orderId, {
+    String? matchedGigId,
+  }) async {
     try {
-      final res = await _dio.get('/farmer/orders/$orderId/cluster-options');
+      final res = await _dio.get(
+        '/farmer/orders/$orderId/cluster-options',
+        queryParameters:
+            (matchedGigId != null && matchedGigId.trim().isNotEmpty)
+                ? {'matchedGigId': matchedGigId.trim()}
+                : null,
+      );
       return _handleResponse(res) as List<dynamic>;
     } on DioException catch (e) {
       throw _handleError(e);
@@ -254,6 +263,7 @@ class ApiClient {
     String orderId, {
     String? clusterId,
     bool createNew = false,
+    String? matchedGigId,
   }) async {
     try {
       final payload = <String, dynamic>{};
@@ -262,6 +272,9 @@ class ApiClient {
       }
       if (createNew) {
         payload['createNew'] = true;
+      }
+      if (matchedGigId != null && matchedGigId.trim().isNotEmpty) {
+        payload['matchedGigId'] = matchedGigId.trim();
       }
 
       final res = await _dio.post(

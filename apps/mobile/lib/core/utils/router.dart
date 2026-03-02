@@ -212,6 +212,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   child: AvailableClustersScreen(
                     cropName: extra['cropName'] as String?,
                     orderId: extra['orderId'] as String?,
+                    matchedGigId: extra['matchedGigId'] as String?,
                   ),
                 );
               }

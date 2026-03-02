@@ -44,6 +44,54 @@ const avatarUpload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
 });
 
+async function reconcileCurrentFarmerPaymentClusters(farmerId: string) {
+  const paymentClusters = await prisma.cluster.findMany({
+    where: {
+      members: { some: { farmerId } },
+      status: ClusterStatus.PAYMENT,
+    },
+    select: { id: true },
+  });
+
+  if (paymentClusters.length === 0) return;
+  await reconcileClusterPaymentTimeouts(paymentClusters.map((c) => c.id));
+}
+
+function normalizeVariety(value?: string | null) {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+async function resolvePreferredVarietyFromMatchedGigId(matchedGigId?: string) {
+  const trimmed = matchedGigId?.trim();
+  if (!trimmed) return undefined;
+  const gig = await prisma.gig.findUnique({
+    where: { id: trimmed },
+    select: { variety: true },
+  });
+  const normalized = normalizeVariety(gig?.variety);
+  return normalized || undefined;
+}
+
+function clusterMatchesPreferredVariety(
+  cluster: {
+    gig?: { variety?: string | null } | null;
+    bids?: Array<{ gig?: { variety?: string | null } | null }>;
+  },
+  preferredVariety?: string,
+) {
+  const normalizedPreferred = normalizeVariety(preferredVariety);
+  if (!normalizedPreferred) return true;
+
+  const matchedVarieties = [
+    cluster.gig?.variety,
+    ...(cluster.bids ?? []).map((bid) => bid.gig?.variety),
+  ]
+    .map((value) => normalizeVariety(value))
+    .filter((value) => value.length > 0);
+
+  return matchedVarieties.includes(normalizedPreferred);
+}
+
 function isGigServiceableForFarmer(params: {
   farmerLatitude?: number | null;
   farmerLongitude?: number | null;
@@ -359,6 +407,7 @@ router.post("/orders", async (req, res) => {
 
     let resolvedCropName = parsed.data.cropName.trim();
     let resolvedUnit = parsed.data.unit;
+    let preferredVariety: string | undefined;
 
     if (parsed.data.matchedGigId) {
       const matchedGig = await prisma.gig.findFirst({
@@ -393,6 +442,7 @@ router.post("/orders", async (req, res) => {
       ) {
         resolvedCropName = matchedGig.cropName;
         resolvedUnit = matchedGig.unit.toLowerCase().trim();
+        preferredVariety = normalizeVariety(matchedGig.variety) || undefined;
       }
     }
 
@@ -414,6 +464,7 @@ router.post("/orders", async (req, res) => {
       farmer.district ?? undefined,
       farmer.latitude ?? undefined,
       farmer.longitude ?? undefined,
+      preferredVariety,
     );
 
     success(res, { ...order, availableClusters }, 201);
@@ -424,6 +475,7 @@ router.post("/orders", async (req, res) => {
 
 router.get("/orders", async (req, res) => {
   try {
+    await reconcileCurrentFarmerPaymentClusters(req.user!.id);
     const orders = await prisma.order.findMany({
       where: { farmerId: req.user!.id },
       include: { clusterMember: { include: { cluster: true } } },
@@ -437,6 +489,13 @@ router.get("/orders", async (req, res) => {
 
 router.get("/orders/:id/cluster-options", async (req, res) => {
   try {
+    const matchedGigId =
+      typeof req.query.matchedGigId === "string"
+        ? req.query.matchedGigId.trim()
+        : undefined;
+    const preferredVariety =
+      await resolvePreferredVarietyFromMatchedGigId(matchedGigId);
+
     const order = await prisma.order.findFirst({
       where: { id: req.params.id, farmerId: req.user!.id },
       select: {
@@ -466,6 +525,7 @@ router.get("/orders/:id/cluster-options", async (req, res) => {
       farmer?.district ?? undefined,
       farmer?.latitude ?? undefined,
       farmer?.longitude ?? undefined,
+      preferredVariety,
     );
     success(res, clusters);
   } catch {
@@ -477,6 +537,7 @@ const assignClusterSchema = z
   .object({
     clusterId: z.string().optional(),
     createNew: z.boolean().optional(),
+    matchedGigId: z.string().trim().min(1).optional(),
   })
   .refine((v) => Boolean(v.clusterId) || Boolean(v.createNew), {
     message: "Either clusterId or createNew must be provided",
@@ -527,6 +588,9 @@ router.post("/orders/:id/assign-cluster", async (req, res) => {
       error(res, "Farmer profile not found", 404);
       return;
     }
+    const preferredVariety = await resolvePreferredVarietyFromMatchedGigId(
+      parsed.data.matchedGigId,
+    );
 
     if (parsed.data.clusterId) {
       const cluster = await prisma.cluster.findUnique({
@@ -539,6 +603,12 @@ router.post("/orders/:id/assign-cluster", async (req, res) => {
           status: true,
           latitude: true,
           longitude: true,
+          gig: {
+            select: { variety: true },
+          },
+          bids: {
+            select: { gig: { select: { variety: true } } },
+          },
         },
       });
 
@@ -578,7 +648,8 @@ router.post("/orders/:id/assign-cluster", async (req, res) => {
       if (
         !sameCrop ||
         !sameUnit ||
-        !((sameGeo ?? false) || (!hasGeoContext && sameDistrict))
+        !((sameGeo ?? false) || (!hasGeoContext && sameDistrict)) ||
+        !clusterMatchesPreferredVariety(cluster, preferredVariety)
       ) {
         error(res, "Selected cluster does not match this order", 400);
         return;
@@ -597,6 +668,7 @@ router.post("/orders/:id/assign-cluster", async (req, res) => {
         cropName: order.cropName,
         quantity: order.quantity,
         unit: order.unit,
+        preferredVariety,
         district: farmer.district ?? undefined,
         state: farmer.state ?? undefined,
         locationAddress: farmer.locationAddress ?? undefined,
@@ -642,6 +714,7 @@ router.post("/orders/:id/assign-cluster", async (req, res) => {
 
 router.get("/orders/:id", async (req, res) => {
   try {
+    await reconcileCurrentFarmerPaymentClusters(req.user!.id);
     const order = await prisma.order.findFirst({
       where: { id: req.params.id, farmerId: req.user!.id },
       include: {
@@ -1508,6 +1581,7 @@ router.get("/mandi-prices", async (req, res) => {
 router.get("/dashboard", async (req, res) => {
   try {
     const farmerId = req.user!.id;
+    await reconcileCurrentFarmerPaymentClusters(farmerId);
 
     const [orders, clusters, payments] = await Promise.all([
       prisma.order.findMany({

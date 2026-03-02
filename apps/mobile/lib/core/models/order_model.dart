@@ -153,6 +153,7 @@ class ClusterMember {
 class ClusterFarmer {
   final String id;
   final String? name;
+  final String? phone;
   final String? village;
   final String? district;
   final String? state;
@@ -163,6 +164,7 @@ class ClusterFarmer {
   const ClusterFarmer({
     required this.id,
     this.name,
+    this.phone,
     this.village,
     this.district,
     this.state,
@@ -175,6 +177,7 @@ class ClusterFarmer {
     return ClusterFarmer(
       id: json['id'] as String,
       name: json['name'] as String?,
+      phone: json['phone'] as String?,
       village: json['village'] as String?,
       district: json['district'] as String?,
       state: json['state'] as String?,

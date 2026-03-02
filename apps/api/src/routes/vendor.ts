@@ -535,9 +535,27 @@ router.get("/orders", async (req, res) => {
     const clusters = await prisma.cluster.findMany({
       where: {
         vendorId: req.user!.id,
-        status: {
-          notIn: [ClusterStatus.FORMING, ClusterStatus.VOTING],
-        },
+        ...(status ? { status: status as ClusterStatus } : {}),
+        OR: [
+          {
+            status: {
+              in: [
+                ClusterStatus.PROCESSING,
+                ClusterStatus.OUT_FOR_DELIVERY,
+                ClusterStatus.DISPATCHED,
+                ClusterStatus.COMPLETED,
+                ClusterStatus.FAILED,
+              ],
+            },
+          },
+          {
+            status: ClusterStatus.PAYMENT,
+            members: {
+              some: {},
+              every: { hasPaid: true },
+            },
+          },
+        ],
       },
       include: {
         members: {
@@ -573,6 +591,13 @@ router.get("/orders/:id", async (req, res) => {
     });
     if (!cluster) {
       error(res, "Order not found", 404);
+      return;
+    }
+    if (
+      cluster.status === ClusterStatus.PAYMENT &&
+      cluster.members.some((member) => !member.hasPaid)
+    ) {
+      error(res, "Order is not ready yet. Waiting for all farmer payments", 400);
       return;
     }
     success(res, cluster);
@@ -724,6 +749,17 @@ router.patch("/orders/:id/process", async (req, res) => {
       error(
         res,
         "Order must be in PAYMENT or PROCESSING status to mark as processing",
+        400,
+      );
+      return;
+    }
+    if (
+      cluster.status === ClusterStatus.PAYMENT &&
+      cluster.members.some((member) => !member.hasPaid)
+    ) {
+      error(
+        res,
+        "Order is not ready yet. Waiting for all farmers to complete payment",
         400,
       );
       return;

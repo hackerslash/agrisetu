@@ -35,7 +35,47 @@ class ClusterDetailScreen extends ConsumerStatefulWidget {
 
 class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
   bool _isVoting = false;
+  bool _navigatedToFailed = false;
   String? _votedBidId;
+  Timer? _clockTimer;
+  DateTime _now = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _now = DateTime.now());
+    });
+  }
+
+  @override
+  void dispose() {
+    _clockTimer?.cancel();
+    super.dispose();
+  }
+
+  bool _isPaymentTimedOut(Cluster cluster) {
+    if (cluster.status == ClusterStatus.failed) return true;
+    if (cluster.status != ClusterStatus.payment) return false;
+    final deadline = cluster.paymentDeadlineAt;
+    return deadline != null && !deadline.isAfter(_now);
+  }
+
+  String _formatDuration(num totalSeconds) {
+    final seconds = totalSeconds.toInt();
+    final safeSeconds = seconds < 0 ? 0 : seconds;
+    final h = safeSeconds ~/ 3600;
+    final m = (safeSeconds % 3600) ~/ 60;
+    final s = safeSeconds % 60;
+    return '${h.toString().padLeft(2, '0')} : ${m.toString().padLeft(2, '0')} : ${s.toString().padLeft(2, '0')}';
+  }
+
+  void _goToFailedScreen() {
+    if (!mounted || _navigatedToFailed) return;
+    _navigatedToFailed = true;
+    context.go('/payment-failed/${widget.clusterId}');
+  }
 
   Future<void> _vote(String bidId) async {
     if (_isVoting) return;
@@ -70,7 +110,15 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: clusterAsync.when(
-        data: (cluster) => _buildContent(context, cluster, farmer),
+        data: (cluster) {
+          if (_isPaymentTimedOut(cluster)) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _goToFailedScreen();
+            });
+            return const SizedBox.shrink();
+          }
+          return _buildContent(context, cluster, farmer);
+        },
         loading: () => const Center(
           child: CircularProgressIndicator(color: AppColors.primary),
         ),
@@ -97,6 +145,10 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
     final paidFarmers = paidByFarmer.values.where((paid) => paid).length;
     final totalFarmers = paidByFarmer.length;
     final allFarmersPaid = totalFarmers > 0 && paidFarmers == totalFarmers;
+    final deadline = cluster.paymentDeadlineAt;
+    final secondsLeft = deadline == null
+        ? 0
+        : deadline.difference(_now).inSeconds.clamp(0, 10 * 24 * 3600);
     final canTrackDelivery = cluster.status == ClusterStatus.processing ||
         cluster.status == ClusterStatus.outForDelivery ||
         cluster.status == ClusterStatus.dispatched ||
@@ -216,6 +268,33 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
 
                 // Payment action
                 if (showPaymentAction) ...[
+                  if (deadline != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.timer_outlined,
+                              color: AppColors.primary, size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Payment timer: ${_formatDuration(secondsLeft)}',
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(

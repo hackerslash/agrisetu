@@ -95,10 +95,16 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
         throw FormatException('Order creation failed: missing order ID');
       }
 
-      final options = await api.getOrderClusterOptions(orderId);
+      final options = await api.getOrderClusterOptions(
+        orderId,
+        matchedGigId: matchedGigId,
+      );
       if (options.isEmpty) {
-        final assigned =
-            await api.assignOrderToCluster(orderId, createNew: true);
+        final assigned = await api.assignOrderToCluster(
+          orderId,
+          createNew: true,
+          matchedGigId: matchedGigId,
+        );
         ref.invalidate(homeDashboardProvider);
         final clusterId = (assigned['clusterMember']
             as Map<String, dynamic>?)?['cluster']?['id'] as String?;
@@ -117,6 +123,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
         context.go('/clusters', extra: {
           'orderId': orderId,
           'cropName': orderData['cropName'] as String? ?? _cropCtrl.text.trim(),
+          'matchedGigId': matchedGigId,
         });
       }
     } catch (e) {

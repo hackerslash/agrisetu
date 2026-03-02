@@ -10,7 +10,11 @@ import '../../../core/api/api_client.dart';
 import '../../../core/models/order_model.dart';
 import '../../../core/providers/auth_provider.dart';
 
-typedef ClusterQuery = ({String? cropName, String? orderId});
+typedef ClusterQuery = ({
+  String? cropName,
+  String? orderId,
+  String? matchedGigId
+});
 
 final availableClustersProvider = FutureProvider.autoDispose
     .family<List<Cluster>, ClusterQuery>((ref, query) async {
@@ -21,7 +25,10 @@ final availableClustersProvider = FutureProvider.autoDispose
 
   final api = ref.read(apiClientProvider);
   final clusters = query.orderId != null
-      ? (await api.getOrderClusterOptions(query.orderId!))
+      ? (await api.getOrderClusterOptions(
+          query.orderId!,
+          matchedGigId: query.matchedGigId,
+        ))
           .map((e) => Cluster.fromJson(e as Map<String, dynamic>))
           .toList()
       : (await api.getClusters(crop: query.cropName))
@@ -35,11 +42,13 @@ final availableClustersProvider = FutureProvider.autoDispose
 class AvailableClustersScreen extends ConsumerStatefulWidget {
   final String? cropName;
   final String? orderId;
+  final String? matchedGigId;
 
   const AvailableClustersScreen({
     super.key,
     this.cropName,
     this.orderId,
+    this.matchedGigId,
   });
 
   @override
@@ -94,7 +103,11 @@ class _AvailableClustersScreenState
     setState(() => _isCreatingNew = true);
     try {
       final api = ref.read(apiClientProvider);
-      final assigned = await api.assignOrderToCluster(orderId, createNew: true);
+      final assigned = await api.assignOrderToCluster(
+        orderId,
+        createNew: true,
+        matchedGigId: widget.matchedGigId,
+      );
       final clusterId =
           ((assigned['clusterMember'] as Map<String, dynamic>?)?['cluster']
               as Map<String, dynamic>?)?['id'] as String?;
@@ -117,7 +130,11 @@ class _AvailableClustersScreenState
   @override
   Widget build(BuildContext context) {
     final farmer = ref.watch(currentFarmerProvider);
-    final query = (cropName: widget.cropName, orderId: widget.orderId);
+    final query = (
+      cropName: widget.cropName,
+      orderId: widget.orderId,
+      matchedGigId: widget.matchedGigId,
+    );
     final clustersAsync = ref.watch(availableClustersProvider(query));
     final selectionMode = widget.orderId != null;
     void handleBack() {
