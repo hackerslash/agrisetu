@@ -334,6 +334,9 @@ async function fetchKnowledgeBaseContext(transcript: string): Promise<string> {
 
     const chunks = response.retrievalResults?.map(r => r.content?.text).filter(Boolean) ?? [];
     console.log(`[ai-order-parser] Retrieved ${chunks.length} chunks from Knowledge Base.`);
+    if (chunks.length > 0) {
+      console.log(`[ai-order-parser] KB Chunk 1 Preview: ${chunks[0]?.substring(0, 150)}...`);
+    }
     return chunks.join("\n\n");
   } catch (error) {
     console.error("[ai-order-parser] Error fetching Knowledge Base context:", error);
@@ -358,7 +361,6 @@ async function callModelForExtraction(params: {
     transcript: params.transcript,
     normalizedTranscript,
     farmerLanguage: params.farmerLanguage ?? "unknown",
-    knowledgeBaseContext: kbContext,
     availableGigs: params.gigs.map((gig) => ({
       id: gig.id,
       cropName: gig.cropName,
@@ -380,8 +382,10 @@ async function callModelForExtraction(params: {
     "3. Prefer matching to `availableGigs` crop/unit/variety. Use `matchedGigId` ONLY from `availableGigs` IDs.\n" +
     "4. When multiple gigs share the same cropName, use variety mentioned in transcript to pick the right gig.\n" +
     "5. If transcript is ambiguous or missing quantity/unit, set `needsClarification` to true and ask one short clarification question.\n" +
-    "6. MUST USE KNOWLEDGE BASE: You MUST strictly adhere to the rules, definitions, and domain constraints provided in the `knowledgeBaseContext` section of the user payload. It contains the ultimate source of truth for handling synonyms, policies, and unit rules.\n\n" +
-    "Use the `knowledgeBaseContext` to help resolve ambiguities in crop names, synonyms, or regional terms.";
+    "6. MUST USE KNOWLEDGE BASE: You MUST strictly adhere to the rules, definitions, and domain constraints provided in the <knowledge_base> section below. It contains the ultimate source of truth for handling synonyms, policies, translating colloquial names, and unit rules.\n\n" +
+    "<knowledge_base>\n" +
+    (kbContext || "No knowledge base context available for this request.") +
+    "\n</knowledge_base>";
 
   try {
     const response = await bedrockClient.send(
