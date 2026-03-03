@@ -6,6 +6,9 @@ import '../../../shared/theme/app_theme.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/models/farmer_model.dart';
 import '../../../core/utils/avatar_picker.dart';
+import '../../../core/providers/locale_provider.dart';
+import '../../../core/constants/app_constants.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../home/screens/home_screen.dart' show homeDashboardProvider;
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -40,25 +43,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       if (mounted && _isUploadingAvatar) {
         setState(() => _isUploadingAvatar = false);
       }
-    }
-  }
-
-  String _languageLabel(String? languageCode) {
-    switch ((languageCode ?? 'en').toLowerCase()) {
-      case 'kn':
-        return 'Kannada';
-      case 'hi':
-        return 'Hindi';
-      case 'ta':
-        return 'Tamil';
-      case 'te':
-        return 'Telugu';
-      case 'ml':
-        return 'Malayalam';
-      case 'mr':
-        return 'Marathi';
-      default:
-        return 'English';
     }
   }
 
@@ -335,10 +319,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           ? '${farmer!.upiId!.trim()}  ✓ Verified'
                           : 'Not set',
                     ),
-                    _ProfileInfoRow(
+                    _SettingsRow(
                       icon: Icons.language_outlined,
-                      label: 'Language Preference',
-                      value: _languageLabel(farmer?.language),
+                      label: AppLocalizations.of(context)!.profileLanguageLabel,
+                      onTap: () => _showLanguagePicker(context, ref),
                     ),
                   ],
                 ),
@@ -380,7 +364,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   child: ElevatedButton.icon(
                     onPressed: () => context.push('/profile/edit'),
                     icon: const Icon(Icons.edit_outlined, size: 18),
-                    label: const Text('Edit Profile'),
+                    label: Text(AppLocalizations.of(context)!.profileEditButton),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       shape: const StadiumBorder(),
@@ -402,7 +386,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       if (context.mounted) context.go('/landing');
                     },
                     icon: const Icon(Icons.logout_outlined, size: 18),
-                    label: const Text('Sign Out'),
+                    label: Text(AppLocalizations.of(context)!.profileLogoutButton),
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.inputBackground,
                       foregroundColor: AppColors.error,
@@ -421,6 +405,50 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showLanguagePicker(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        final currentLocale = ref.watch(localeProvider).languageCode;
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                AppLocalizations.of(context)!.profileLanguageSelect,
+                style: AppTextStyles.h4.copyWith(color: AppColors.primary),
+              ),
+              const SizedBox(height: 24),
+              ...AppConstants.supportedLanguages.map((lang) {
+                final isSelected = currentLocale == lang['code'];
+                return ListTile(
+                  title: Text(
+                    lang['label']!,
+                    style: AppTextStyles.body.copyWith(
+                      color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                  trailing: isSelected
+                      ? const Icon(Icons.check_circle, color: AppColors.primary)
+                      : null,
+                  onTap: () async {
+                    await ref.read(localeProvider.notifier).setLocale(lang['code']!);
+                    if (context.mounted) Navigator.pop(context);
+                  },
+                );
+              }).toList(),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -600,16 +628,18 @@ class _SettingsDivider extends StatelessWidget {
 class _SettingsRow extends StatelessWidget {
   final IconData icon;
   final String label;
+  final VoidCallback? onTap;
 
   const _SettingsRow({
     required this.icon,
     required this.label,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {},
+      onTap: onTap ?? () {},
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),

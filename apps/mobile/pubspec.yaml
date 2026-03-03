@@ -54,6 +54,8 @@ dependencies:
 
   # Local storage
   shared_preferences: ^2.3.4
+  flutter_localizations:
+    sdk: flutter
 
 dev_dependencies:
   flutter_test:
@@ -68,6 +70,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  generate: true
 
   assets:
     - assets/images/
