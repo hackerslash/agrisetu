@@ -70,9 +70,8 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
       _error = null;
     });
     try {
-      final result = await ref
-          .read(authProvider.notifier)
-          .verifyOtp(widget.phone, otp);
+      final result =
+          await ref.read(authProvider.notifier).verifyOtp(widget.phone, otp);
 
       if (mounted) {
         if (result.isNewUser || !result.farmer.isProfileComplete) {
@@ -91,6 +90,9 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final isKeyboardVisible = mediaQuery.viewInsets.bottom > 0;
+
     final defaultTheme = PinTheme(
       width: 52,
       height: 56,
@@ -127,28 +129,32 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
             flex: 3,
             child: Padding(
               padding: EdgeInsets.only(
-                top: MediaQuery.of(context).padding.top + 60,
+                top: mediaQuery.padding.top + (isKeyboardVisible ? 12 : 60),
                 left: 24,
                 right: 24,
-                bottom: 40,
+                bottom: isKeyboardVisible ? 12 : 40,
               ),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisAlignment: isKeyboardVisible
+                    ? MainAxisAlignment.start
+                    : MainAxisAlignment.center,
                 children: [
-                  Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      color: AppColors.surface.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(32),
+                  if (!isKeyboardVisible) ...[
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: AppColors.surface.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(32),
+                      ),
+                      child: const Icon(
+                        Icons.sms_outlined,
+                        color: AppColors.surface,
+                        size: 32,
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.sms_outlined,
-                      color: AppColors.surface,
-                      size: 32,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
+                    const SizedBox(height: 16),
+                  ],
                   Text(
                     'Verify your number',
                     style: AppTextStyles.h2.copyWith(
@@ -156,14 +162,16 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'OTP sent to +91 ${widget.phone}',
-                    style: AppTextStyles.body.copyWith(
-                      color: AppColors.textOnPrimaryMuted,
+                  if (!isKeyboardVisible) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'OTP sent to +91 ${widget.phone}',
+                      style: AppTextStyles.body.copyWith(
+                        color: AppColors.textOnPrimaryMuted,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
-                    textAlign: TextAlign.center,
-                  ),
+                  ],
                 ],
               ),
             ),

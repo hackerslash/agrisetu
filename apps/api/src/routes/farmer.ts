@@ -140,39 +140,40 @@ async function getAvailableGigContextForFarmer(
   farmerLanguage: string | null;
   gigs: GigContext[];
 }> {
-  const farmer = await prisma.farmer.findUnique({
-    where: { id: farmerId },
-    select: {
-      language: true,
-      state: true,
-      latitude: true,
-      longitude: true,
-    },
-  });
+  const [farmer, gigs] = await Promise.all([
+    prisma.farmer.findUnique({
+      where: { id: farmerId },
+      select: {
+        language: true,
+        state: true,
+        latitude: true,
+        longitude: true,
+      },
+    }),
+    prisma.gig.findMany({
+      where: {
+        status: GigStatus.PUBLISHED,
+        availableQuantity: { gt: 0 },
+      },
+      include: {
+        vendor: {
+          select: {
+            businessName: true,
+            state: true,
+            latitude: true,
+            longitude: true,
+            serviceRadiusKm: true,
+          },
+        },
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      take: 120,
+    })
+  ]);
 
   if (!farmer) {
     throw new Error("Farmer profile not found");
   }
-
-  const gigs = await prisma.gig.findMany({
-    where: {
-      status: GigStatus.PUBLISHED,
-      availableQuantity: { gt: 0 },
-    },
-    include: {
-      vendor: {
-        select: {
-          businessName: true,
-          state: true,
-          latitude: true,
-          longitude: true,
-          serviceRadiusKm: true,
-        },
-      },
-    },
-    orderBy: [{ updatedAt: "desc" }],
-    take: 120,
-  });
 
   const serviceableGigs = gigs
     .filter((gig) =>
@@ -335,16 +336,21 @@ router.post("/voice/parse-order", upload.single("audio"), async (req, res) => {
   }
 
   try {
-    const context = await getAvailableGigContextForFarmer(req.user!.id);
     const languageCode = parsed.data.languageCode;
 
-    if (audioFile) {
-      const transcribed = await transcribeAudioBuffer({
-        audioBuffer: audioFile.buffer,
-        fileName: audioFile.originalname,
-        mimeType: audioFile.mimetype,
-        languageCode: languageCode ?? undefined,
-      });
+    const [context, transcribed] = await Promise.all([
+      getAvailableGigContextForFarmer(req.user!.id),
+      audioFile
+        ? transcribeAudioBuffer({
+            audioBuffer: audioFile.buffer,
+            fileName: audioFile.originalname,
+            mimeType: audioFile.mimetype,
+            languageCode: languageCode ?? undefined,
+          })
+        : Promise.resolve(null),
+    ]);
+
+    if (transcribed) {
       transcript = transcribed.transcript;
       detectedLanguageCode = transcribed.detectedLanguageCode;
     }
