@@ -85,6 +85,35 @@ export function DashboardContent() {
 
   const recentOrders = (orders as Cluster[]).slice(0, 5);
 
+  const now = new Date();
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+  const ordersThisMonth = (orders as Cluster[]).filter((order) => {
+    const createdAt = new Date(order.createdAt);
+    return createdAt >= currentMonthStart && createdAt < nextMonthStart;
+  }).length;
+
+  const ordersLastMonth = (orders as Cluster[]).filter((order) => {
+    const createdAt = new Date(order.createdAt);
+    return createdAt >= previousMonthStart && createdAt < currentMonthStart;
+  }).length;
+
+  const ordersTrendPercent =
+    ordersLastMonth === 0
+      ? ordersThisMonth === 0
+        ? 0
+        : 100
+      : Math.round(((ordersThisMonth - ordersLastMonth) / ordersLastMonth) * 100);
+  const ordersTrendSub = `${ordersTrendPercent > 0 ? "+" : ""}${ordersTrendPercent}% vs last month`;
+  const ordersTrendSubColor =
+    ordersTrendPercent > 0
+      ? "#16A34A"
+      : ordersTrendPercent < 0
+        ? "#DC2626"
+        : "#A0A0A0";
+
   return (
     <div className="flex flex-col gap-6">
       {/* Greet row */}
@@ -130,8 +159,9 @@ export function DashboardContent() {
         />
         <MetricCard
           label="Orders This Month"
-          value={orders.length}
-          sub="+24% vs last month"
+          value={ordersThisMonth}
+          sub={ordersTrendSub}
+          subColor={ordersTrendSubColor}
           icon={<Package size={16} color="#2C5F2D" />}
         />
         <MetricCard

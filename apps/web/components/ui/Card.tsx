@@ -20,9 +20,16 @@ interface MetricCardProps {
   sub?: string;
   icon?: React.ReactNode;
   color?: string;
+  subColor?: string;
 }
 
-export function MetricCard({ label, value, sub, icon }: MetricCardProps) {
+export function MetricCard({
+  label,
+  value,
+  sub,
+  icon,
+  subColor,
+}: MetricCardProps) {
   return (
     <Card className="flex-1" style={{ padding: 20 }}>
       <div className="flex flex-col gap-3">
@@ -57,7 +64,7 @@ export function MetricCard({ label, value, sub, icon }: MetricCardProps) {
           {value}
         </p>
         {/* Sub */}
-        {sub && <p style={{ fontSize: 12, color: "#A0A0A0" }}>{sub}</p>}
+        {sub && <p style={{ fontSize: 12, color: subColor ?? "#A0A0A0" }}>{sub}</p>}
       </div>
     </Card>
   );
