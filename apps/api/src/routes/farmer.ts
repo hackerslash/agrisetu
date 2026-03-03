@@ -93,6 +93,113 @@ function clusterMatchesPreferredVariety(
   return matchedVarieties.includes(normalizedPreferred);
 }
 
+type ClusterBidForRanking = {
+  id: string;
+  vendorId: string;
+  pricePerUnit: number;
+  votes: number;
+  createdAt: Date;
+  vendor?: { isVerified: boolean | null } | null;
+};
+
+type ClusterRatingForRanking = {
+  vendorId: string;
+  score: number;
+};
+
+function clamp0to100(value: number) {
+  return Math.max(0, Math.min(100, value));
+}
+
+function median(numbers: number[]) {
+  if (numbers.length === 0) return 0;
+  const sorted = [...numbers].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[mid] ?? 0;
+  return ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2;
+}
+
+function bayesianRatingScore(ratings: ClusterRatingForRanking[]) {
+  if (ratings.length === 0) return 60;
+  const priorMean = 3.5;
+  const priorWeight = 5;
+  const avg = ratings.reduce((sum, rating) => sum + rating.score, 0) / ratings.length;
+  const bayes =
+    (avg * ratings.length + priorMean * priorWeight) /
+    (ratings.length + priorWeight);
+  return clamp0to100((bayes / 5) * 100);
+}
+
+function recentActivityScore(createdAt: Date, now: Date) {
+  const ageDays = (now.getTime() - createdAt.getTime()) / (24 * 60 * 60 * 1000);
+  if (ageDays <= 1) return 100;
+  if (ageDays <= 7) return 85;
+  if (ageDays <= 30) return 70;
+  if (ageDays <= 90) return 55;
+  return 40;
+}
+
+function sortLevel(score: number) {
+  if (score >= 80) return 4; // L1
+  if (score >= 65) return 3; // L2
+  if (score >= 50) return 2; // L3
+  return 1; // L4
+}
+
+function scoreAndSortClusterBids<T extends ClusterBidForRanking>(
+  bids: T[],
+  ratings: ClusterRatingForRanking[],
+) {
+  if (bids.length === 0) return [];
+
+  const now = new Date();
+  const medianPrice = median(bids.map((bid) => bid.pricePerUnit));
+  const totalVotes = bids.reduce((sum, bid) => sum + bid.votes, 0);
+
+  const ranked = bids.map((bid) => {
+    // SLA/cancellation metrics are not tracked per bid yet, so use neutral defaults.
+    const reliability =
+      totalVotes >= 10 ? clamp0to100((bid.votes / totalVotes) * 100) : 60;
+    const rating = bayesianRatingScore(
+      ratings.filter((entry) => entry.vendorId === bid.vendorId),
+    );
+    const priceFit =
+      medianPrice > 0
+        ? clamp0to100(50 + ((medianPrice - bid.pricePerUnit) / medianPrice) * 100)
+        : 60;
+    const responseSla = 50;
+    const recentActivity = recentActivityScore(bid.createdAt, now);
+    const penalties = 0;
+
+    const score =
+      0.4 * reliability +
+      0.25 * rating +
+      0.2 * priceFit +
+      0.1 * responseSla +
+      0.05 * recentActivity -
+      penalties;
+
+    return {
+      bid,
+      score: clamp0to100(score),
+      level: sortLevel(score),
+    };
+  });
+
+  ranked.sort((a, b) => {
+    if (a.level !== b.level) return b.level - a.level;
+    if (a.score !== b.score) return b.score - a.score;
+
+    const aVerified = a.bid.vendor?.isVerified ? 1 : 0;
+    const bVerified = b.bid.vendor?.isVerified ? 1 : 0;
+    if (aVerified !== bVerified) return bVerified - aVerified;
+    if (a.bid.votes !== b.bid.votes) return b.bid.votes - a.bid.votes;
+    return b.bid.createdAt.getTime() - a.bid.createdAt.getTime();
+  });
+
+  return ranked;
+}
+
 function isGigServiceableForFarmer(params: {
   farmerLatitude?: number | null;
   farmerLongitude?: number | null;
@@ -907,13 +1014,19 @@ router.get("/clusters/:id", async (req, res) => {
         bids: { include: { vendor: { select: vendorSafeSelect }, vendorVotes: true } },
         delivery: true,
         vendor: { select: vendorSafeSelect },
+        ratings: true,
       },
     });
     if (!cluster) {
       error(res, "Cluster not found", 404);
       return;
     }
-    success(res, cluster);
+    const rankedBids = scoreAndSortClusterBids(cluster.bids, cluster.ratings);
+
+    success(res, {
+      ...cluster,
+      bids: rankedBids.map((entry) => entry.bid),
+    });
   } catch {
     error(res, "Internal server error", 500);
   }
