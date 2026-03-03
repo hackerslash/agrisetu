@@ -14,8 +14,8 @@ import {
 } from "@aws-sdk/client-s3";
 
 const DEFAULT_REGION = "ap-south-1";
-const POLL_INTERVAL_MS = 2000;
-const MAX_POLLS = 45;
+const POLL_INTERVAL_MS = 500;
+const MAX_POLLS = 180;
 
 const AWS_LANGUAGE_OPTIONS: LanguageCode[] = [
   "en-IN",
