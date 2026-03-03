@@ -592,15 +592,16 @@ export async function autoAssignCluster(
 }
 
 /**
- * When a gig is published, find matching FORMING clusters that still have the
- * default (or higher) targetQuantity and lower it to the gig's minQuantity.
- * Then transition any that now meet the threshold to VOTING and auto-bid.
+ * When a gig is published, recompute each matching FORMING cluster's best
+ * possible targetQuantity from serviceable published gigs and lower target only
+ * when a better minimum is available. Transition to VOTING when the adjusted
+ * target is met, then auto-bid.
  * Also auto-bid on any already-VOTING clusters that match.
  */
 export async function syncClustersForPublishedGig(
   cropName: string,
   unit: string,
-  minQuantity: number,
+  _minQuantity: number,
 ) {
   unit = normalizeUnit(unit);
 
@@ -622,60 +623,101 @@ export async function syncClustersForPublishedGig(
     },
   });
 
-  // Fix FORMING clusters whose targetQuantity is too high
+  // Recompute target quantity for FORMING clusters using only serviceable gigs.
   const formingClusters = await prisma.cluster.findMany({
     where: {
       cropName: { equals: cropName, mode: "insensitive" },
       unit: { equals: unit, mode: "insensitive" },
       status: ClusterStatus.FORMING,
-      targetQuantity: { gt: minQuantity },
     },
     select: {
       id: true,
       cropName: true,
       unit: true,
+      targetQuantity: true,
+      currentQuantity: true,
       latitude: true,
       longitude: true,
-    }
+    },
   });
 
-  // Update all eligible forming clusters efficiently
-  if (formingClusters.length > 0) {
-    await prisma.cluster.updateMany({
-      where: {
-        id: { in: formingClusters.map((c) => c.id) },
-      },
-      data: { targetQuantity: minQuantity },
-    });
+  const formingAdjustments = formingClusters
+    .map((cluster) => {
+      const serviceableGigs = matchingGigs.filter((gig) =>
+        isClusterServiceableForVendor({
+          vendorLatitude: gig.vendor.latitude,
+          vendorLongitude: gig.vendor.longitude,
+          serviceRadiusKm: gig.vendor.serviceRadiusKm,
+          clusterLatitude: cluster.latitude,
+          clusterLongitude: cluster.longitude,
+        }),
+      );
+
+      if (serviceableGigs.length === 0) return null;
+
+      const bestTargetQuantity = Math.min(
+        ...serviceableGigs.map((gig) => gig.minQuantity),
+      );
+      const nextTargetQuantity = Math.min(
+        cluster.targetQuantity,
+        bestTargetQuantity,
+      );
+      const shouldUpdateTarget = nextTargetQuantity < cluster.targetQuantity;
+      const shouldTransition = cluster.currentQuantity >= nextTargetQuantity;
+
+      if (!shouldUpdateTarget && !shouldTransition) return null;
+
+      return {
+        ...cluster,
+        nextTargetQuantity,
+        shouldUpdateTarget,
+        shouldTransition,
+      };
+    })
+    .filter(
+      (
+        value,
+      ): value is {
+        id: string;
+        cropName: string;
+        unit: string;
+        targetQuantity: number;
+        currentQuantity: number;
+        latitude: number | null;
+        longitude: number | null;
+        nextTargetQuantity: number;
+        shouldUpdateTarget: boolean;
+        shouldTransition: boolean;
+      } => value !== null,
+    );
+
+  let clustersToTransition: typeof formingAdjustments = [];
+
+  if (formingAdjustments.length > 0) {
+    const updateResults = await prisma.$transaction(
+      formingAdjustments.map((cluster) =>
+        prisma.cluster.updateMany({
+          where: {
+            id: cluster.id,
+            status: ClusterStatus.FORMING,
+          },
+          data: {
+            ...(cluster.shouldUpdateTarget
+              ? { targetQuantity: cluster.nextTargetQuantity }
+              : {}),
+            ...(cluster.shouldTransition ? { status: ClusterStatus.VOTING } : {}),
+          },
+        }),
+      ),
+    );
+
+    clustersToTransition = formingAdjustments.filter(
+      (cluster, index) =>
+        cluster.shouldTransition && (updateResults[index]?.count ?? 0) > 0,
+    );
   }
 
-  // Refetch to see which ones now meet the threshold and need to be transitioned
-  const updatedFormingClusters = await prisma.cluster.findMany({
-    where: {
-      id: { in: formingClusters.map((c) => c.id) },
-    },
-    select: {
-      id: true,
-      currentQuantity: true,
-      cropName: true,
-      unit: true,
-      latitude: true,
-      longitude: true,
-    },
-  });
-
-  const clustersToTransition = updatedFormingClusters.filter(
-    (c) => c.currentQuantity >= minQuantity
-  );
-
   if (clustersToTransition.length > 0) {
-    await prisma.cluster.updateMany({
-      where: {
-        id: { in: clustersToTransition.map((c) => c.id) },
-      },
-      data: { status: ClusterStatus.VOTING },
-    });
-
     await Promise.all(
       clustersToTransition.map((cluster) =>
         autoCreateBidsForVotingCluster(
@@ -689,9 +731,9 @@ export async function syncClustersForPublishedGig(
               longitude: cluster.longitude,
             },
             matchingGigs,
-          }
+          },
         )
-      )
+      ),
     );
   }
 
@@ -709,7 +751,7 @@ export async function syncClustersForPublishedGig(
       currentQuantity: true,
       latitude: true,
       longitude: true,
-    }
+    },
   });
 
   await Promise.all(
@@ -725,9 +767,9 @@ export async function syncClustersForPublishedGig(
             longitude: cluster.longitude,
           },
           matchingGigs,
-        }
+        },
       )
-    )
+    ),
   );
 }
 
