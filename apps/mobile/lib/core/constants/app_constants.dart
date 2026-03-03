@@ -23,9 +23,6 @@ class AppConstants {
   // Cluster
   static const double defaultTargetQuantity = 1000;
 
-  // Payment timer (24 hours in seconds)
-  static const int paymentTimerSeconds = 86400;
-
   // Pagination
   static const int pageSize = 20;
 
