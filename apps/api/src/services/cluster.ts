@@ -597,7 +597,7 @@ export async function syncClustersForPublishedGig(
     },
   });
 
-  // Fix FORMING clusters whose targetQuantity is too high
+  // Adjust FORMING clusters whose targetQuantity can be lowered based on serviceable gigs
   const formingClusters = await prisma.cluster.findMany({
     where: {
       cropName: { equals: cropName, mode: "insensitive" },
@@ -611,22 +611,42 @@ export async function syncClustersForPublishedGig(
       unit: true,
       latitude: true,
       longitude: true,
-    }
+      currentQuantity: true,
+      targetQuantity: true,
+    },
   });
 
   await Promise.all(
     formingClusters.map(async (cluster) => {
+      const serviceableGigs = matchingGigs.filter((gig) =>
+        isClusterServiceableForVendor({
+          vendorLatitude: gig.vendor.latitude,
+          vendorLongitude: gig.vendor.longitude,
+          serviceRadiusKm: gig.vendor.serviceRadiusKm,
+          clusterLatitude: cluster.latitude,
+          clusterLongitude: cluster.longitude,
+        }),
+      );
+
+      if (serviceableGigs.length === 0) return;
+
+      const bestMinQuantity = Math.min(
+        ...serviceableGigs.map((g) => g.minQuantity),
+      );
+
+      if (bestMinQuantity >= cluster.targetQuantity) return;
+
+      const shouldTransition = cluster.currentQuantity >= bestMinQuantity;
+
       const updated = await prisma.cluster.update({
         where: { id: cluster.id },
-        data: { targetQuantity: minQuantity },
+        data: {
+          targetQuantity: bestMinQuantity,
+          ...(shouldTransition ? { status: ClusterStatus.VOTING } : {}),
+        },
       });
 
-      // If current quantity already meets new (lower) target → go to VOTING
-      if (updated.currentQuantity >= minQuantity) {
-        await prisma.cluster.update({
-          where: { id: cluster.id },
-          data: { status: ClusterStatus.VOTING },
-        });
+      if (shouldTransition) {
         await autoCreateBidsForVotingCluster(
           cluster.id,
           cluster.cropName,
@@ -638,10 +658,10 @@ export async function syncClustersForPublishedGig(
               longitude: cluster.longitude,
             },
             matchingGigs,
-          }
+          },
         );
       }
-    })
+    }),
   );
 
   // Also auto-bid on already-VOTING clusters that match this gig
