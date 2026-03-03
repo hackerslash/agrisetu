@@ -1,0 +1,30 @@
+export const vendorSafeSelect = {
+  id: true,
+  email: true,
+  businessName: true,
+  contactName: true,
+  phone: true,
+  state: true,
+  businessType: true,
+  locationAddress: true,
+  latitude: true,
+  longitude: true,
+  serviceRadiusKm: true,
+  isVerified: true,
+  createdAt: true,
+} as const;
+
+export const farmerSafeSelect = {
+  id: true,
+  name: true,
+  avatarUrl: true,
+  village: true,
+  district: true,
+  state: true,
+  locationAddress: true,
+  latitude: true,
+  longitude: true,
+  cropsGrown: true,
+  language: true,
+  createdAt: true,
+} as const;

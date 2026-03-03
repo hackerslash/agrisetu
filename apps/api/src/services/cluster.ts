@@ -1,3 +1,4 @@
+import { vendorSafeSelect, farmerSafeSelect } from "../lib/selects.js";
 import { prisma } from "../lib/prisma.js";
 import {
   ClusterStatus,
@@ -327,10 +328,10 @@ export async function findJoinableClusters(
       status: { in: [ClusterStatus.FORMING, ClusterStatus.VOTING] },
     },
     include: {
-      members: { include: { farmer: true, order: true } },
-      bids: { include: { vendor: true, vendorVotes: true, gig: true } },
+      members: { include: { farmer: { select: farmerSafeSelect }, order: true } },
+      bids: { include: { vendor: { select: vendorSafeSelect }, vendorVotes: true, gig: true } },
       delivery: true,
-      vendor: true,
+      vendor: { select: vendorSafeSelect },
       gig: true,
       ratings: true,
     },
@@ -497,10 +498,10 @@ export async function assignOrderToCluster(params: {
   return prisma.cluster.findUnique({
     where: { id: updated.id },
     include: {
-      members: { include: { farmer: true, order: true } },
-      bids: { include: { vendor: true, vendorVotes: true } },
+      members: { include: { farmer: { select: farmerSafeSelect }, order: true } },
+      bids: { include: { vendor: { select: vendorSafeSelect }, vendorVotes: true } },
       delivery: true,
-      vendor: true,
+      vendor: { select: vendorSafeSelect },
       ratings: true,
     },
   });
