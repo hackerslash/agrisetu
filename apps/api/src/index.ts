@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import multer from "multer";
 import authRouter from "./routes/auth.js";
 import farmerRouter from "./routes/farmer.js";
@@ -11,6 +12,7 @@ const PORT = process.env.PORT ?? 3001;
 
 app.use(cors({ origin: "*", credentials: true }));
 app.use(express.json({ limit: "10mb" }));
+app.use(helmet());
 
 // Health check
 app.get("/health", (_req, res) => {

@@ -1,3 +1,4 @@
+import { vendorSafeSelect, farmerSafeSelect } from "../lib/selects.js";
 import { Router } from "express";
 import multer from "multer";
 import { z } from "zod";
@@ -560,7 +561,7 @@ router.get("/orders", async (req, res) => {
       include: {
         members: {
           include: {
-            farmer: true,
+            farmer: { select: farmerSafeSelect },
             order: true,
           },
         },
@@ -581,12 +582,12 @@ router.get("/orders/:id", async (req, res) => {
       where: { id: req.params.id, vendorId: req.user!.id },
       include: {
         members: {
-          include: { farmer: true, order: true },
+          include: { farmer: { select: farmerSafeSelect }, order: true },
         },
         bids: true,
         delivery: true,
         payments: true,
-        ratings: { include: { farmer: true } },
+        ratings: { include: { farmer: { select: farmerSafeSelect } } },
       },
     });
     if (!cluster) {

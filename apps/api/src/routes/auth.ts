@@ -11,6 +11,7 @@ import {
 import { success, error } from "../lib/response.js";
 import { withFarmerAvatarForClient } from "../services/farmer-avatar.js";
 import { withVendorDocumentsForClient } from "../services/vendor-documents.js";
+import { authLimiter } from "../middleware/rate-limit.js";
 
 const router = Router();
 
@@ -20,7 +21,7 @@ const requestOtpSchema = z.object({
   phone: z.string().min(10),
 });
 
-router.post("/farmer/request-otp", async (req, res) => {
+router.post("/farmer/request-otp", authLimiter, async (req, res) => {
   const parsed = requestOtpSchema.safeParse(req.body);
   if (!parsed.success) {
     error(res, "Invalid request", 422, parsed.error.flatten());
@@ -34,7 +35,7 @@ const verifyOtpSchema = z.object({
   otp: z.string(),
 });
 
-router.post("/farmer/verify-otp", async (req, res) => {
+router.post("/farmer/verify-otp", authLimiter, async (req, res) => {
   const parsed = verifyOtpSchema.safeParse(req.body);
   if (!parsed.success) {
     error(res, "Invalid request", 422, parsed.error.flatten());
@@ -126,7 +127,7 @@ const vendorStep1Schema = z.object({
   serviceRadiusKm: z.number().positive().max(500).optional(),
 });
 
-router.post("/vendor/register/step1", async (req, res) => {
+router.post("/vendor/register/step1", authLimiter, async (req, res) => {
   const parsed = vendorStep1Schema.safeParse(req.body);
   if (!parsed.success) {
     error(res, "Invalid request", 422, parsed.error.flatten());
@@ -256,7 +257,7 @@ const vendorLoginSchema = z.object({
   password: z.string(),
 });
 
-router.post("/vendor/login", async (req, res) => {
+router.post("/vendor/login", authLimiter, async (req, res) => {
   const parsed = vendorLoginSchema.safeParse(req.body);
   if (!parsed.success) {
     error(res, "Invalid request", 422, parsed.error.flatten());

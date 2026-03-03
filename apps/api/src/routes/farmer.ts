@@ -1,3 +1,4 @@
+import { vendorSafeSelect, farmerSafeSelect } from "../lib/selects.js";
 import { Router } from "express";
 import multer from "multer";
 import { z } from "zod";
@@ -684,10 +685,10 @@ router.post("/orders/:id/assign-cluster", async (req, res) => {
           include: {
             cluster: {
               include: {
-                members: { include: { farmer: true, order: true } },
-                bids: { include: { vendor: true, vendorVotes: true } },
+                members: { include: { farmer: { select: farmerSafeSelect }, order: true } },
+                bids: { include: { vendor: { select: vendorSafeSelect }, vendorVotes: true } },
                 delivery: true,
-                vendor: true,
+                vendor: { select: vendorSafeSelect },
                 ratings: {
                   where: { farmerId: req.user!.id },
                   take: 1,
@@ -724,12 +725,12 @@ router.get("/orders/:id", async (req, res) => {
               include: {
                 bids: {
                   include: {
-                    vendor: true,
+                    vendor: { select: vendorSafeSelect },
                     vendorVotes: { where: { farmerId: req.user!.id } },
                   },
                   orderBy: { votes: "desc" },
                 },
-                vendor: true,
+                vendor: { select: vendorSafeSelect },
                 delivery: true,
                 ratings: {
                   where: { farmerId: req.user!.id },
@@ -767,7 +768,7 @@ router.get("/clusters", async (req, res) => {
         },
         include: {
           members: true,
-          bids: { include: { vendor: true } },
+          bids: { include: { vendor: { select: vendorSafeSelect } } },
         },
         distinct: ["id"],
         orderBy: { createdAt: "desc" },
@@ -896,10 +897,10 @@ router.get("/clusters/:id", async (req, res) => {
     const cluster = await prisma.cluster.findUnique({
       where: { id: req.params.id },
       include: {
-        members: { include: { farmer: true, order: true } },
-        bids: { include: { vendor: true, vendorVotes: true } },
+        members: { include: { farmer: { select: farmerSafeSelect }, order: true } },
+        bids: { include: { vendor: { select: vendorSafeSelect }, vendorVotes: true } },
         delivery: true,
-        vendor: true,
+        vendor: { select: vendorSafeSelect },
       },
     });
     if (!cluster) {
@@ -1593,7 +1594,7 @@ router.get("/dashboard", async (req, res) => {
           clusterMember: {
             include: {
               cluster: {
-                include: { vendor: true, bids: true },
+                include: { vendor: { select: vendorSafeSelect }, bids: true },
               },
             },
           },
@@ -1606,8 +1607,8 @@ router.get("/dashboard", async (req, res) => {
         },
         include: {
           members: true,
-          bids: { include: { vendor: true } },
-          vendor: true,
+          bids: { include: { vendor: { select: vendorSafeSelect } } },
+          vendor: { select: vendorSafeSelect },
         },
         distinct: ["id"],
         orderBy: { createdAt: "desc" },
