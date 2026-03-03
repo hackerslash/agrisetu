@@ -1,0 +1,26 @@
+name: Deploy To Server
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH deploy
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          command_timeout: 45m
+          script: |
+            cd /opt/agrisetu && git checkout main && git pull --ff-only origin main && npm ci && npm run db:migrate && npm run build --workspace=apps/api && npm run build --workspace=apps/web && sudo -n systemctl restart agrisetu-api agrisetu-web && sudo -n systemctl reload nginx
