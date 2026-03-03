@@ -31,8 +31,7 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
     super.dispose();
   }
 
-  bool get _isValid =>
-      _phoneController.text.replaceAll(' ', '').length == 10;
+  bool get _isValid => _phoneController.text.replaceAll(' ', '').length == 10;
 
   Future<void> _sendOtp() async {
     if (!_isValid) return;
@@ -41,7 +40,9 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
       _error = null;
     });
     try {
-      await ref.read(authProvider.notifier).requestOtp(_phoneController.text.trim());
+      await ref
+          .read(authProvider.notifier)
+          .requestOtp(_phoneController.text.trim());
       if (mounted) {
         context.push('/otp', extra: _phoneController.text.trim());
       }
@@ -54,6 +55,9 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final isKeyboardVisible = mediaQuery.viewInsets.bottom > 0;
+
     return Scaffold(
       backgroundColor: AppColors.primary,
       body: Column(
@@ -63,33 +67,42 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
             flex: 3,
             child: Padding(
               padding: EdgeInsets.only(
-                top: MediaQuery.of(context).padding.top + 60,
+                top: mediaQuery.padding.top + (isKeyboardVisible ? 12 : 60),
                 left: 24,
                 right: 24,
-                bottom: 40,
+                bottom: isKeyboardVisible ? 12 : 40,
               ),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisAlignment: isKeyboardVisible
+                    ? MainAxisAlignment.start
+                    : MainAxisAlignment.center,
                 children: [
-                  Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      color: AppColors.surface.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(32),
+                  if (!isKeyboardVisible) ...[
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: AppColors.surface.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(32),
+                      ),
+                      child: const Icon(Icons.eco,
+                          color: AppColors.surface, size: 32),
                     ),
-                    child: const Icon(Icons.eco, color: AppColors.surface, size: 32),
-                  ),
-                  const SizedBox(height: 16),
-                  Text('AgriSetu', style: AppTextStyles.h1.copyWith(color: AppColors.surface)),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Enter your mobile number to continue',
-                    style: AppTextStyles.body.copyWith(
-                      color: AppColors.textOnPrimaryMuted,
+                    const SizedBox(height: 16),
+                  ],
+                  Text('AgriSetu',
+                      style:
+                          AppTextStyles.h1.copyWith(color: AppColors.surface)),
+                  if (!isKeyboardVisible) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Enter your mobile number to continue',
+                      style: AppTextStyles.body.copyWith(
+                        color: AppColors.textOnPrimaryMuted,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
-                    textAlign: TextAlign.center,
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -184,7 +197,8 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
                     const SizedBox(height: 8),
                     Text(
                       _error!,
-                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.error),
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.error),
                     ),
                   ],
 
