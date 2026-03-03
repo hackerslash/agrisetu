@@ -28,9 +28,9 @@ import { formatCurrency, formatDate, formatShortDate } from "../../lib/utils";
 type Period = "7d" | "30d" | "90d";
 
 function getGreetingByHour(hour: number): string {
-  if (hour < 12) return "Good morning";
-  if (hour < 17) return "Good afternoon";
-  return "Good evening";
+  if (hour < 12) return "Good morning 🌾";
+  if (hour < 17) return "Good afternoon ☀️";
+  return "Good evening 🌙";
 }
 
 export function DashboardContent() {
