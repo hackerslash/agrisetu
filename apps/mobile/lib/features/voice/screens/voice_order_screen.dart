@@ -260,6 +260,8 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
         : _isProcessing
             ? 'Analyzing your voice order…'
             : 'Tap to record · AI extraction enabled';
+    final shouldCenterPrimaryContent =
+        _voiceResult == null && _errorMessage == null;
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -274,278 +276,314 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
         },
         trailing: const Icon(Icons.history, color: AppColors.surface, size: 24),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            const SizedBox(height: 16),
-            Text(
-              'Tap the mic and speak your order in your language',
-              style: AppTextStyles.body.copyWith(
-                color: AppColors.primary,
-                height: 1.5,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 32),
-            GestureDetector(
-              onTap: _isProcessing ? null : _toggleRecording,
-              child: AnimatedBuilder(
-                animation: _pulseAnimation,
-                builder: (_, child) => Transform.scale(
-                  scale: _isRecording ? _pulseAnimation.value : 1.0,
-                  child: child,
-                ),
-                child: Container(
-                  width: 220,
-                  height: 220,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _isRecording
-                        ? AppColors.error.withOpacity(0.1)
-                        : AppColors.surface,
-                    boxShadow: [
-                      BoxShadow(
-                        color: _isRecording
-                            ? AppColors.error.withOpacity(0.3)
-                            : AppColors.primary.withOpacity(0.15),
-                        blurRadius: _isRecording ? 40 : 20,
-                        spreadRadius: _isRecording ? 10 : 0,
-                      ),
-                    ],
-                    border: Border.all(
-                      color: _isRecording
-                          ? AppColors.error.withOpacity(0.3)
-                          : AppColors.border,
-                      width: 2,
-                    ),
-                  ),
-                  child: Center(
-                    child: Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color:
-                            _isRecording ? AppColors.error : AppColors.primary,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        _isRecording ? Icons.stop : Icons.mic,
-                        color: AppColors.surface,
-                        size: 36,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              statusLabel,
-              style: AppTextStyles.body.copyWith(
-                color: _isRecording ? AppColors.error : AppColors.primary,
-                fontWeight: FontWeight.w500,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            if (_errorMessage != null) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.error.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Text(
-                  _errorMessage!,
-                  style:
-                      AppTextStyles.bodySmall.copyWith(color: AppColors.error),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-            if (_voiceResult != null) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: AppColors.inputBackground,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+      body: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: SizedBox(
+              width: constraints.maxWidth,
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    child: Column(
+                      mainAxisAlignment: shouldCenterPrimaryContent
+                          ? MainAxisAlignment.center
+                          : MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        const Icon(Icons.text_fields,
-                            size: 16, color: AppColors.textMuted),
-                        const SizedBox(width: 6),
-                        Text('What we heard', style: AppTextStyles.caption),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '"${_voiceResult!.transcript}"',
-                      style: AppTextStyles.body.copyWith(
-                        color: AppColors.primary,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                    if ((_voiceResult!.detectedLanguageCode ?? '')
-                        .isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        'Language: ${_voiceResult!.detectedLanguageCode}',
-                        style: AppTextStyles.caption,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Extracted Order',
-                      style: AppTextStyles.label
-                          .copyWith(color: AppColors.surface),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _ExtractedField(
-                            label: 'Product',
-                            value: extraction?.cropName ?? 'Not detected',
+                        const SizedBox(height: 16),
+                        Text(
+                          'Tap the mic and speak your order in your language',
+                          style: AppTextStyles.body.copyWith(
+                            color: AppColors.primary,
+                            height: 1.5,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 32),
+                        GestureDetector(
+                          onTap: _isProcessing ? null : _toggleRecording,
+                          child: AnimatedBuilder(
+                            animation: _pulseAnimation,
+                            builder: (_, child) => Transform.scale(
+                              scale: _isRecording ? _pulseAnimation.value : 1.0,
+                              child: child,
+                            ),
+                            child: Container(
+                              width: 220,
+                              height: 220,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: _isRecording
+                                    ? AppColors.error.withOpacity(0.1)
+                                    : AppColors.surface,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: _isRecording
+                                        ? AppColors.error.withOpacity(0.3)
+                                        : AppColors.primary.withOpacity(0.15),
+                                    blurRadius: _isRecording ? 40 : 20,
+                                    spreadRadius: _isRecording ? 10 : 0,
+                                  ),
+                                ],
+                                border: Border.all(
+                                  color: _isRecording
+                                      ? AppColors.error.withOpacity(0.3)
+                                      : AppColors.border,
+                                  width: 2,
+                                ),
+                              ),
+                              child: Center(
+                                child: Container(
+                                  width: 80,
+                                  height: 80,
+                                  decoration: BoxDecoration(
+                                    color: _isRecording
+                                        ? AppColors.error
+                                        : AppColors.primary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    _isRecording ? Icons.stop : Icons.mic,
+                                    color: AppColors.surface,
+                                    size: 36,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _ExtractedField(
-                            label: 'Quantity',
-                            value: extraction?.quantity != null &&
-                                    extraction?.unit != null
-                                ? '${_quantityLabel(extraction!.quantity!)} ${extraction.unit}'
-                                : 'Not detected',
+                        const SizedBox(height: 16),
+                        Text(
+                          statusLabel,
+                          style: AppTextStyles.body.copyWith(
+                            color: _isRecording
+                                ? AppColors.error
+                                : AppColors.primary,
+                            fontWeight: FontWeight.w500,
                           ),
+                          textAlign: TextAlign.center,
                         ),
+                        const SizedBox(height: 24),
+                        if (_errorMessage != null) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: AppColors.error.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Text(
+                              _errorMessage!,
+                              style: AppTextStyles.bodySmall
+                                  .copyWith(color: AppColors.error),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                        if (_voiceResult != null) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: AppColors.inputBackground,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(Icons.text_fields,
+                                        size: 16, color: AppColors.textMuted),
+                                    const SizedBox(width: 6),
+                                    Text('What we heard',
+                                        style: AppTextStyles.caption),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '"${_voiceResult!.transcript}"',
+                                  style: AppTextStyles.body.copyWith(
+                                    color: AppColors.primary,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                                if ((_voiceResult!.detectedLanguageCode ?? '')
+                                    .isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Language: ${_voiceResult!.detectedLanguageCode}',
+                                    style: AppTextStyles.caption,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Extracted Order',
+                                  style: AppTextStyles.label
+                                      .copyWith(color: AppColors.surface),
+                                ),
+                                const SizedBox(height: 16),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _ExtractedField(
+                                        label: 'Product',
+                                        value: extraction?.cropName ??
+                                            'Not detected',
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _ExtractedField(
+                                        label: 'Quantity',
+                                        value: extraction?.quantity != null &&
+                                                extraction?.unit != null
+                                            ? '${_quantityLabel(extraction!.quantity!)} ${extraction.unit}'
+                                            : 'Not detected',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if ((extraction?.matchedGigLabel ?? '')
+                                    .isNotEmpty) ...[
+                                  const SizedBox(height: 12),
+                                  _ExtractedField(
+                                    label: 'Matched Gig',
+                                    value: extraction!.matchedGigLabel!,
+                                  ),
+                                ],
+                                const SizedBox(height: 10),
+                                Text(
+                                  'Confidence ${(extraction!.confidence * 100).toStringAsFixed(0)}% · ${extraction.source.toUpperCase()}',
+                                  style: AppTextStyles.caption.copyWith(
+                                      color: AppColors.textOnPrimaryMuted),
+                                ),
+                                if (extraction.needsClarification &&
+                                    (extraction.clarificationQuestion ?? '')
+                                        .isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    extraction.clarificationQuestion!,
+                                    style: AppTextStyles.bodySmall
+                                        .copyWith(color: AppColors.surface),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: _isProcessing ? null : _reset,
+                                  icon: const Icon(Icons.refresh, size: 18),
+                                  label: const Text('Re-record'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppColors.primary,
+                                    side: const BorderSide(
+                                        color: AppColors.primary, width: 1.5),
+                                    shape: const StadiumBorder(),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 14),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: canConfirm
+                                      ? () {
+                                          final resolvedExtraction =
+                                              _voiceResult!.extraction;
+                                          final qty =
+                                              resolvedExtraction.quantity!;
+                                          context.push(
+                                            '/orders/new',
+                                            extra: {
+                                              'crop':
+                                                  resolvedExtraction.cropName,
+                                              'quantity': qty % 1 == 0
+                                                  ? qty.toInt().toString()
+                                                  : qty.toString(),
+                                              'unit': resolvedExtraction.unit,
+                                              'transcript':
+                                                  _voiceResult!.transcript,
+                                              'confidence':
+                                                  resolvedExtraction.confidence,
+                                              'matchedGigId': resolvedExtraction
+                                                  .matchedGigId,
+                                              'matchedGigLabel':
+                                                  resolvedExtraction
+                                                      .matchedGigLabel,
+                                              'extractionSource':
+                                                  resolvedExtraction.source,
+                                            },
+                                          );
+                                        }
+                                      : null,
+                                  icon: const Icon(Icons.check, size: 18),
+                                  label: const Text('Confirm'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    shape: const StadiumBorder(),
+                                    elevation: 0,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 14),
+                                    textStyle: AppTextStyles.button,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ] else
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: AppColors.inputBackground,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Column(
+                              children: [
+                                Text(
+                                  'You can say things like:',
+                                  style: AppTextStyles.caption,
+                                ),
+                                const SizedBox(height: 8),
+                                const _ExamplePhrase(
+                                    text: '"मुझे 100 किलो यूरिया चाहिए"'),
+                                const _ExamplePhrase(
+                                    text: '"I need 5 bags of DAP fertilizer"'),
+                                const _ExamplePhrase(
+                                    text:
+                                        '"నాకు 50 కేజీల టమాట విత్తనాలు కావాలి"'),
+                              ],
+                            ),
+                          ),
                       ],
                     ),
-                    if ((extraction?.matchedGigLabel ?? '').isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      _ExtractedField(
-                        label: 'Matched Gig',
-                        value: extraction!.matchedGigLabel!,
-                      ),
-                    ],
-                    const SizedBox(height: 10),
-                    Text(
-                      'Confidence ${(extraction!.confidence * 100).toStringAsFixed(0)}% · ${extraction.source.toUpperCase()}',
-                      style: AppTextStyles.caption
-                          .copyWith(color: AppColors.textOnPrimaryMuted),
-                    ),
-                    if (extraction.needsClarification &&
-                        (extraction.clarificationQuestion ?? '')
-                            .isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        extraction.clarificationQuestion!,
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: AppColors.surface),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _isProcessing ? null : _reset,
-                      icon: const Icon(Icons.refresh, size: 18),
-                      label: const Text('Re-record'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.primary,
-                        side: const BorderSide(
-                            color: AppColors.primary, width: 1.5),
-                        shape: const StadiumBorder(),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                    ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: canConfirm
-                          ? () {
-                              final resolvedExtraction =
-                                  _voiceResult!.extraction;
-                              final qty = resolvedExtraction.quantity!;
-                              context.push(
-                                '/orders/new',
-                                extra: {
-                                  'crop': resolvedExtraction.cropName,
-                                  'quantity': qty % 1 == 0
-                                      ? qty.toInt().toString()
-                                      : qty.toString(),
-                                  'unit': resolvedExtraction.unit,
-                                  'transcript': _voiceResult!.transcript,
-                                  'confidence': resolvedExtraction.confidence,
-                                  'matchedGigId':
-                                      resolvedExtraction.matchedGigId,
-                                  'matchedGigLabel':
-                                      resolvedExtraction.matchedGigLabel,
-                                  'extractionSource': resolvedExtraction.source,
-                                },
-                              );
-                            }
-                          : null,
-                      icon: const Icon(Icons.check, size: 18),
-                      label: const Text('Confirm'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        shape: const StadiumBorder(),
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        textStyle: AppTextStyles.button,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ] else
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.inputBackground,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      'You can say things like:',
-                      style: AppTextStyles.caption,
-                    ),
-                    const SizedBox(height: 8),
-                    const _ExamplePhrase(text: '"मुझे 100 किलो यूरिया चाहिए"'),
-                    const _ExamplePhrase(
-                        text: '"I need 5 bags of DAP fertilizer"'),
-                    const _ExamplePhrase(
-                        text: '"నాకు 50 కేజీల టమాట విత్తనాలు కావాలి"'),
-                  ],
                 ),
               ),
-          ],
+            ),
+          ),
         ),
       ),
     );

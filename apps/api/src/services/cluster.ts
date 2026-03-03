@@ -232,41 +232,65 @@ async function autoCreateBidsForVotingCluster(
         },
       });
 
-  for (const gig of matchingGigs) {
-    if (
-      !isClusterServiceableForVendor({
-        vendorLatitude: gig.vendor.latitude,
-        vendorLongitude: gig.vendor.longitude,
-        serviceRadiusKm: gig.vendor.serviceRadiusKm,
-        clusterLatitude: cluster?.latitude,
-        clusterLongitude: cluster?.longitude,
-      })
-    ) {
-      continue;
-    }
+  const serviceableGigs = matchingGigs.filter((gig) =>
+    isClusterServiceableForVendor({
+      vendorLatitude: gig.vendor.latitude,
+      vendorLongitude: gig.vendor.longitude,
+      serviceRadiusKm: gig.vendor.serviceRadiusKm,
+      clusterLatitude: cluster?.latitude,
+      clusterLongitude: cluster?.longitude,
+    })
+  );
 
-    // Skip if this vendor already has a bid on this cluster
-    const existing = await prisma.vendorBid.findFirst({
-      where: { clusterId, vendorId: gig.vendorId },
-    });
+  if (serviceableGigs.length === 0) return;
+
+  const existingBids = await prisma.vendorBid.findMany({
+    where: {
+      clusterId,
+      vendorId: { in: serviceableGigs.map((g) => g.vendorId) },
+    },
+  });
+
+  const existingBidsByVendorId = new Map(
+    existingBids.map((bid) => [bid.vendorId, bid])
+  );
+
+  const bidsToCreate = [];
+  const bidsToUpdate = [];
+
+  for (const gig of serviceableGigs) {
+    const existing = existingBidsByVendorId.get(gig.vendorId);
     if (existing) {
-      // Keep total in sync as quantity changes while still in voting phase
-      await prisma.vendorBid.update({
-        where: { id: existing.id },
-        data: { totalPrice: existing.pricePerUnit * currentQuantity },
+      bidsToUpdate.push({
+        id: existing.id,
+        totalPrice: existing.pricePerUnit * currentQuantity,
       });
-      continue;
-    }
-
-    await prisma.vendorBid.create({
-      data: {
+    } else {
+      bidsToCreate.push({
         clusterId,
         vendorId: gig.vendorId,
         gigId: gig.id,
         pricePerUnit: gig.pricePerUnit,
         totalPrice: gig.pricePerUnit * currentQuantity,
-      },
+      });
+    }
+  }
+
+  if (bidsToCreate.length > 0) {
+    await prisma.vendorBid.createMany({
+      data: bidsToCreate,
     });
+  }
+
+  if (bidsToUpdate.length > 0) {
+    await Promise.all(
+      bidsToUpdate.map((bid) =>
+        prisma.vendorBid.update({
+          where: { id: bid.id },
+          data: { totalPrice: bid.totalPrice },
+        })
+      )
+    );
   }
 }
 
@@ -614,24 +638,50 @@ export async function syncClustersForPublishedGig(
     }
   });
 
-  await Promise.all(
-    formingClusters.map(async (cluster) => {
-      const updated = await prisma.cluster.update({
-        where: { id: cluster.id },
-        data: { targetQuantity: minQuantity },
-      });
+  // Update all eligible forming clusters efficiently
+  if (formingClusters.length > 0) {
+    await prisma.cluster.updateMany({
+      where: {
+        id: { in: formingClusters.map((c) => c.id) },
+      },
+      data: { targetQuantity: minQuantity },
+    });
+  }
 
-      // If current quantity already meets new (lower) target → go to VOTING
-      if (updated.currentQuantity >= minQuantity) {
-        await prisma.cluster.update({
-          where: { id: cluster.id },
-          data: { status: ClusterStatus.VOTING },
-        });
-        await autoCreateBidsForVotingCluster(
+  // Refetch to see which ones now meet the threshold and need to be transitioned
+  const updatedFormingClusters = await prisma.cluster.findMany({
+    where: {
+      id: { in: formingClusters.map((c) => c.id) },
+    },
+    select: {
+      id: true,
+      currentQuantity: true,
+      cropName: true,
+      unit: true,
+      latitude: true,
+      longitude: true,
+    },
+  });
+
+  const clustersToTransition = updatedFormingClusters.filter(
+    (c) => c.currentQuantity >= minQuantity
+  );
+
+  if (clustersToTransition.length > 0) {
+    await prisma.cluster.updateMany({
+      where: {
+        id: { in: clustersToTransition.map((c) => c.id) },
+      },
+      data: { status: ClusterStatus.VOTING },
+    });
+
+    await Promise.all(
+      clustersToTransition.map((cluster) =>
+        autoCreateBidsForVotingCluster(
           cluster.id,
           cluster.cropName,
           cluster.unit,
-          updated.currentQuantity,
+          cluster.currentQuantity,
           {
             clusterCoordinates: {
               latitude: cluster.latitude,
@@ -639,10 +689,10 @@ export async function syncClustersForPublishedGig(
             },
             matchingGigs,
           }
-        );
-      }
-    })
-  );
+        )
+      )
+    );
+  }
 
   // Also auto-bid on already-VOTING clusters that match this gig
   const votingClusters = await prisma.cluster.findMany({
