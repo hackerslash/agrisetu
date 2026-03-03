@@ -1,5 +1,6 @@
 import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
 import { BedrockAgentRuntimeClient, RetrieveCommand } from "@aws-sdk/client-bedrock-agent-runtime";
+import { logger } from "../lib/logger.js";
 
 type GigContext = {
   id: string;
@@ -339,7 +340,7 @@ async function fetchKnowledgeBaseContext(transcript: string): Promise<string> {
     }
     return chunks.join("\n\n");
   } catch (error) {
-    console.error("[ai-order-parser] Error fetching Knowledge Base context:", error);
+    logger.error("[ai-order-parser] Error fetching Knowledge Base context:", error);
     return "";
   }
 }
@@ -418,7 +419,7 @@ async function callModelForExtraction(params: {
     logAiJson("parsed-model-json", parsed);
     return parsed;
   } catch (error) {
-    console.error("[ai-order-parser] Error calling Bedrock model:", error);
+    logger.error("[ai-order-parser] Error calling Bedrock model:", error);
     return null;
   }
 }
