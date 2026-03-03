@@ -1,5 +1,6 @@
 import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
 import { BedrockAgentRuntimeClient, RetrieveCommand } from "@aws-sdk/client-bedrock-agent-runtime";
+import { logger } from "../lib/logger.js";
 
 type GigContext = {
   id: string;
@@ -88,11 +89,7 @@ function containsUnitAlias(text: string, alias: string) {
 }
 
 function logAiJson(label: string, payload: unknown) {
-  try {
-    console.log(`[ai-order-parser] ${label}: ${JSON.stringify(payload)}`);
-  } catch {
-    console.log(`[ai-order-parser] ${label}:`, payload);
-  }
+  logger.info(`[ai-order-parser] ${label}:`, payload);
 }
 
 function clampConfidence(input: unknown, fallback = 0.4) {
@@ -314,12 +311,12 @@ const bedrockAgentClient = new BedrockAgentRuntimeClient({ region: process.env.A
 async function fetchKnowledgeBaseContext(transcript: string): Promise<string> {
   const kbId = process.env.KNOWLEDGE_BASE_ID?.trim();
   if (!kbId) {
-    console.log("[ai-order-parser] KNOWLEDGE_BASE_ID not set, skipping KB retrieval.");
+    logger.info("[ai-order-parser] KNOWLEDGE_BASE_ID not set, skipping KB retrieval.");
     return "";
   }
 
   try {
-    console.log(`[ai-order-parser] Fetching KB context for transcript: "${transcript}" using KB ID: ${kbId}`);
+    logger.info(`[ai-order-parser] Fetching KB context for transcript: "${transcript}" using KB ID: ${kbId}`);
     const response = await bedrockAgentClient.send(
       new RetrieveCommand({
         knowledgeBaseId: kbId,
@@ -333,13 +330,13 @@ async function fetchKnowledgeBaseContext(transcript: string): Promise<string> {
     );
 
     const chunks = response.retrievalResults?.map(r => r.content?.text).filter(Boolean) ?? [];
-    console.log(`[ai-order-parser] Retrieved ${chunks.length} chunks from Knowledge Base.`);
+    logger.info(`[ai-order-parser] Retrieved ${chunks.length} chunks from Knowledge Base.`);
     if (chunks.length > 0) {
-      console.log(`[ai-order-parser] KB Chunk 1 Preview: ${chunks[0]?.substring(0, 150)}...`);
+      logger.info(`[ai-order-parser] KB Chunk 1 Preview: ${chunks[0]?.substring(0, 150)}...`);
     }
     return chunks.join("\n\n");
   } catch (error) {
-    console.error("[ai-order-parser] Error fetching Knowledge Base context:", error);
+    logger.error("[ai-order-parser] Error fetching Knowledge Base context:", error);
     return "";
   }
 }
@@ -418,7 +415,7 @@ async function callModelForExtraction(params: {
     logAiJson("parsed-model-json", parsed);
     return parsed;
   } catch (error) {
-    console.error("[ai-order-parser] Error calling Bedrock model:", error);
+    logger.error("[ai-order-parser] Error calling Bedrock model:", error);
     return null;
   }
 }
