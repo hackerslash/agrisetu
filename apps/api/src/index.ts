@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import multer from "multer";
+import { logger } from "./lib/logger.js";
 import authRouter from "./routes/auth.js";
 import farmerRouter from "./routes/farmer.js";
 import vendorRouter from "./routes/vendor.js";
@@ -72,7 +73,7 @@ app.use(
       return;
     }
 
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ success: false, error: "Internal server error" });
   },
 );
