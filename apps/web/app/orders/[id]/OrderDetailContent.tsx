@@ -19,12 +19,6 @@ import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { formatCurrency, formatDate } from "../../../lib/utils";
 import { useNotifications } from "../../../lib/NotificationContext";
 
-interface RejectState {
-  open: boolean;
-  reason: string;
-  note: string;
-}
-
 function ConfirmModal({
   title,
   description,
@@ -137,11 +131,6 @@ export function OrderDetailContent({ id }: { id: string }) {
   const queryClient = useQueryClient();
   const { addNotification } = useNotifications();
   const previousStatusRef = useRef<string | null>(null);
-  const [rejectState, setRejectState] = useState<RejectState>({
-    open: false,
-    reason: "",
-    note: "",
-  });
   const [confirmAction, setConfirmAction] = useState<
     null | "process" | "dispatch"
   >(null);
@@ -169,19 +158,6 @@ export function OrderDetailContent({ id }: { id: string }) {
     onSuccess: () => {
       setConfirmAction(null);
       addNotification(`Order #${id.slice(-6).toUpperCase()} marked as dispatched.`);
-      void queryClient.invalidateQueries({ queryKey: ["vendor-order", id] });
-      void queryClient.invalidateQueries({ queryKey: ["vendor-orders"] });
-    },
-  });
-
-  const rejectMutation = useMutation({
-    mutationFn: () =>
-      vendorApi.rejectOrder(id, {
-        reason: rejectState.reason,
-        note: rejectState.note || undefined,
-      }),
-    onSuccess: () => {
-      setRejectState({ open: false, reason: "", note: "" });
       void queryClient.invalidateQueries({ queryKey: ["vendor-order", id] });
       void queryClient.invalidateQueries({ queryKey: ["vendor-orders"] });
     },
@@ -282,7 +258,7 @@ export function OrderDetailContent({ id }: { id: string }) {
     dispatchMutation.isPending;
 
   const totalAmount = (cluster.payments ?? [])
-    .filter((p) => p.status === "SUCCESS")
+    .filter((p) => p.status === "SUCCESS" || p.status === "REFUNDED")
     .reduce((sum, p) => sum + p.amount, 0);
 
   const farmerDeliverySummary = Array.from(
@@ -682,9 +658,7 @@ export function OrderDetailContent({ id }: { id: string }) {
 
             {canReject && (
               <button
-                onClick={() =>
-                  setRejectState({ open: true, reason: "", note: "" })
-                }
+                onClick={() => router.push(`/orders/${id}/reject`)}
                 className="flex items-center justify-center gap-2 rounded-xl font-semibold"
                 style={{
                   backgroundColor: "#FEF2F2",
@@ -756,78 +730,6 @@ export function OrderDetailContent({ id }: { id: string }) {
           onCancel={() => setConfirmAction(null)}
           loading={isPending}
         />
-      )}
-
-      {/* Reject modal */}
-      {rejectState.open && (
-        <ConfirmModal
-          title="Reject Order"
-          description="Please provide a reason for rejecting this order. Farmers will be notified."
-          confirmLabel="Reject Order"
-          confirmColor="#DC2626"
-          onConfirm={() => {
-            if (!rejectState.reason) return;
-            rejectMutation.mutate();
-          }}
-          onCancel={() => setRejectState({ open: false, reason: "", note: "" })}
-          loading={rejectMutation.isPending}
-        >
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1.5">
-              <label
-                style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}
-              >
-                Reason <span style={{ color: "#EF4444" }}>*</span>
-              </label>
-              <select
-                value={rejectState.reason}
-                onChange={(e) =>
-                  setRejectState({ ...rejectState, reason: e.target.value })
-                }
-                className="w-full outline-none"
-                style={{
-                  backgroundColor: "#EDE8DF",
-                  borderRadius: 12,
-                  height: 44,
-                  padding: "0 14px",
-                  fontSize: 14,
-                  border: "1.5px solid transparent",
-                }}
-              >
-                <option value="">Select a reason…</option>
-                <option value="OUT_OF_STOCK">Out of stock</option>
-                <option value="PRICE_MISMATCH">Price mismatch</option>
-                <option value="LOCATION_NOT_SERVICEABLE">
-                  Location not serviceable
-                </option>
-                <option value="OTHER">Other</option>
-              </select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label
-                style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}
-              >
-                Additional note (optional)
-              </label>
-              <textarea
-                value={rejectState.note}
-                onChange={(e) =>
-                  setRejectState({ ...rejectState, note: e.target.value })
-                }
-                rows={3}
-                placeholder="Any additional details…"
-                className="w-full outline-none resize-none"
-                style={{
-                  backgroundColor: "#EDE8DF",
-                  borderRadius: 12,
-                  padding: "10px 14px",
-                  fontSize: 14,
-                  border: "1.5px solid transparent",
-                }}
-              />
-            </div>
-          </div>
-        </ConfirmModal>
       )}
     </div>
   );

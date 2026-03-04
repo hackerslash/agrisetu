@@ -129,7 +129,7 @@ export function OrdersContent() {
 
   function getTotalAmount(cluster: Cluster) {
     return (cluster.payments ?? [])
-      .filter((p) => p.status === "SUCCESS")
+      .filter((p) => p.status === "SUCCESS" || p.status === "REFUNDED")
       .reduce((sum, p) => sum + p.amount, 0);
   }
 

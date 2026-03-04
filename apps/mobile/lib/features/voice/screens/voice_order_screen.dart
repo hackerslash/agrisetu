@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:record/record.dart';
 import '../../../core/api/api_client.dart';
@@ -21,13 +25,25 @@ class VoiceOrderScreen extends ConsumerStatefulWidget {
 class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
     with SingleTickerProviderStateMixin {
   final AudioRecorder _recorder = AudioRecorder();
+  final AudioPlayer _clarificationPlayer = AudioPlayer();
+  final FlutterTts _fallbackTts = FlutterTts();
+  final Random _random = Random();
+  static const List<String> _processingHintPool = [
+    'Tuning into your order…',
+    'Listening for crop and quantity…',
+    'Converting your voice into an order…',
+    'Matching words with marketplace items…',
+  ];
   late final AnimationController _pulseController;
   late final Animation<double> _pulseAnimation;
   Timer? _recordingTimer;
+  Timer? _processingTextTimer;
 
   bool _isRecording = false;
   bool _isProcessing = false;
   int _recordedSeconds = 0;
+  int _processingHintIndex = 0;
+  List<String> _processingHints = const [];
   String? _errorMessage;
   VoiceOrderResult? _voiceResult;
 
@@ -42,11 +58,17 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.14).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
+
+    unawaited(_configureFallbackTts());
   }
 
   @override
   void dispose() {
     _recordingTimer?.cancel();
+    _processingTextTimer?.cancel();
+    _clarificationPlayer.stop();
+    _clarificationPlayer.dispose();
+    _fallbackTts.stop();
     _pulseController.dispose();
     _recorder.dispose();
     super.dispose();
@@ -61,6 +83,144 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
   String _quantityLabel(double quantity) {
     if (quantity % 1 == 0) return quantity.toInt().toString();
     return quantity.toStringAsFixed(2);
+  }
+
+  String _clarificationQuestionText(VoiceOrderExtraction extraction) {
+    final localized = extraction.clarificationQuestionLocalized?.trim();
+    if (localized != null && localized.isNotEmpty) return localized;
+    return extraction.clarificationQuestion?.trim() ?? '';
+  }
+
+  String _normalizeTtsLanguageCode(String? input) {
+    final normalized = input?.trim().replaceAll('_', '-').toLowerCase();
+    switch (normalized) {
+      case 'hi':
+      case 'hi-in':
+      case 'hindi':
+        return 'hi-IN';
+      case 'ta':
+      case 'ta-in':
+      case 'tamil':
+        return 'ta-IN';
+      case 'te':
+      case 'te-in':
+      case 'telugu':
+        return 'te-IN';
+      case 'bn':
+      case 'bn-in':
+      case 'bengali':
+        return 'bn-IN';
+      case 'kn':
+      case 'kn-in':
+      case 'kannada':
+        return 'kn-IN';
+      case 'en':
+      case 'en-in':
+      case 'english':
+      default:
+        return 'en-IN';
+    }
+  }
+
+  Future<void> _configureFallbackTts() async {
+    try {
+      await _fallbackTts.awaitSpeakCompletion(true);
+      await _fallbackTts.setSpeechRate(0.42);
+      await _fallbackTts.setVolume(1.0);
+      await _fallbackTts.setPitch(1.0);
+    } catch (e) {
+      debugPrint('Unable to configure fallback TTS: $e');
+    }
+  }
+
+  Future<void> _speakClarificationFallback(VoiceOrderResult result) async {
+    final text = _clarificationQuestionText(result.extraction);
+    if (text.isEmpty) {
+      debugPrint(
+        '[voice-order][tts] fallback skipped: clarification text is empty',
+      );
+      return;
+    }
+
+    final preferredLanguage = _normalizeTtsLanguageCode(
+      result.clarificationLanguageCode ?? result.detectedLanguageCode,
+    );
+
+    try {
+      debugPrint(
+        '[voice-order][tts] fallback start language=$preferredLanguage textLen=${text.length}',
+      );
+      await _fallbackTts.stop();
+      try {
+        await _fallbackTts.setLanguage(preferredLanguage);
+      } catch (_) {
+        try {
+          await _fallbackTts
+              .setLanguage(preferredLanguage.split('-').first.toLowerCase());
+        } catch (_) {
+          await _fallbackTts.setLanguage('en-IN');
+        }
+      }
+      await _fallbackTts.speak(text);
+      debugPrint('[voice-order][tts] fallback speaking via flutter_tts');
+    } catch (e) {
+      debugPrint('[voice-order][tts] fallback failed: $e');
+    }
+  }
+
+  Future<void> _playClarificationQuestion(VoiceOrderResult result) async {
+    if (!result.extraction.needsClarification) return;
+    final audioBase64 = result.clarificationAudioBase64?.trim();
+    if (audioBase64 == null || audioBase64.isEmpty) {
+      debugPrint(
+        '[voice-order][tts] source=aws missing audio payload, switching to fallback',
+      );
+      await _speakClarificationFallback(result);
+      return;
+    }
+
+    try {
+      final bytes = base64Decode(audioBase64);
+      if (bytes.isEmpty) {
+        debugPrint(
+          '[voice-order][tts] source=aws empty decoded bytes, switching to fallback',
+        );
+        await _speakClarificationFallback(result);
+        return;
+      }
+      await _clarificationPlayer.stop();
+      await _clarificationPlayer.play(
+        BytesSource(Uint8List.fromList(bytes)),
+      );
+      debugPrint(
+        '[voice-order][tts] source=aws playback started mime=${result.clarificationAudioMimeType ?? "unknown"} bytes=${bytes.length}',
+      );
+    } catch (e) {
+      debugPrint(
+        '[voice-order][tts] source=aws playback failed: $e; switching to fallback',
+      );
+      await _speakClarificationFallback(result);
+    }
+  }
+
+  void _startProcessingHints() {
+    _processingTextTimer?.cancel();
+    _processingHints = List<String>.from(_processingHintPool)..shuffle(_random);
+    _processingHintIndex = 0;
+    _processingTextTimer =
+        Timer.periodic(const Duration(milliseconds: 1400), (_) {
+      if (!mounted || !_isProcessing || _processingHints.length < 2) return;
+      setState(() {
+        _processingHintIndex =
+            (_processingHintIndex + 1) % _processingHints.length;
+      });
+    });
+  }
+
+  void _stopProcessingHints() {
+    _processingTextTimer?.cancel();
+    _processingTextTimer = null;
+    _processingHintIndex = 0;
   }
 
   Future<void> _startRecording() async {
@@ -153,6 +313,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
       _errorMessage = null;
       _voiceResult = null;
     });
+    _startProcessingHints();
 
     try {
       final result = await ref.read(apiClientProvider).parseVoiceOrder(
@@ -160,6 +321,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
           );
       if (!mounted) return;
       setState(() => _voiceResult = result);
+      unawaited(_playClarificationQuestion(result));
     } catch (e) {
       if (!mounted) return;
       setState(() => _errorMessage = e.toString());
@@ -176,6 +338,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
       if (mounted) {
         setState(() => _isProcessing = false);
       }
+      _stopProcessingHints();
     }
   }
 
@@ -185,6 +348,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
       _errorMessage = null;
       _voiceResult = null;
     });
+    _startProcessingHints();
 
     try {
       final blobResp = await Dio().get<List<int>>(
@@ -202,6 +366,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
           );
       if (!mounted) return;
       setState(() => _voiceResult = result);
+      unawaited(_playClarificationQuestion(result));
     } catch (e) {
       if (!mounted) return;
       setState(() => _errorMessage = e.toString());
@@ -214,6 +379,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
       if (mounted) {
         setState(() => _isProcessing = false);
       }
+      _stopProcessingHints();
     }
   }
 
@@ -244,6 +410,8 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
   }
 
   void _reset() {
+    _clarificationPlayer.stop();
+    _fallbackTts.stop();
     setState(() {
       _errorMessage = null;
       _voiceResult = null;
@@ -258,7 +426,9 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
     final statusLabel = _isRecording
         ? '● Listening… ${_formatDuration(_recordedSeconds)} (tap again to stop)'
         : _isProcessing
-            ? 'Analyzing your voice order…'
+            ? (_processingHints.isEmpty
+                ? 'Analyzing your voice order…'
+                : _processingHints[_processingHintIndex])
             : 'Tap to record · AI extraction enabled';
     final shouldCenterPrimaryContent =
         _voiceResult == null && _errorMessage == null;
@@ -308,10 +478,20 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
                           onTap: _isProcessing ? null : _toggleRecording,
                           child: AnimatedBuilder(
                             animation: _pulseAnimation,
-                            builder: (_, child) => Transform.scale(
-                              scale: _isRecording ? _pulseAnimation.value : 1.0,
-                              child: child,
-                            ),
+                            builder: (_, child) {
+                              final recordingScale = _pulseAnimation.value;
+                              final processingScale =
+                                  1.0 + ((recordingScale - 1.0) * 0.75);
+                              final scale = _isRecording
+                                  ? recordingScale
+                                  : _isProcessing
+                                      ? processingScale
+                                      : 1.0;
+                              return Transform.scale(
+                                scale: scale,
+                                child: child,
+                              );
+                            },
                             child: Container(
                               width: 220,
                               height: 220,
@@ -347,7 +527,11 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
                                     shape: BoxShape.circle,
                                   ),
                                   child: Icon(
-                                    _isRecording ? Icons.stop : Icons.mic,
+                                    _isRecording
+                                        ? Icons.stop
+                                        : _isProcessing
+                                            ? Icons.multitrack_audio
+                                            : Icons.mic,
                                     color: AppColors.surface,
                                     size: 36,
                                   ),
@@ -476,13 +660,39 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
                                       color: AppColors.textOnPrimaryMuted),
                                 ),
                                 if (extraction.needsClarification &&
-                                    (extraction.clarificationQuestion ?? '')
+                                    _clarificationQuestionText(extraction)
                                         .isNotEmpty) ...[
                                   const SizedBox(height: 8),
                                   Text(
-                                    extraction.clarificationQuestion!,
+                                    _clarificationQuestionText(extraction),
                                     style: AppTextStyles.bodySmall
                                         .copyWith(color: AppColors.surface),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextButton.icon(
+                                    onPressed: _isProcessing
+                                        ? null
+                                        : () => unawaited(
+                                            _playClarificationQuestion(
+                                                _voiceResult!),
+                                          ),
+                                    icon: const Icon(
+                                      Icons.volume_up,
+                                      color: AppColors.surface,
+                                      size: 18,
+                                    ),
+                                    label: Text(
+                                      'Hear question',
+                                      style: AppTextStyles.caption.copyWith(
+                                        color: AppColors.surface,
+                                      ),
+                                    ),
+                                    style: TextButton.styleFrom(
+                                      padding: EdgeInsets.zero,
+                                      minimumSize: const Size(0, 24),
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                    ),
                                   ),
                                 ],
                               ],

@@ -120,9 +120,31 @@ export async function acceptOrder(id: string): Promise<void> {
 
 export async function rejectOrder(
   id: string,
-  data: { reason: string; note?: string },
+  data: {
+    reason: string;
+    note?: string;
+    proofUrls: string[];
+    acknowledgeRatingImpact: true;
+    acknowledgeRefund: true;
+  },
 ): Promise<void> {
   await getApiClient().post(`/vendor/orders/${id}/reject`, data);
+}
+
+export async function uploadOrderRejectProof(
+  id: string,
+  file: File,
+): Promise<{ fileUrl: string }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await getApiClient().post(
+    `/vendor/orders/${id}/reject/proofs`,
+    formData,
+    {
+      headers: { "Content-Type": "multipart/form-data" },
+    },
+  );
+  return res.data.data as { fileUrl: string };
 }
 
 export async function processOrder(id: string): Promise<void> {

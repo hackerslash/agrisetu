@@ -684,7 +684,74 @@ router.patch("/orders/:id/accept", async (req, res) => {
 const rejectSchema = z.object({
   reason: z.string().min(1),
   note: z.string().optional(),
+  proofUrls: z.array(z.string().url()).min(1),
+  acknowledgeRatingImpact: z.literal(true),
+  acknowledgeRefund: z.literal(true),
 });
+
+router.post(
+  "/orders/:id/reject/proofs",
+  vendorDocUpload.single("file"),
+  async (req, res) => {
+    const file = req.file;
+    if (!file) {
+      error(res, "Proof image is required", 422);
+      return;
+    }
+
+    const mimeType = file.mimetype?.toLowerCase();
+    if (
+      mimeType !== "image/jpeg" &&
+      mimeType !== "image/jpg" &&
+      mimeType !== "image/png" &&
+      mimeType !== "image/webp"
+    ) {
+      error(res, "Only JPG, PNG, and WEBP images are supported", 422);
+      return;
+    }
+
+    try {
+      const clusterId = Array.isArray(req.params.id)
+        ? req.params.id[0]
+        : req.params.id;
+      if (!clusterId) {
+        error(res, "Order id is required", 422);
+        return;
+      }
+
+      const cluster = await prisma.cluster.findFirst({
+        where: {
+          id: clusterId,
+          vendorId: req.user!.id,
+          status: { in: [ClusterStatus.PAYMENT, ClusterStatus.PROCESSING] },
+        },
+        select: { id: true },
+      });
+      if (!cluster) {
+        error(
+          res,
+          "Order not found or not eligible for rejection proof upload",
+          404,
+        );
+        return;
+      }
+
+      const uploaded = await uploadVendorDocumentBuffer({
+        vendorId: req.user!.id,
+        docType: "REJECTION_PROOF",
+        fileBuffer: file.buffer,
+        fileName: file.originalname,
+        mimeType: file.mimetype,
+      });
+
+      success(res, { fileUrl: uploaded.fileUrl }, 201);
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Unable to upload rejection proof";
+      error(res, message, 500);
+    }
+  },
+);
 
 router.post("/orders/:id/reject", async (req, res) => {
   const parsed = rejectSchema.safeParse(req.body);
@@ -698,36 +765,80 @@ router.post("/orders/:id/reject", async (req, res) => {
       include: {
         members: true,
         payments: true,
+        delivery: true,
       },
     });
     if (!cluster) {
       error(res, "Order not found", 404);
       return;
     }
-
-    await prisma.cluster.update({
-      where: { id: req.params.id },
-      data: { status: ClusterStatus.FAILED },
-    });
-
-    // Update all member orders to REJECTED
-    await prisma.order.updateMany({
-      where: { id: { in: cluster.members.map((m) => m.orderId) } },
-      data: { status: OrderStatus.REJECTED },
-    });
-
-    // Refund all payments
-    if (cluster.payments.length > 0) {
-      await prisma.payment.updateMany({
-        where: {
-          clusterId: req.params.id,
-          status: PaymentStatus.SUCCESS,
-        },
-        data: { status: PaymentStatus.REFUNDED },
-      });
+    if (
+      cluster.status !== ClusterStatus.PAYMENT &&
+      cluster.status !== ClusterStatus.PROCESSING
+    ) {
+      error(
+        res,
+        "Order must be in PAYMENT or PROCESSING status to reject",
+        400,
+      );
+      return;
     }
 
-    success(res, { rejected: true, reason: parsed.data.reason });
+    const rejectedAt = new Date().toISOString();
+    const existingSteps = Array.isArray(cluster.delivery?.trackingSteps)
+      ? cluster.delivery?.trackingSteps
+      : [];
+    const rejectionStep = {
+      step: "Rejected by Vendor",
+      status: "completed",
+      timestamp: rejectedAt,
+      reason: parsed.data.reason,
+      note: parsed.data.note ?? null,
+      proofUrls: parsed.data.proofUrls,
+      acknowledgements: {
+        ratingImpact: parsed.data.acknowledgeRatingImpact,
+        fullRefund: parsed.data.acknowledgeRefund,
+      },
+    };
+
+    await prisma.$transaction(async (tx) => {
+      await tx.cluster.update({
+        where: { id: req.params.id },
+        data: { status: ClusterStatus.FAILED },
+      });
+
+      await tx.order.updateMany({
+        where: { id: { in: cluster.members.map((m) => m.orderId) } },
+        data: { status: OrderStatus.REJECTED },
+      });
+
+      if (cluster.payments.length > 0) {
+        await tx.payment.updateMany({
+          where: {
+            clusterId: req.params.id,
+            status: PaymentStatus.SUCCESS,
+          },
+          data: { status: PaymentStatus.REFUNDED },
+        });
+      }
+
+      await tx.delivery.upsert({
+        where: { clusterId: req.params.id },
+        update: {
+          trackingSteps: [...existingSteps, rejectionStep],
+        },
+        create: {
+          clusterId: req.params.id,
+          trackingSteps: [rejectionStep],
+        },
+      });
+    });
+
+    success(res, {
+      rejected: true,
+      reason: parsed.data.reason,
+      proofCount: parsed.data.proofUrls.length,
+    });
   } catch {
     error(res, "Internal server error", 500);
   }
@@ -1062,11 +1173,20 @@ router.get("/payments", async (req, res) => {
     });
 
     const paymentData = clusters.map((cluster) => {
-      const totalAmount = cluster.payments
+      const successfulAmount = cluster.payments
         .filter((p) => p.status === PaymentStatus.SUCCESS)
         .reduce((sum, p) => sum + p.amount, 0);
-      const isEscrow = cluster.status !== ClusterStatus.COMPLETED;
+      const refundedAmount = cluster.payments
+        .filter((p) => p.status === PaymentStatus.REFUNDED)
+        .reduce((sum, p) => sum + p.amount, 0);
+      const totalAmount = successfulAmount + refundedAmount;
+      const isRefunded =
+        cluster.status === ClusterStatus.FAILED || refundedAmount > 0;
       const isReleased = cluster.status === ClusterStatus.COMPLETED;
+      const isEscrow =
+        !isReleased &&
+        !isRefunded &&
+        successfulAmount > 0;
       const uniqueFarmerCount = new Set(cluster.members.map((m) => m.farmerId))
         .size;
 
@@ -1074,7 +1194,13 @@ router.get("/payments", async (req, res) => {
         clusterId: cluster.id,
         cropName: cluster.cropName,
         totalAmount,
-        status: isReleased ? "released" : isEscrow ? "escrow" : "pending",
+        status: isRefunded
+          ? "refunded"
+          : isReleased
+            ? "released"
+            : isEscrow
+              ? "escrow"
+              : "pending",
         clusterStatus: cluster.status,
         memberCount: uniqueFarmerCount,
         payments: cluster.payments,

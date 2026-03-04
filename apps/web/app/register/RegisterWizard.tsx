@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { authApi, vendorApi } from "@repo/api-client";
-import { LocateFixed } from "lucide-react";
+import { LocateFixed, Upload } from "lucide-react";
 
 // ─── Step 1 Schema ────────────────────────────────────────────────────────────
 
@@ -88,12 +88,14 @@ function FormInput({
   error,
   type = "text",
   placeholder,
+  style,
   ...props
 }: {
   label: string;
   error?: string;
   type?: string;
   placeholder?: string;
+  style?: React.CSSProperties;
   [key: string]: unknown;
 }) {
   return (
@@ -113,9 +115,72 @@ function FormInput({
           fontSize: 14,
           color: "#1A1A1A",
           border: error ? "1.5px solid #EF4444" : "1.5px solid transparent",
+          ...(style ?? {}),
         }}
         {...(props as React.InputHTMLAttributes<HTMLInputElement>)}
       />
+      {error && <p style={{ fontSize: 12, color: "#EF4444" }}>{error}</p>}
+    </div>
+  );
+}
+
+function FormFileInput({
+  label,
+  error,
+  selectedFileName,
+  name,
+  ...inputProps
+}: {
+  label: string;
+  error?: string;
+  selectedFileName?: string;
+} & React.InputHTMLAttributes<HTMLInputElement>) {
+  const inputName = String(name ?? label).replace(/\s+/g, "-");
+  const inputId = `upload-${inputName.toLowerCase()}`;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}>
+        {label}
+      </label>
+      <div
+        className="flex items-center gap-3 rounded-[14px]"
+        style={{
+          backgroundColor: "#EDE8DF",
+          border: error ? "1.5px solid #EF4444" : "1.5px solid transparent",
+          minHeight: 60,
+          padding: "10px 12px",
+        }}
+      >
+        <input
+          id={inputId}
+          type="file"
+          className="sr-only"
+          name={name}
+          {...inputProps}
+        />
+        <label
+          htmlFor={inputId}
+          className="flex shrink-0 items-center gap-2 rounded-lg font-semibold cursor-pointer"
+          style={{
+            height: 38,
+            padding: "0 12px",
+            backgroundColor: "#FFFFFF",
+            border: "1px solid #D5CEC2",
+            color: "#1A1A1A",
+            fontSize: 13,
+          }}
+        >
+          <Upload size={14} />
+          Choose File
+        </label>
+        <span
+          className="truncate"
+          style={{ fontSize: 13, color: selectedFileName ? "#1A1A1A" : "#7C7C7C" }}
+        >
+          {selectedFileName ?? "No file chosen"}
+        </span>
+      </div>
       {error && <p style={{ fontSize: 12, color: "#EF4444" }}>{error}</p>}
     </div>
   );
@@ -135,6 +200,9 @@ export function RegisterWizard() {
   });
   const form2 = useForm<Step2Data>({ resolver: zodResolver(step2Schema) });
   const form3 = useForm<Step3Data>();
+  const panFileName = form3.watch("panFile")?.[0]?.name;
+  const gstFileName = form3.watch("gstFile")?.[0]?.name;
+  const qualityFileName = form3.watch("qualityFile")?.[0]?.name;
 
   async function onStep1(data: Step1Data) {
     setApiError("");
@@ -468,14 +536,15 @@ export function RegisterWizard() {
           </div>
           <FormInput
             label="GSTIN Number"
-            placeholder="27AAAPZ9999Z1Z5"
+            placeholder="Enter GSTIN"
             error={form2.formState.errors.gstin?.message}
             {...form2.register("gstin")}
-            style={{ textTransform: "uppercase" }}
+            autoComplete="off"
+            maxLength={15}
           />
           <FormInput
             label="PAN Number (optional)"
-            placeholder="AAAPZ9999Z"
+            placeholder="Enter PAN"
             error={form2.formState.errors.pan?.message}
             {...form2.register("pan")}
           />
@@ -521,25 +590,25 @@ export function RegisterWizard() {
           <p style={{ fontSize: 13, color: "#A0A0A0" }}>
             Upload your verification files (PDF/JPG/PNG/WEBP).
           </p>
-          <FormInput
+          <FormFileInput
             label="PAN Card Document"
-            type="file"
             accept=".pdf,.jpg,.jpeg,.png,.webp"
             error={form3.formState.errors.panFile?.message}
+            selectedFileName={panFileName}
             {...form3.register("panFile")}
           />
-          <FormInput
+          <FormFileInput
             label="GST Certificate"
-            type="file"
             accept=".pdf,.jpg,.jpeg,.png,.webp"
             error={form3.formState.errors.gstFile?.message}
+            selectedFileName={gstFileName}
             {...form3.register("gstFile")}
           />
-          <FormInput
+          <FormFileInput
             label="Quality Certificate (optional)"
-            type="file"
             accept=".pdf,.jpg,.jpeg,.png,.webp"
             error={form3.formState.errors.qualityFile?.message}
+            selectedFileName={qualityFileName}
             {...form3.register("qualityFile")}
           />
           <div className="flex gap-3">

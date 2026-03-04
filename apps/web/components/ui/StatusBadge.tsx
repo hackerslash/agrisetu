@@ -34,6 +34,7 @@ const STATUS_STYLES: Record<
   CLOSED: { bg: "#FEF2F2", text: "#B03A2E", label: "Closed" },
   SUCCESS: { bg: "#D1FAE5", text: "#065F46", label: "Success" },
   REFUNDED: { bg: "#F3E8FF", text: "#7E22CE", label: "Refunded" },
+  refunded: { bg: "#F3E8FF", text: "#7E22CE", label: "Refunded" },
   released: { bg: "#D1FAE5", text: "#065F46", label: "Released" },
   escrow: { bg: "#FFF3CD", text: "#D97706", label: "In Escrow" },
 };

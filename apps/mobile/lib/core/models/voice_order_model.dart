@@ -7,6 +7,7 @@ class VoiceOrderExtraction {
   final double confidence;
   final bool needsClarification;
   final String? clarificationQuestion;
+  final String? clarificationQuestionLocalized;
   final String source;
 
   const VoiceOrderExtraction({
@@ -18,6 +19,7 @@ class VoiceOrderExtraction {
     required this.confidence,
     required this.needsClarification,
     this.clarificationQuestion,
+    this.clarificationQuestionLocalized,
     required this.source,
   });
 
@@ -31,6 +33,8 @@ class VoiceOrderExtraction {
       confidence: (json['confidence'] as num?)?.toDouble() ?? 0,
       needsClarification: json['needsClarification'] as bool? ?? false,
       clarificationQuestion: json['clarificationQuestion'] as String?,
+      clarificationQuestionLocalized:
+          json['clarificationQuestionLocalized'] as String?,
       source: json['source'] as String? ?? 'model',
     );
   }
@@ -42,6 +46,9 @@ class VoiceOrderResult {
   final int availableGigCount;
   final bool transcribedFromAudio;
   final String? detectedLanguageCode;
+  final String? clarificationLanguageCode;
+  final String? clarificationAudioBase64;
+  final String? clarificationAudioMimeType;
 
   const VoiceOrderResult({
     required this.transcript,
@@ -49,6 +56,9 @@ class VoiceOrderResult {
     required this.availableGigCount,
     required this.transcribedFromAudio,
     this.detectedLanguageCode,
+    this.clarificationLanguageCode,
+    this.clarificationAudioBase64,
+    this.clarificationAudioMimeType,
   });
 
   bool get isActionable =>
@@ -59,6 +69,8 @@ class VoiceOrderResult {
 
   factory VoiceOrderResult.fromJson(Map<String, dynamic> json) {
     final context = json['context'] as Map<String, dynamic>? ?? const {};
+    final clarificationSpeech =
+        json['clarificationSpeech'] as Map<String, dynamic>? ?? const {};
     return VoiceOrderResult(
       transcript: json['transcript'] as String? ?? '',
       extraction: VoiceOrderExtraction.fromJson(
@@ -67,6 +79,9 @@ class VoiceOrderResult {
       availableGigCount: context['availableGigCount'] as int? ?? 0,
       transcribedFromAudio: context['transcribedFromAudio'] as bool? ?? false,
       detectedLanguageCode: context['detectedLanguageCode'] as String?,
+      clarificationLanguageCode: context['clarificationLanguageCode'] as String?,
+      clarificationAudioBase64: clarificationSpeech['audioBase64'] as String?,
+      clarificationAudioMimeType: clarificationSpeech['mimeType'] as String?,
     );
   }
 }

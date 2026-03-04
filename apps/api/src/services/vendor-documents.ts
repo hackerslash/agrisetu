@@ -22,7 +22,7 @@ type AwsConfig = {
   };
 };
 
-type DocType = "PAN" | "GST" | "QUALITY_CERT";
+type DocType = "PAN" | "GST" | "QUALITY_CERT" | "REJECTION_PROOF";
 
 function getAwsConfig(): AwsConfig {
   const region = process.env.AWS_REGION?.trim() || DEFAULT_REGION;

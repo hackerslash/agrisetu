@@ -32,6 +32,15 @@ import {
   uploadFarmerAvatar,
   withFarmerAvatarForClient,
 } from "../services/farmer-avatar.js";
+import {
+  clearFarmerPendingOrderDraft,
+  getFarmerPendingOrderDraft,
+  indexFarmerProfileMemory,
+  rememberFarmerConversationTurn,
+  searchFarmerConversationMemory,
+  setFarmerPendingOrderDraft,
+} from "../services/conversation-memory.js";
+import { buildLocalizedClarificationSpeech } from "../services/clarification-speech.js";
 
 const router = Router();
 router.use(authenticate, requireFarmer);
@@ -246,13 +255,25 @@ async function getAvailableGigContextForFarmer(
   farmerId: string,
 ): Promise<{
   farmerLanguage: string | null;
+  farmerProfile: {
+    name: string | null;
+    village: string | null;
+    district: string | null;
+    state: string | null;
+    language: string | null;
+    cropsGrown: string[];
+  };
   gigs: GigContext[];
 }> {
   const [farmer, gigs] = await Promise.all([
     prisma.farmer.findUnique({
       where: { id: farmerId },
       select: {
+        name: true,
+        village: true,
+        district: true,
         language: true,
+        cropsGrown: true,
         state: true,
         latitude: true,
         longitude: true,
@@ -309,6 +330,14 @@ async function getAvailableGigContextForFarmer(
 
   return {
     farmerLanguage: farmer.language,
+    farmerProfile: {
+      name: farmer.name ?? null,
+      village: farmer.village ?? null,
+      district: farmer.district ?? null,
+      state: farmer.state ?? null,
+      language: farmer.language ?? null,
+      cropsGrown: farmer.cropsGrown ?? [],
+    },
     gigs: serviceableGigs,
   };
 }
@@ -463,19 +492,79 @@ router.post("/voice/parse-order", upload.single("audio"), async (req, res) => {
       detectedLanguageCode = transcribed.detectedLanguageCode;
     }
 
+    indexFarmerProfileMemory(req.user!.id, context.farmerProfile);
+    const pendingDraft = getFarmerPendingOrderDraft(req.user!.id);
+    const memoryMatches = searchFarmerConversationMemory({
+      farmerId: req.user!.id,
+      query: transcript,
+      limit: 5,
+    });
+
     const extraction = await extractVoiceOrderFromTranscript({
       transcript,
       gigs: context.gigs,
       farmerLanguage: context.farmerLanguage,
+      conversationContext: memoryMatches.map((match) => match.text),
+      pendingDraft,
     });
+
+    let clarificationQuestionLocalized = extraction.clarificationQuestion;
+    let clarificationSpeech: {
+      languageCode: string;
+      mimeType: string;
+      audioBase64: string;
+    } | null = null;
+
+    rememberFarmerConversationTurn({
+      farmerId: req.user!.id,
+      transcript,
+      extraction,
+    });
+
+    if (extraction.needsClarification) {
+      setFarmerPendingOrderDraft({
+        farmerId: req.user!.id,
+        extraction,
+      });
+
+      if (extraction.clarificationQuestion) {
+        const speech = await buildLocalizedClarificationSpeech({
+          question: extraction.clarificationQuestion,
+          languageHint:
+            detectedLanguageCode ?? languageCode ?? context.farmerLanguage,
+        });
+        if (speech) {
+          clarificationQuestionLocalized = speech.localizedQuestion;
+          clarificationSpeech = {
+            languageCode: speech.languageCode,
+            mimeType: speech.mimeType,
+            audioBase64: speech.audioBase64,
+          };
+        }
+      }
+    } else {
+      clearFarmerPendingOrderDraft(req.user!.id);
+    }
 
     success(res, {
       transcript,
-      extraction,
+      extraction: {
+        ...extraction,
+        clarificationQuestionLocalized,
+      },
+      clarificationSpeech,
       context: {
         availableGigCount: context.gigs.length,
         transcribedFromAudio: Boolean(audioFile),
         detectedLanguageCode,
+        clarificationLanguageCode:
+          clarificationSpeech?.languageCode ??
+          detectedLanguageCode ??
+          languageCode ??
+          context.farmerLanguage,
+        memoryMatchesUsed: memoryMatches.length,
+        usedPendingDraft: Boolean(pendingDraft),
+        pendingDraftActive: extraction.needsClarification,
       },
     });
   } catch (e) {
@@ -571,6 +660,9 @@ router.post("/orders", async (req, res) => {
           : null,
       },
     });
+
+    // Once an order is successfully created, the pending voice-order draft is stale.
+    clearFarmerPendingOrderDraft(req.user!.id);
 
     const availableClusters = await findJoinableClusters(
       resolvedCropName,

@@ -225,7 +225,7 @@ export interface VendorPaymentRow {
   clusterId: string;
   cropName: string;
   totalAmount: number;
-  status: "released" | "escrow" | "pending";
+  status: "released" | "escrow" | "pending" | "refunded";
   clusterStatus: ClusterStatus;
   memberCount: number;
   payments: Payment[];
