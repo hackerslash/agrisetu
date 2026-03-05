@@ -1,5 +1,11 @@
-import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
-import { BedrockAgentRuntimeClient, RetrieveCommand } from "@aws-sdk/client-bedrock-agent-runtime";
+import {
+  BedrockAgentRuntimeClient,
+  RetrieveCommand,
+} from "@aws-sdk/client-bedrock-agent-runtime";
+import {
+  BedrockRuntimeClient,
+  ConverseCommand,
+} from "@aws-sdk/client-bedrock-runtime";
 import { logger } from "../lib/logger.js";
 
 type GigContext = {
@@ -13,6 +19,16 @@ type GigContext = {
   vendorState: string | null;
 };
 
+export type VoiceAssistantIntent =
+  | "PLACE_ORDER"
+  | "TRACK_ORDERS"
+  | "PENDING_PAYMENTS"
+  | "CLUSTER_STATUS"
+  | "VOTING_STATUS"
+  | "UPDATE_PROFILE"
+  | "GENERAL_QUESTION"
+  | "UNKNOWN";
+
 export type VoiceOrderExtraction = {
   product: string | null;
   quantity: number | null;
@@ -23,6 +39,13 @@ export type VoiceOrderExtraction = {
   needsClarification: boolean;
   clarificationQuestion: string | null;
   source: "model" | "fallback";
+};
+
+export type VoiceAssistantExtraction = {
+  intent: VoiceAssistantIntent;
+  intentConfidence: number;
+  assistantMessage: string | null;
+  extraction: VoiceOrderExtraction;
 };
 
 export type VoiceOrderDraft = {
@@ -56,8 +79,28 @@ const UNIT_ALIASES: Record<string, string> = {
 };
 
 const SUPPORTED_UNITS = ["kg", "quintal", "ton", "bag", "litre"] as const;
+
 const FALLBACK_PROCESSING_MESSAGE =
   "I could not process this request. Please repeat your order with product, quantity, and unit.";
+
+const ASSISTANT_INTENTS: VoiceAssistantIntent[] = [
+  "PLACE_ORDER",
+  "TRACK_ORDERS",
+  "PENDING_PAYMENTS",
+  "CLUSTER_STATUS",
+  "VOTING_STATUS",
+  "UPDATE_PROFILE",
+  "GENERAL_QUESTION",
+  "UNKNOWN",
+];
+
+const bedrockClient = new BedrockRuntimeClient({
+  region: process.env.AWS_REGION || "us-east-1",
+});
+
+const bedrockAgentClient = new BedrockAgentRuntimeClient({
+  region: process.env.AWS_REGION || "us-east-1",
+});
 
 function normalizeTextForMatch(input: string) {
   return input
@@ -85,7 +128,9 @@ function clampConfidence(input: unknown, fallback = 0.4) {
 function normalizeUnit(input: unknown): string | null {
   if (typeof input !== "string") return null;
   const key = input.trim().toLowerCase();
-  return UNIT_ALIASES[key] ?? (SUPPORTED_UNITS.includes(key as never) ? key : null);
+  return (
+    UNIT_ALIASES[key] ?? (SUPPORTED_UNITS.includes(key as never) ? key : null)
+  );
 }
 
 function sanitizeProduct(input: unknown): string | null {
@@ -116,6 +161,7 @@ function extractJsonObject(content: string): Record<string, unknown> | null {
     const first = content.indexOf("{");
     const last = content.lastIndexOf("}");
     if (first === -1 || last === -1 || last <= first) return null;
+
     try {
       const parsed = JSON.parse(content.slice(first, last + 1)) as unknown;
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
@@ -170,7 +216,7 @@ function findGigById(gigs: GigContext[], gigId: string | null | undefined) {
   return gigs.find((gig) => gig.id === normalizedId) ?? null;
 }
 
-function buildFallbackExtraction(): VoiceOrderExtraction {
+function buildOrderFallbackExtraction(): VoiceOrderExtraction {
   return {
     product: null,
     quantity: null,
@@ -184,18 +230,174 @@ function buildFallbackExtraction(): VoiceOrderExtraction {
   };
 }
 
-const bedrockClient = new BedrockRuntimeClient({ region: process.env.AWS_REGION || "us-east-1" });
-const bedrockAgentClient = new BedrockAgentRuntimeClient({ region: process.env.AWS_REGION || "us-east-1" });
+function buildNonOrderExtraction(
+  source: "model" | "fallback",
+): VoiceOrderExtraction {
+  return {
+    product: null,
+    quantity: null,
+    unit: null,
+    matchedGigId: null,
+    matchedGigLabel: null,
+    confidence: source === "model" ? 0.72 : 0.4,
+    needsClarification: false,
+    clarificationQuestion: null,
+    source,
+  };
+}
+
+function normalizeAssistantIntent(
+  input: unknown,
+  transcript?: string,
+): VoiceAssistantIntent {
+  if (typeof input === "string") {
+    const key = input
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+
+    if ((ASSISTANT_INTENTS as string[]).includes(key)) {
+      return key as VoiceAssistantIntent;
+    }
+
+    if (key === "ORDER" || key === "PLACE" || key === "PLACE_ORDER_INTENT") {
+      return "PLACE_ORDER";
+    }
+    if (key === "TRACK_ORDER" || key === "TRACK") {
+      return "TRACK_ORDERS";
+    }
+    if (key === "PENDING_PAYMENT" || key === "PAYMENT_PENDING") {
+      return "PENDING_PAYMENTS";
+    }
+    if (key === "CLUSTER" || key === "CLUSTER_TRACK") {
+      return "CLUSTER_STATUS";
+    }
+    if (key === "VOTE" || key === "VOTING") {
+      return "VOTING_STATUS";
+    }
+    if (key === "PROFILE" || key === "EDIT_PROFILE") {
+      return "UPDATE_PROFILE";
+    }
+    if (key === "QUESTION" || key === "GENERAL" || key === "GENERAL_QUERY") {
+      return "GENERAL_QUESTION";
+    }
+  }
+
+  if (!transcript) return "UNKNOWN";
+  return inferIntentFromTranscriptFallback(transcript);
+}
+
+function firstSentence(input: string) {
+  const normalized = input.replace(/\s+/g, " ").trim();
+  if (!normalized) return "";
+
+  const sentenceMatch = normalized.match(/^(.+?[.!?])(?:\s|$)/);
+  if (sentenceMatch?.[1]) return sentenceMatch[1].trim();
+  return normalized;
+}
+
+function sanitizeAssistantMessage(input: unknown): string | null {
+  if (typeof input !== "string") return null;
+  const oneLine = firstSentence(input);
+  if (!oneLine) return null;
+
+  if (oneLine.length <= 200) return oneLine;
+  return `${oneLine.slice(0, 197).trim()}...`;
+}
+
+function inferIntentFromTranscriptFallback(
+  transcript: string,
+): VoiceAssistantIntent {
+  const normalized = normalizeTextForMatch(transcript);
+  if (!normalized) return "UNKNOWN";
+
+  if (
+    /\b(update|edit|change)\b.*\b(profile|account|phone|name|address)\b/.test(
+      normalized,
+    ) ||
+    /\bprofile\b/.test(normalized)
+  ) {
+    return "UPDATE_PROFILE";
+  }
+
+  if (
+    /\b(track|status|show|check|where)\b.*\b(order|orders|delivery)\b/.test(
+      normalized,
+    )
+  ) {
+    return "TRACK_ORDERS";
+  }
+
+  if (
+    /\b(payment|payments|pay|due|pending)\b/.test(normalized) &&
+    /\b(pending|due|remaining|left|unpaid|status|which)\b/.test(normalized)
+  ) {
+    return "PENDING_PAYMENTS";
+  }
+
+  if (/\b(vote|voting|bid)\b/.test(normalized)) {
+    return "VOTING_STATUS";
+  }
+
+  if (/\b(cluster|group order|group)\b/.test(normalized)) {
+    return "CLUSTER_STATUS";
+  }
+
+  if (
+    /\b(order|buy|need|require|purchase|book|chahiye|mujhe|hame)\b/.test(
+      normalized,
+    ) ||
+    (/\b\d+(?:\.\d+)?\b/.test(normalized) &&
+      /\b(kg|kilo|quintal|ton|bag|litre|liter|liters|litres|bags)\b/.test(
+        normalized,
+      ))
+  ) {
+    return "PLACE_ORDER";
+  }
+
+  if (/^(what|which|when|how|who|why)\b/.test(normalized)) {
+    return "GENERAL_QUESTION";
+  }
+
+  return "UNKNOWN";
+}
+
+function buildFallbackAssistantResult(
+  transcript: string,
+): VoiceAssistantExtraction {
+  const inferredIntent = inferIntentFromTranscriptFallback(transcript);
+
+  if (inferredIntent === "PLACE_ORDER") {
+    return {
+      intent: "PLACE_ORDER",
+      intentConfidence: 0.38,
+      assistantMessage: null,
+      extraction: buildOrderFallbackExtraction(),
+    };
+  }
+
+  return {
+    intent: inferredIntent,
+    intentConfidence: 0.42,
+    assistantMessage: null,
+    extraction: buildNonOrderExtraction("fallback"),
+  };
+}
 
 async function fetchKnowledgeBaseContext(transcript: string): Promise<string> {
   const kbId = process.env.KNOWLEDGE_BASE_ID?.trim();
   if (!kbId) {
-    console.log("[ai-order-parser] KNOWLEDGE_BASE_ID not set, skipping KB retrieval.");
+    console.log(
+      "[ai-order-parser] KNOWLEDGE_BASE_ID not set, skipping KB retrieval.",
+    );
     return "";
   }
 
   try {
-    console.log(`[ai-order-parser] Fetching KB context for transcript: "${transcript}" using KB ID: ${kbId}`);
+    console.log(
+      `[ai-order-parser] Fetching KB context for transcript: "${transcript}" using KB ID: ${kbId}`,
+    );
     const response = await bedrockAgentClient.send(
       new RetrieveCommand({
         knowledgeBaseId: kbId,
@@ -205,34 +407,45 @@ async function fetchKnowledgeBaseContext(transcript: string): Promise<string> {
             numberOfResults: 5,
           },
         },
-      })
+      }),
     );
 
-    const chunks = response.retrievalResults?.map(r => r.content?.text).filter(Boolean) ?? [];
-    console.log(`[ai-order-parser] Retrieved ${chunks.length} chunks from Knowledge Base.`);
+    const chunks =
+      response.retrievalResults
+        ?.map((result) => result.content?.text)
+        .filter((chunk): chunk is string => Boolean(chunk)) ?? [];
+
+    console.log(
+      `[ai-order-parser] Retrieved ${chunks.length} chunks from Knowledge Base.`,
+    );
     if (chunks.length > 0) {
-      console.log(`[ai-order-parser] KB Chunk 1 Preview: ${chunks[0]?.substring(0, 150)}...`);
+      console.log(
+        `[ai-order-parser] KB Chunk 1 Preview: ${chunks[0]?.substring(0, 150)}...`,
+      );
     }
+
     return chunks.join("\n\n");
   } catch (error) {
-    logger.error("[ai-order-parser] Error fetching Knowledge Base context:", error);
+    logger.error(
+      "[ai-order-parser] Error fetching Knowledge Base context:",
+      error,
+    );
     return "";
   }
 }
 
-async function callModelForExtraction(params: {
+async function callModelForAssistantExtraction(params: {
   transcript: string;
   gigs: GigContext[];
   farmerLanguage?: string | null;
   conversationContext?: string[];
   pendingDraft?: VoiceOrderDraft | null;
 }) {
-  const modelId = process.env.BEDROCK_MODEL_ID?.trim() || "anthropic.claude-3-sonnet-20240229-v1:0";
+  const modelId =
+    process.env.BEDROCK_MODEL_ID?.trim() ||
+    "anthropic.claude-3-sonnet-20240229-v1:0";
 
-  // Step A: Normalize transcript and metadata
   const normalizedTranscript = normalizeTextForMatch(params.transcript);
-
-  // Step B: Fetch retrieval context from Knowledge Base
   const kbContext = await fetchKnowledgeBaseContext(normalizedTranscript);
 
   const promptPayload = {
@@ -254,16 +467,16 @@ async function callModelForExtraction(params: {
   };
 
   const systemPrompt =
-    "You are an AI order extraction assistant for agriculture. Extract agricultural order intent based on the user transcript and available context.\n\n" +
+    "You are an AI farmer voice assistant for AgriSetu. Classify user intent and extract order details only when needed.\n\n" +
     "CRITICAL RULES:\n" +
-    "1. Respond with ONLY one valid JSON object and absolutely no extra text, markdown formatting, or preamble.\n" +
-    "2. JSON schema: { \"product\": string|null, \"quantity\": number|null, \"unit\": \"kg\"|\"quintal\"|\"ton\"|\"bag\"|\"litre\"|null, " +
-    "\"matchedGigId\": string|null, \"confidence\": number, \"needsClarification\": boolean, \"clarificationQuestion\": string|null }\n" +
-    "3. Prefer matching to `availableGigs` product/unit/variety. Use `matchedGigId` ONLY from `availableGigs` IDs.\n" +
-    "4. When multiple gigs share the same product, use variety mentioned in transcript to pick the right gig.\n" +
-    "5. If transcript is ambiguous or missing quantity/unit, set `needsClarification` to true and ask one short clarification question.\n" +
-    "6. If `conversationContext` or `pendingDraft` are provided, chain with them to fill missing fields across turns before asking clarification.\n" +
-    "7. MUST USE KNOWLEDGE BASE: You MUST strictly adhere to the rules, definitions, policies, and unavailability constraints provided in the <knowledge_base> section below. It overrides all other information.\n\n" +
+    "1. Respond with ONLY one valid JSON object and no extra text.\n" +
+    '2. JSON schema: { "intent": "PLACE_ORDER"|"TRACK_ORDERS"|"PENDING_PAYMENTS"|"CLUSTER_STATUS"|"VOTING_STATUS"|"UPDATE_PROFILE"|"GENERAL_QUESTION"|"UNKNOWN", "intentConfidence": number, "assistantMessage": string|null, "product": string|null, "quantity": number|null, "unit": "kg"|"quintal"|"ton"|"bag"|"litre"|null, "matchedGigId": string|null, "confidence": number, "needsClarification": boolean, "clarificationQuestion": string|null }.\n' +
+    "3. If intent is not PLACE_ORDER: set product/quantity/unit/matchedGigId to null, needsClarification=false, clarificationQuestion=null.\n" +
+    "4. For GENERAL_QUESTION, assistantMessage must be one concise sentence and must not trigger navigation/action.\n" +
+    "5. For PLACE_ORDER, prefer matching to availableGigs and use matchedGigId only from availableGigs IDs.\n" +
+    "6. For PLACE_ORDER, if product/quantity/unit are incomplete, set needsClarification=true and ask one short question.\n" +
+    "7. Use conversationContext and pendingDraft to complete PLACE_ORDER details across turns.\n" +
+    "8. MUST USE KNOWLEDGE BASE: follow rules in <knowledge_base>.\n\n" +
     "<knowledge_base>\n" +
     (kbContext || "No knowledge base context available for this request.") +
     "\n</knowledge_base>";
@@ -283,7 +496,7 @@ async function callModelForExtraction(params: {
           temperature: 0.1,
           maxTokens: 1000,
         },
-      })
+      }),
     );
 
     let contentText = "";
@@ -311,12 +524,14 @@ function mergeWithPendingDraft(params: {
 }): VoiceOrderExtraction {
   const { extraction, pendingDraft, gigs } = params;
   const draft = pendingDraft ?? null;
+
   if (!draft) {
     const question = buildClarificationQuestion({
       product: extraction.product,
       quantity: extraction.quantity,
       unit: extraction.unit,
     });
+
     return {
       ...extraction,
       needsClarification: Boolean(question),
@@ -338,8 +553,7 @@ function mergeWithPendingDraft(params: {
     extraction.matchedGigId ??
     (typeof draft.matchedGigId === "string" ? draft.matchedGigId : null);
 
-  const matchedGig =
-    findGigById(gigs, explicitGigId);
+  const matchedGig = findGigById(gigs, explicitGigId);
 
   const resolvedProduct = matchedGig?.product ?? mergedProduct;
   const resolvedUnit = matchedGig?.unit ?? mergedUnit;
@@ -361,7 +575,9 @@ function mergeWithPendingDraft(params: {
     matchedGigId: matchedGig?.id ?? explicitGigId ?? null,
     matchedGigLabel:
       buildGigLabel(matchedGig) ??
-      (typeof draft.matchedGigLabel === "string" ? draft.matchedGigLabel : null),
+      (typeof draft.matchedGigLabel === "string"
+        ? draft.matchedGigLabel
+        : null),
     confidence: clampConfidence(
       extraction.confidence,
       clarificationQuestion ? 0.45 : usedPendingContext ? 0.72 : 0.8,
@@ -372,25 +588,40 @@ function mergeWithPendingDraft(params: {
   };
 }
 
-export async function extractVoiceOrderFromTranscript(params: {
+export async function extractVoiceAssistantFromTranscript(params: {
   transcript: string;
   gigs: GigContext[];
   farmerLanguage?: string | null;
   conversationContext?: string[];
   pendingDraft?: VoiceOrderDraft | null;
-}): Promise<VoiceOrderExtraction> {
+}): Promise<VoiceAssistantExtraction> {
   const transcript = params.transcript.trim();
-  const fallback = buildFallbackExtraction();
 
   try {
-    const parsed = await callModelForExtraction({
+    const parsed = await callModelForAssistantExtraction({
       transcript,
       gigs: params.gigs,
       farmerLanguage: params.farmerLanguage,
       conversationContext: params.conversationContext,
       pendingDraft: params.pendingDraft,
     });
-    if (!parsed) return fallback;
+
+    if (!parsed) {
+      return buildFallbackAssistantResult(transcript);
+    }
+
+    const intent = normalizeAssistantIntent(parsed.intent, transcript);
+    const intentConfidence = clampConfidence(parsed.intentConfidence, 0.6);
+    const assistantMessage = sanitizeAssistantMessage(parsed.assistantMessage);
+
+    if (intent !== "PLACE_ORDER") {
+      return {
+        intent,
+        intentConfidence,
+        assistantMessage,
+        extraction: buildNonOrderExtraction("model"),
+      };
+    }
 
     const product = sanitizeProduct(parsed.product);
     const quantity = coerceQuantity(parsed.quantity);
@@ -399,10 +630,11 @@ export async function extractVoiceOrderFromTranscript(params: {
     const modelGigId =
       typeof parsed.matchedGigId === "string" ? parsed.matchedGigId : null;
     const matchedGig = findGigById(params.gigs, modelGigId);
+
     const resolvedProduct = matchedGig?.product ?? product;
     const resolvedUnit = matchedGig?.unit ?? unit;
 
-    const merged = mergeWithPendingDraft({
+    const mergedExtraction = mergeWithPendingDraft({
       extraction: {
         product: resolvedProduct,
         quantity,
@@ -418,9 +650,14 @@ export async function extractVoiceOrderFromTranscript(params: {
       gigs: params.gigs,
     });
 
-    return merged;
+    return {
+      intent,
+      intentConfidence,
+      assistantMessage,
+      extraction: mergedExtraction,
+    };
   } catch {
-    return fallback;
+    return buildFallbackAssistantResult(transcript);
   }
 }
 

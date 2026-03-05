@@ -1,21 +1,43 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+
 import '../../../core/api/api_client.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/models/order_model.dart';
 import '../../../core/models/voice_order_model.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../features/orders/widgets/order_summary_card.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/widgets/app_header.dart';
+import '../../../shared/widgets/status_badge.dart';
+
+final voiceAssistantOrdersProvider =
+    FutureProvider.autoDispose<List<Order>>((ref) async {
+  final api = ref.read(apiClientProvider);
+  final rawOrders = await api.getOrders();
+  return rawOrders
+      .map((raw) => Order.fromJson(raw as Map<String, dynamic>))
+      .toList();
+});
+
+final voiceAssistantClustersProvider =
+    FutureProvider.autoDispose<List<Cluster>>((ref) async {
+  final api = ref.read(apiClientProvider);
+  final rawClusters = await api.getClusters();
+  return rawClusters
+      .map((raw) => Cluster.fromJson(raw as Map<String, dynamic>))
+      .toList();
+});
 
 class VoiceOrderScreen extends ConsumerStatefulWidget {
   const VoiceOrderScreen({super.key});
@@ -28,16 +50,22 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
     with SingleTickerProviderStateMixin {
   final AudioRecorder _recorder = AudioRecorder();
   final AudioPlayer _clarificationPlayer = AudioPlayer();
-  final FlutterTts _fallbackTts = FlutterTts();
+  final AudioPlayer _assistantPlayer = AudioPlayer();
   final Random _random = Random();
+
   static const List<String> _processingHintPool = [
-    'Tuning into your order…',
-    'Listening for product and quantity…',
-    'Converting your voice into an order…',
-    'Matching words with marketplace items…',
+    'Understanding your request…',
+    'Checking orders, payments, and clusters…',
+    'Preparing your voice assistant response…',
+    'Matching your request with farm actions…',
   ];
+  static const int _silenceAutoSubmitMs = 2500;
+  static const int _recordingSampleRateHz = 16000;
+  static const double _silenceRmsThreshold = 550;
+
   late final AnimationController _pulseController;
   late final Animation<double> _pulseAnimation;
+
   Timer? _recordingTimer;
   Timer? _processingTextTimer;
   StreamSubscription<Uint8List>? _audioStreamSub;
@@ -55,11 +83,16 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
   String _liveTranscript = '';
   String? _liveDetectedLanguageCode;
   VoiceOrderResult? _voiceResult;
+  bool _handledNavigationForCurrentResult = false;
+  bool _hasDetectedSpeechInCurrentRecording = false;
+  int _silenceAccumulatedMs = 0;
+  bool _autoSubmittingForSilence = false;
 
   @override
   void initState() {
     super.initState();
     _voiceConversationSessionId = _buildConversationSessionId();
+
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1000),
@@ -68,8 +101,6 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.14).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
-
-    unawaited(_configureFallbackTts());
   }
 
   @override
@@ -81,7 +112,8 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
     _voiceSocket?.sink.close();
     _clarificationPlayer.stop();
     _clarificationPlayer.dispose();
-    _fallbackTts.stop();
+    _assistantPlayer.stop();
+    _assistantPlayer.dispose();
     _pulseController.dispose();
     _recorder.dispose();
     super.dispose();
@@ -156,85 +188,100 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
     }
   }
 
-  Future<void> _configureFallbackTts() async {
-    try {
-      await _fallbackTts.awaitSpeakCompletion(true);
-      await _fallbackTts.setSpeechRate(0.42);
-      await _fallbackTts.setVolume(1.0);
-      await _fallbackTts.setPitch(1.0);
-    } catch (e) {
-      debugPrint('Unable to configure fallback TTS: $e');
-    }
-  }
-
-  Future<void> _speakClarificationFallback(VoiceOrderResult result) async {
-    final text = _clarificationQuestionText(result.extraction);
-    if (text.isEmpty) {
-      debugPrint(
-        '[voice-order][tts] fallback skipped: clarification text is empty',
-      );
-      return;
-    }
-
-    final preferredLanguage = _normalizeTtsLanguageCode(
-      result.clarificationLanguageCode ?? result.detectedLanguageCode,
-    );
-
-    try {
-      debugPrint(
-        '[voice-order][tts] fallback start language=$preferredLanguage textLen=${text.length}',
-      );
-      await _fallbackTts.stop();
-      try {
-        await _fallbackTts.setLanguage(preferredLanguage);
-      } catch (_) {
-        try {
-          await _fallbackTts
-              .setLanguage(preferredLanguage.split('-').first.toLowerCase());
-        } catch (_) {
-          await _fallbackTts.setLanguage('en-IN');
-        }
-      }
-      await _fallbackTts.speak(text);
-      debugPrint('[voice-order][tts] fallback speaking via flutter_tts');
-    } catch (e) {
-      debugPrint('[voice-order][tts] fallback failed: $e');
-    }
-  }
-
   Future<void> _playClarificationQuestion(VoiceOrderResult result) async {
     if (!result.extraction.needsClarification) return;
     final audioBase64 = result.clarificationAudioBase64?.trim();
+
     if (audioBase64 == null || audioBase64.isEmpty) {
-      debugPrint(
-        '[voice-order][tts] source=aws missing audio payload, switching to fallback',
-      );
-      await _speakClarificationFallback(result);
       return;
     }
 
     try {
       final bytes = base64Decode(audioBase64);
       if (bytes.isEmpty) {
-        debugPrint(
-          '[voice-order][tts] source=aws empty decoded bytes, switching to fallback',
-        );
-        await _speakClarificationFallback(result);
         return;
       }
+      await _assistantPlayer.stop();
       await _clarificationPlayer.stop();
-      await _clarificationPlayer.play(
-        BytesSource(Uint8List.fromList(bytes)),
-      );
-      debugPrint(
-        '[voice-order][tts] source=aws playback started mime=${result.clarificationAudioMimeType ?? "unknown"} bytes=${bytes.length}',
-      );
+      await _clarificationPlayer.play(BytesSource(Uint8List.fromList(bytes)));
     } catch (e) {
-      debugPrint(
-        '[voice-order][tts] source=aws playback failed: $e; switching to fallback',
-      );
-      await _speakClarificationFallback(result);
+      debugPrint('[voice-order][tts] clarification playback failed: $e');
     }
+  }
+
+  Future<void> _playAssistantSpeech(VoiceOrderResult result) async {
+    if (result.assistant.intent == VoiceAssistantIntent.placeOrder) return;
+
+    final audioBase64 = result.assistantAudioBase64?.trim();
+    if (audioBase64 == null || audioBase64.isEmpty) return;
+
+    try {
+      final bytes = base64Decode(audioBase64);
+      if (bytes.isEmpty) return;
+      await _clarificationPlayer.stop();
+      await _assistantPlayer.stop();
+      await _assistantPlayer.play(BytesSource(Uint8List.fromList(bytes)));
+    } catch (e) {
+      debugPrint('[voice-order][tts] assistant playback failed: $e');
+    }
+  }
+
+  void _resetSilenceDetectionState() {
+    _hasDetectedSpeechInCurrentRecording = false;
+    _silenceAccumulatedMs = 0;
+    _autoSubmittingForSilence = false;
+  }
+
+  int _chunkDurationMs(Uint8List chunk) {
+    final sampleCount = chunk.lengthInBytes ~/ 2;
+    if (sampleCount <= 0) return 0;
+    return ((sampleCount / _recordingSampleRateHz) * 1000).round();
+  }
+
+  double _chunkRms(Uint8List chunk) {
+    final sampleCount = chunk.lengthInBytes ~/ 2;
+    if (sampleCount <= 0) return 0;
+
+    final data = ByteData.sublistView(chunk);
+    double sumSquares = 0;
+    for (var i = 0; i < sampleCount; i += 1) {
+      final sample = data.getInt16(i * 2, Endian.little).toDouble();
+      sumSquares += sample * sample;
+    }
+    return sqrt(sumSquares / sampleCount);
+  }
+
+  bool _chunkHasSpeech(Uint8List chunk) {
+    return _chunkRms(chunk) >= _silenceRmsThreshold;
+  }
+
+  Future<void> _autoSubmitAfterSilence() async {
+    if (!_isRecording || _isProcessing) {
+      _autoSubmittingForSilence = false;
+      return;
+    }
+    await _stopRecordingAndProcess();
+  }
+
+  void _trackSilenceAndMaybeAutoSubmit(Uint8List chunk) {
+    if (!_isRecording || _isProcessing || _autoSubmittingForSilence) return;
+
+    final chunkMs = _chunkDurationMs(chunk);
+    if (chunkMs <= 0) return;
+
+    if (_chunkHasSpeech(chunk)) {
+      _hasDetectedSpeechInCurrentRecording = true;
+      _silenceAccumulatedMs = 0;
+      return;
+    }
+
+    if (!_hasDetectedSpeechInCurrentRecording) return;
+
+    _silenceAccumulatedMs += chunkMs;
+    if (_silenceAccumulatedMs < _silenceAutoSubmitMs) return;
+
+    _autoSubmittingForSilence = true;
+    unawaited(_autoSubmitAfterSilence());
   }
 
   void _startProcessingHints() {
@@ -266,6 +313,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
       'voice',
       'stream',
     ];
+
     return base.replace(
       scheme: wsScheme,
       pathSegments: pathSegments,
@@ -284,8 +332,9 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
     _recordingTimer?.cancel();
     _stopProcessingHints();
     _clarificationPlayer.stop();
-    _fallbackTts.stop();
+    _assistantPlayer.stop();
     unawaited(_closeVoiceStream());
+
     _isRecording = false;
     _isProcessing = false;
     _recordedSeconds = 0;
@@ -293,6 +342,8 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
     _voiceResult = null;
     _liveTranscript = '';
     _liveDetectedLanguageCode = null;
+    _handledNavigationForCurrentResult = false;
+    _resetSilenceDetectionState();
     _voiceConversationSessionId = _buildConversationSessionId();
   }
 
@@ -317,6 +368,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
 
   void _handleVoiceSocketMessage(dynamic event) {
     if (event is! String) return;
+
     Map<String, dynamic> decoded;
     try {
       final raw = jsonDecode(event);
@@ -325,6 +377,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
     } catch (_) {
       return;
     }
+
     final type = decoded['type'] as String?;
     if (type == null) return;
 
@@ -366,6 +419,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
     if (token == null || token.isEmpty) {
       throw const ApiException('Session expired. Please login again.');
     }
+
     final prefs = await SharedPreferences.getInstance();
     final profileLanguageCode = ref.read(currentFarmerProvider)?.language;
     final selectedLanguageCode = profileLanguageCode ??
@@ -413,6 +467,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
     _audioStreamSub = audioStream.listen(
       (chunk) {
         if (chunk.isEmpty) return;
+        _trackSilenceAndMaybeAutoSubmit(chunk);
         _voiceSocket?.sink.add(chunk);
       },
       onError: (Object error) {
@@ -424,6 +479,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
 
   Future<void> _startRecording() async {
     if (_isProcessing) return;
+
     try {
       final hasPermission = await _recorder.hasPermission();
       if (!hasPermission) {
@@ -451,6 +507,8 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
         _voiceResult = null;
         _liveTranscript = '';
         _liveDetectedLanguageCode = null;
+        _handledNavigationForCurrentResult = false;
+        _resetSilenceDetectionState();
       });
     } catch (e) {
       await _closeVoiceStream();
@@ -462,7 +520,33 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
     }
   }
 
+  void _handleAssistantIntentResult(VoiceOrderResult result) {
+    final intent = result.assistant.intent;
+
+    if (intent == VoiceAssistantIntent.updateProfile) {
+      if (_handledNavigationForCurrentResult) return;
+      _handledNavigationForCurrentResult = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context.push('/profile/edit');
+      });
+      return;
+    }
+
+    if (intent == VoiceAssistantIntent.trackOrders ||
+        intent == VoiceAssistantIntent.pendingPayments) {
+      ref.invalidate(voiceAssistantOrdersProvider);
+    }
+
+    if (intent == VoiceAssistantIntent.clusterStatus ||
+        intent == VoiceAssistantIntent.votingStatus) {
+      ref.invalidate(voiceAssistantClustersProvider);
+    }
+  }
+
   Future<void> _stopRecordingAndProcess() async {
+    if (_isProcessing) return;
+
     setState(() {
       _isRecording = false;
       _isProcessing = true;
@@ -482,16 +566,20 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
         throw const ApiException('Voice stream not initialized.');
       }
 
-      final result = await resultFuture.timeout(
-        const Duration(seconds: 50),
-      );
+      final result = await resultFuture.timeout(const Duration(seconds: 50));
       if (!mounted) return;
       setState(() => _voiceResult = result);
-      unawaited(_playClarificationQuestion(result));
+      unawaited(_playAssistantSpeech(result));
+      _handleAssistantIntentResult(result);
+
+      if (result.assistant.intent == VoiceAssistantIntent.placeOrder) {
+        unawaited(_playClarificationQuestion(result));
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _errorMessage = e.toString());
     } finally {
+      _resetSilenceDetectionState();
       await _closeVoiceStream();
       if (mounted) {
         setState(() => _isProcessing = false);
@@ -511,6 +599,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
 
   Future<void> _toggleRecording() async {
     try {
+      if (_autoSubmittingForSilence) return;
       if (_isRecording) {
         await _stopRecordingAndProcess();
         return;
@@ -527,7 +616,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
 
   void _reset() {
     _clarificationPlayer.stop();
-    _fallbackTts.stop();
+    _assistantPlayer.stop();
     unawaited(_closeVoiceStream());
     setState(() {
       _errorMessage = null;
@@ -535,20 +624,439 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
       _recordedSeconds = 0;
       _liveTranscript = '';
       _liveDetectedLanguageCode = null;
+      _handledNavigationForCurrentResult = false;
+      _resetSilenceDetectionState();
     });
+  }
+
+  List<Order> _ordersForTracking(List<Order> orders) {
+    final active = orders
+        .where((order) =>
+            order.status != OrderStatus.delivered &&
+            order.status != OrderStatus.rejected &&
+            order.status != OrderStatus.failed)
+        .toList();
+
+    final recent = orders
+        .where((order) =>
+            order.status == OrderStatus.delivered ||
+            order.status == OrderStatus.rejected ||
+            order.status == OrderStatus.failed)
+        .toList();
+
+    final combined = <Order>[];
+    combined.addAll(active.take(5));
+
+    if (combined.length < 5) {
+      combined.addAll(recent.take(5 - combined.length));
+    }
+
+    return combined;
+  }
+
+  List<Order> _ordersWithPendingPayments(List<Order> orders) {
+    final pending = orders
+        .where((order) => order.status == OrderStatus.paymentPending)
+        .toList();
+
+    if (pending.isNotEmpty) {
+      return pending.take(5).toList();
+    }
+
+    final clusterPayment = orders
+        .where((order) =>
+            order.clusterMember?.cluster?.status == ClusterStatus.payment)
+        .toList();
+
+    return clusterPayment.take(5).toList();
+  }
+
+  Widget _buildMessageCard({
+    required String title,
+    required String message,
+    IconData icon = Icons.assistant,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.inputBackground,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: AppColors.primary, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: AppTextStyles.label),
+                const SizedBox(height: 6),
+                Text(
+                  message,
+                  style: AppTextStyles.body.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOrderCards({
+    required List<Order> orders,
+    required bool showPayAction,
+  }) {
+    return Column(
+      children: orders
+          .map(
+            (order) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: OrderSummaryCard(
+                order: order,
+                onTap: () => context.push('/orders/${order.id}'),
+                actionLabel: showPayAction ? 'Pay now' : null,
+                onActionTap: showPayAction
+                    ? () {
+                        final clusterId = order.clusterMember?.cluster?.id;
+                        if (clusterId != null && clusterId.isNotEmpty) {
+                          context.push('/payment/$clusterId');
+                          return;
+                        }
+                        context.push('/orders/${order.id}');
+                      }
+                    : null,
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  Widget _buildClusterCards(List<Cluster> clusters) {
+    return Column(
+      children: clusters
+          .map(
+            (cluster) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _VoiceClusterCard(
+                cluster: cluster,
+                onTap: () => context.push('/clusters/${cluster.id}'),
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  Widget _buildPlaceOrderPanel(VoiceOrderResult result) {
+    final extraction = result.extraction;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Order details',
+            style: AppTextStyles.label.copyWith(color: AppColors.surface),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _ExtractedField(
+                  label: 'Product',
+                  value: extraction.product ?? 'Not detected',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _ExtractedField(
+                  label: 'Quantity',
+                  value: extraction.quantity != null && extraction.unit != null
+                      ? '${_quantityLabel(extraction.quantity!)} ${extraction.unit}'
+                      : 'Not detected',
+                ),
+              ),
+            ],
+          ),
+          if ((extraction.matchedGigLabel ?? '').isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _ExtractedField(
+              label: 'Matched Gig',
+              value: extraction.matchedGigLabel!,
+            ),
+          ],
+          const SizedBox(height: 10),
+          Text(
+            'Confidence ${(extraction.confidence * 100).toStringAsFixed(0)}% · ${extraction.source.toUpperCase()}',
+            style: AppTextStyles.caption.copyWith(
+              color: AppColors.textOnPrimaryMuted,
+            ),
+          ),
+          if (extraction.needsClarification &&
+              _clarificationQuestionText(extraction).isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              _clarificationQuestionText(extraction),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.surface,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: _isProcessing
+                  ? null
+                  : () => unawaited(_playClarificationQuestion(result)),
+              icon: const Icon(
+                Icons.volume_up,
+                color: AppColors.surface,
+                size: 18,
+              ),
+              label: Text(
+                'Hear question',
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.surface,
+                ),
+              ),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(0, 24),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIntentPanel(VoiceOrderResult result) {
+    final intent = result.assistant.intent;
+    final assistantMessage = result.assistant.message?.trim();
+
+    switch (intent) {
+      case VoiceAssistantIntent.placeOrder:
+        return _buildPlaceOrderPanel(result);
+
+      case VoiceAssistantIntent.trackOrders:
+        final ordersAsync = ref.watch(voiceAssistantOrdersProvider);
+        return ordersAsync.when(
+          data: (orders) {
+            final selected = _ordersForTracking(orders);
+            if (selected.isEmpty) {
+              return _buildMessageCard(
+                title: 'Orders',
+                message: assistantMessage?.isNotEmpty == true
+                    ? assistantMessage!
+                    : 'You do not have any orders yet.',
+                icon: Icons.receipt_long,
+              );
+            }
+            return Column(
+              children: [
+                if (assistantMessage?.isNotEmpty == true) ...[
+                  _buildMessageCard(
+                    title: 'Orders',
+                    message: assistantMessage!,
+                    icon: Icons.receipt_long,
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                _buildOrderCards(orders: selected, showPayAction: false),
+              ],
+            );
+          },
+          loading: () => const Center(
+            child: CircularProgressIndicator(color: AppColors.primary),
+          ),
+          error: (error, _) => _buildMessageCard(
+            title: 'Orders',
+            message: error.toString(),
+            icon: Icons.error_outline,
+          ),
+        );
+
+      case VoiceAssistantIntent.pendingPayments:
+        final ordersAsync = ref.watch(voiceAssistantOrdersProvider);
+        return ordersAsync.when(
+          data: (orders) {
+            final selected = _ordersWithPendingPayments(orders);
+            if (selected.isEmpty) {
+              return _buildMessageCard(
+                title: 'Payments',
+                message: assistantMessage?.isNotEmpty == true
+                    ? assistantMessage!
+                    : 'There are no pending payments right now.',
+                icon: Icons.payments_outlined,
+              );
+            }
+            return Column(
+              children: [
+                if (assistantMessage?.isNotEmpty == true) ...[
+                  _buildMessageCard(
+                    title: 'Payments',
+                    message: assistantMessage!,
+                    icon: Icons.payments_outlined,
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                _buildOrderCards(orders: selected, showPayAction: true),
+              ],
+            );
+          },
+          loading: () => const Center(
+            child: CircularProgressIndicator(color: AppColors.primary),
+          ),
+          error: (error, _) => _buildMessageCard(
+            title: 'Payments',
+            message: error.toString(),
+            icon: Icons.error_outline,
+          ),
+        );
+
+      case VoiceAssistantIntent.clusterStatus:
+      case VoiceAssistantIntent.votingStatus:
+        final clustersAsync = ref.watch(voiceAssistantClustersProvider);
+        return clustersAsync.when(
+          data: (clusters) {
+            final selected = intent == VoiceAssistantIntent.votingStatus
+                ? clusters
+                    .where((cluster) => cluster.status == ClusterStatus.voting)
+                    .take(5)
+                    .toList()
+                : clusters.take(5).toList();
+
+            if (selected.isEmpty) {
+              return _buildMessageCard(
+                title: intent == VoiceAssistantIntent.votingStatus
+                    ? 'Voting Status'
+                    : 'Cluster Status',
+                message: assistantMessage?.isNotEmpty == true
+                    ? assistantMessage!
+                    : intent == VoiceAssistantIntent.votingStatus
+                        ? 'No active voting is pending for your clusters.'
+                        : 'No active clusters found right now.',
+                icon: intent == VoiceAssistantIntent.votingStatus
+                    ? Icons.how_to_vote
+                    : Icons.people,
+              );
+            }
+
+            return Column(
+              children: [
+                if (assistantMessage?.isNotEmpty == true) ...[
+                  _buildMessageCard(
+                    title: intent == VoiceAssistantIntent.votingStatus
+                        ? 'Voting Status'
+                        : 'Cluster Status',
+                    message: assistantMessage!,
+                    icon: intent == VoiceAssistantIntent.votingStatus
+                        ? Icons.how_to_vote
+                        : Icons.people,
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                _buildClusterCards(selected),
+              ],
+            );
+          },
+          loading: () => const Center(
+            child: CircularProgressIndicator(color: AppColors.primary),
+          ),
+          error: (error, _) => _buildMessageCard(
+            title: 'Cluster Status',
+            message: error.toString(),
+            icon: Icons.error_outline,
+          ),
+        );
+
+      case VoiceAssistantIntent.updateProfile:
+        return _buildMessageCard(
+          title: 'Profile Update',
+          message: assistantMessage?.isNotEmpty == true
+              ? assistantMessage!
+              : 'Opening your profile editor.',
+          icon: Icons.person_outline,
+        );
+
+      case VoiceAssistantIntent.generalQuestion:
+        return _buildMessageCard(
+          title: 'Assistant Answer',
+          message: assistantMessage?.isNotEmpty == true
+              ? assistantMessage!
+              : 'I can answer quick questions about products and deliveries.',
+        );
+
+      case VoiceAssistantIntent.unknown:
+        return _buildMessageCard(
+          title: 'Assistant',
+          message: assistantMessage?.isNotEmpty == true
+              ? assistantMessage!
+              : 'I could not map that request, please try asking about orders, payments, clusters, voting, or profile updates.',
+          icon: Icons.help_outline,
+        );
+    }
+  }
+
+  void _confirmPlaceOrder() {
+    final voiceResult = _voiceResult;
+    if (voiceResult == null) return;
+
+    final extraction = voiceResult.extraction;
+    final qty = extraction.quantity;
+    if (qty == null) return;
+
+    _resetVoiceModuleContextOnExit();
+    context.push(
+      '/orders/new',
+      extra: {
+        'product': extraction.product,
+        'quantity': qty % 1 == 0 ? qty.toInt().toString() : qty.toString(),
+        'unit': extraction.unit,
+        'transcript': voiceResult.transcript,
+        'confidence': extraction.confidence,
+        'matchedGigId': extraction.matchedGigId,
+        'matchedGigLabel': extraction.matchedGigLabel,
+        'extractionSource': extraction.source,
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final extraction = _voiceResult?.extraction;
-    final canConfirm = _voiceResult?.isActionable == true;
+    final voiceResult = _voiceResult;
+    final canConfirm = voiceResult?.canPlaceOrder == true;
+    final isPlaceOrderIntent =
+        voiceResult?.assistant.intent == VoiceAssistantIntent.placeOrder;
+
     final statusLabel = _isRecording
-        ? '● Listening… ${_formatDuration(_recordedSeconds)} (tap again to stop)'
+        ? '● Listening… ${_formatDuration(_recordedSeconds)}'
         : _isProcessing
             ? (_processingHints.isEmpty
-                ? 'Analyzing your voice order…'
+                ? 'Analyzing your request…'
                 : _processingHints[_processingHintIndex])
-            : 'Tap to record · AI extraction enabled';
+            : 'Tap to record · AI voice assistance enabled';
+
     final liveTranscript = _liveTranscript.trim();
     final shouldCenterPrimaryContent =
         _voiceResult == null && _errorMessage == null;
@@ -556,7 +1064,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
     return Scaffold(
       backgroundColor: AppColors.surface,
       appBar: AppHeader(
-        title: 'Voice Order',
+        title: 'Voice Assistance',
         onBack: () {
           _resetVoiceModuleContextOnExit();
           if (context.canPop()) {
@@ -587,7 +1095,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
                       children: [
                         const SizedBox(height: 16),
                         Text(
-                          'Tap the mic and speak your order in your language',
+                          'Tap the mic and ask for orders, payments, cluster status, voting, profile updates, or place an order.',
                           style: AppTextStyles.body.copyWith(
                             color: AppColors.primary,
                             height: 1.5,
@@ -684,10 +1192,8 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  'Live transcript',
-                                  style: AppTextStyles.caption,
-                                ),
+                                Text('Live transcript',
+                                    style: AppTextStyles.caption),
                                 const SizedBox(height: 6),
                                 Text(
                                   liveTranscript,
@@ -724,7 +1230,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
                           ),
                           const SizedBox(height: 16),
                         ],
-                        if (_voiceResult != null) ...[
+                        if (voiceResult != null) ...[
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(20),
@@ -737,8 +1243,11 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
                               children: [
                                 Row(
                                   children: [
-                                    const Icon(Icons.text_fields,
-                                        size: 16, color: AppColors.textMuted),
+                                    const Icon(
+                                      Icons.text_fields,
+                                      size: 16,
+                                      color: AppColors.textMuted,
+                                    ),
                                     const SizedBox(width: 6),
                                     Text('What we heard',
                                         style: AppTextStyles.caption),
@@ -746,17 +1255,17 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  '"${_voiceResult!.transcript}"',
+                                  '"${voiceResult.transcript}"',
                                   style: AppTextStyles.body.copyWith(
                                     color: AppColors.primary,
                                     fontStyle: FontStyle.italic,
                                   ),
                                 ),
-                                if ((_voiceResult!.detectedLanguageCode ?? '')
+                                if ((voiceResult.detectedLanguageCode ?? '')
                                     .isNotEmpty) ...[
                                   const SizedBox(height: 8),
                                   Text(
-                                    'Language: ${_voiceResult!.detectedLanguageCode}',
+                                    'Language: ${voiceResult.detectedLanguageCode}',
                                     style: AppTextStyles.caption,
                                   ),
                                 ],
@@ -764,164 +1273,69 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
                             ),
                           ),
                           const SizedBox(height: 16),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Extracted Order',
-                                  style: AppTextStyles.label
-                                      .copyWith(color: AppColors.surface),
-                                ),
-                                const SizedBox(height: 16),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: _ExtractedField(
-                                        label: 'Product',
-                                        value: extraction?.product ??
-                                            'Not detected',
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: _ExtractedField(
-                                        label: 'Quantity',
-                                        value: extraction?.quantity != null &&
-                                                extraction?.unit != null
-                                            ? '${_quantityLabel(extraction!.quantity!)} ${extraction.unit}'
-                                            : 'Not detected',
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                if ((extraction?.matchedGigLabel ?? '')
-                                    .isNotEmpty) ...[
-                                  const SizedBox(height: 12),
-                                  _ExtractedField(
-                                    label: 'Matched Gig',
-                                    value: extraction!.matchedGigLabel!,
-                                  ),
-                                ],
-                                const SizedBox(height: 10),
-                                Text(
-                                  'Confidence ${(extraction!.confidence * 100).toStringAsFixed(0)}% · ${extraction.source.toUpperCase()}',
-                                  style: AppTextStyles.caption.copyWith(
-                                      color: AppColors.textOnPrimaryMuted),
-                                ),
-                                if (extraction.needsClarification &&
-                                    _clarificationQuestionText(extraction)
-                                        .isNotEmpty) ...[
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    _clarificationQuestionText(extraction),
-                                    style: AppTextStyles.bodySmall
-                                        .copyWith(color: AppColors.surface),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  TextButton.icon(
-                                    onPressed: _isProcessing
-                                        ? null
-                                        : () => unawaited(
-                                              _playClarificationQuestion(
-                                                  _voiceResult!),
-                                            ),
-                                    icon: const Icon(
-                                      Icons.volume_up,
-                                      color: AppColors.surface,
-                                      size: 18,
-                                    ),
-                                    label: Text(
-                                      'Hear question',
-                                      style: AppTextStyles.caption.copyWith(
-                                        color: AppColors.surface,
-                                      ),
-                                    ),
-                                    style: TextButton.styleFrom(
-                                      padding: EdgeInsets.zero,
-                                      minimumSize: const Size(0, 24),
-                                      tapTargetSize:
-                                          MaterialTapTargetSize.shrinkWrap,
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
+                          _buildIntentPanel(voiceResult),
                           const SizedBox(height: 20),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: _isProcessing ? null : _reset,
-                                  icon: const Icon(Icons.refresh, size: 18),
-                                  label: const Text('Re-record'),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: AppColors.primary,
-                                    side: const BorderSide(
-                                        color: AppColors.primary, width: 1.5),
-                                    shape: const StadiumBorder(),
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 14),
+                          if (isPlaceOrderIntent)
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: _isProcessing ? null : _reset,
+                                    icon: const Icon(Icons.refresh, size: 18),
+                                    label: const Text('Re-record'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: AppColors.primary,
+                                      side: const BorderSide(
+                                        color: AppColors.primary,
+                                        width: 1.5,
+                                      ),
+                                      shape: const StadiumBorder(),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed:
+                                        canConfirm ? _confirmPlaceOrder : null,
+                                    icon: const Icon(Icons.check, size: 18),
+                                    label: const Text('Confirm'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.primary,
+                                      shape: const StadiumBorder(),
+                                      elevation: 0,
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 14,
+                                      ),
+                                      textStyle: AppTextStyles.button,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          else
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: _isProcessing ? null : _reset,
+                                icon: const Icon(Icons.refresh, size: 18),
+                                label: const Text('Ask another question'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.primary,
+                                  side: const BorderSide(
+                                    color: AppColors.primary,
+                                    width: 1.5,
+                                  ),
+                                  shape: const StadiumBorder(),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: canConfirm
-                                      ? () {
-                                          final voiceResult = _voiceResult;
-                                          if (voiceResult == null) return;
-                                          final resolvedExtraction =
-                                              voiceResult.extraction;
-                                          final qty =
-                                              resolvedExtraction.quantity!;
-                                          _resetVoiceModuleContextOnExit();
-                                          context.push(
-                                            '/orders/new',
-                                            extra: {
-                                              'product':
-                                                  resolvedExtraction.product,
-                                              'quantity': qty % 1 == 0
-                                                  ? qty.toInt().toString()
-                                                  : qty.toString(),
-                                              'unit': resolvedExtraction.unit,
-                                              'transcript':
-                                                  voiceResult.transcript,
-                                              'confidence':
-                                                  resolvedExtraction.confidence,
-                                              'matchedGigId': resolvedExtraction
-                                                  .matchedGigId,
-                                              'matchedGigLabel':
-                                                  resolvedExtraction
-                                                      .matchedGigLabel,
-                                              'extractionSource':
-                                                  resolvedExtraction.source,
-                                            },
-                                          );
-                                        }
-                                      : null,
-                                  icon: const Icon(Icons.check, size: 18),
-                                  label: const Text('Confirm'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primary,
-                                    shape: const StadiumBorder(),
-                                    elevation: 0,
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 14),
-                                    textStyle: AppTextStyles.button,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                            ),
                         ] else
                           Container(
                             padding: const EdgeInsets.all(16),
@@ -936,13 +1350,16 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
                                   style: AppTextStyles.caption,
                                 ),
                                 const SizedBox(height: 8),
+                                const _ExamplePhrase(text: '"Track my orders"'),
                                 const _ExamplePhrase(
-                                    text: '"मुझे 100 किलो यूरिया चाहिए"'),
+                                  text: '"Which payments are pending for me?"',
+                                ),
                                 const _ExamplePhrase(
-                                    text: '"I need 5 bags of DAP fertilizer"'),
+                                  text: '"What products are available now?"',
+                                ),
                                 const _ExamplePhrase(
-                                    text:
-                                        '"నాకు 50 కేజీల టమాట విత్తనాలు కావాలి"'),
+                                  text: '"I need 5 bags of DAP fertilizer"',
+                                ),
                               ],
                             ),
                           ),
@@ -953,6 +1370,87 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _VoiceClusterCard extends StatelessWidget {
+  final Cluster cluster;
+  final VoidCallback onTap;
+
+  const _VoiceClusterCard({
+    required this.cluster,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.inputBackground,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.people,
+                    color: AppColors.primary,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(cluster.product, style: AppTextStyles.label),
+                      Text(
+                        '#${cluster.id.substring(0, 8).toUpperCase()}',
+                        style: AppTextStyles.caption,
+                      ),
+                    ],
+                  ),
+                ),
+                StatusBadge.fromClusterStatus(cluster.status),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '${cluster.currentQuantity.toStringAsFixed(0)} / ${cluster.targetQuantity.toStringAsFixed(0)} ${cluster.unit}',
+              style:
+                  AppTextStyles.body.copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${cluster.membersCount} farmers · ${cluster.district ?? "your area"}',
+                  style: AppTextStyles.caption,
+                ),
+                const Icon(
+                  Icons.arrow_forward_ios,
+                  size: 12,
+                  color: AppColors.textMuted,
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

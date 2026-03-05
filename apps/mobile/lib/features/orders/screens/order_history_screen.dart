@@ -4,11 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../shared/theme/app_theme.dart';
-import '../../../shared/widgets/app_brand_icon.dart';
 import '../../../shared/widgets/app_header.dart';
-import '../../../shared/widgets/status_badge.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/models/order_model.dart';
+import '../widgets/order_summary_card.dart';
 
 final allOrdersProvider = FutureProvider.autoDispose<List<Order>>((ref) async {
   final timer = Timer.periodic(const Duration(seconds: 8), (_) {
@@ -110,7 +109,10 @@ class OrderHistoryScreen extends ConsumerWidget {
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 80),
                     itemCount: orders.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (_, i) => _OrderCard(order: orders[i]),
+                    itemBuilder: (_, i) => OrderSummaryCard(
+                      order: orders[i],
+                      onTap: () => context.push('/orders/${orders[i].id}'),
+                    ),
                   ),
                 );
               },
@@ -125,89 +127,6 @@ class OrderHistoryScreen extends ConsumerWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _OrderCard extends StatelessWidget {
-  final Order order;
-
-  const _OrderCard({required this.order});
-
-  @override
-  Widget build(BuildContext context) {
-    final cluster = order.clusterMember?.cluster;
-
-    return GestureDetector(
-      onTap: () => context.push('/orders/${order.id}'),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.inputBackground,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const AppBrandIcon(
-                    color: AppColors.primary,
-                    size: 20,
-                    padding: EdgeInsets.all(4),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(order.product, style: AppTextStyles.label),
-                      Text(
-                        '#${order.id.substring(0, 8).toUpperCase()}',
-                        style: AppTextStyles.caption,
-                      ),
-                    ],
-                  ),
-                ),
-                StatusBadge.fromOrderStatus(order.status),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              '${order.quantity.toStringAsFixed(0)} ${order.unit}',
-              style:
-                  AppTextStyles.body.copyWith(color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                if (cluster != null)
-                  Text(
-                    '${cluster.membersCount} farmers · ${cluster.district ?? ''}',
-                    style: AppTextStyles.caption,
-                  )
-                else
-                  Text('Looking for cluster…', style: AppTextStyles.caption),
-                Row(
-                  children: [
-                    const Icon(Icons.arrow_forward_ios,
-                        size: 12, color: AppColors.textMuted),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }
