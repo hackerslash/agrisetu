@@ -210,16 +210,16 @@ final routerProvider = Provider<GoRouter>((ref) {
                 return _smoothDissolvePage(
                   state: state,
                   child: AvailableClustersScreen(
-                    cropName: extra['cropName'] as String?,
+                    product: extra['product'] as String?,
                     orderId: extra['orderId'] as String?,
                     matchedGigId: extra['matchedGigId'] as String?,
                   ),
                 );
               }
-              final cropName = extra as String?;
+              final product = extra as String?;
               return _smoothDissolvePage(
                 state: state,
-                child: AvailableClustersScreen(cropName: cropName),
+                child: AvailableClustersScreen(product: product),
               );
             },
           ),

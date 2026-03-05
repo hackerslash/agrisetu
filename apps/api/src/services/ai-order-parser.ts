@@ -4,7 +4,7 @@ import { logger } from "../lib/logger.js";
 
 type GigContext = {
   id: string;
-  cropName: string;
+  product: string;
   variety: string | null;
   unit: string;
   minQuantity: number;
@@ -14,7 +14,7 @@ type GigContext = {
 };
 
 export type VoiceOrderExtraction = {
-  cropName: string | null;
+  product: string | null;
   quantity: number | null;
   unit: string | null;
   matchedGigId: string | null;
@@ -26,7 +26,7 @@ export type VoiceOrderExtraction = {
 };
 
 export type VoiceOrderDraft = {
-  cropName?: string | null;
+  product?: string | null;
   quantity?: number | null;
   unit?: string | null;
   matchedGigId?: string | null;
@@ -57,7 +57,7 @@ const UNIT_ALIASES: Record<string, string> = {
 
 const SUPPORTED_UNITS = ["kg", "quintal", "ton", "bag", "litre"] as const;
 const FALLBACK_PROCESSING_MESSAGE =
-  "I could not process this request. Please repeat your order with crop, quantity, and unit.";
+  "I could not process this request. Please repeat your order with product, quantity, and unit.";
 
 function normalizeTextForMatch(input: string) {
   return input
@@ -88,7 +88,7 @@ function normalizeUnit(input: unknown): string | null {
   return UNIT_ALIASES[key] ?? (SUPPORTED_UNITS.includes(key as never) ? key : null);
 }
 
-function sanitizeCropName(input: unknown): string | null {
+function sanitizeProduct(input: unknown): string | null {
   if (typeof input !== "string") return null;
   const value = input.trim();
   return value.length > 0 ? value : null;
@@ -131,34 +131,34 @@ function extractJsonObject(content: string): Record<string, unknown> | null {
 function buildGigLabel(gig?: GigContext | null) {
   if (!gig) return null;
   const productLabel = gig.variety
-    ? `${gig.cropName} (${gig.variety})`
-    : gig.cropName;
+    ? `${gig.product} (${gig.variety})`
+    : gig.product;
   return `${productLabel} • ${gig.vendorBusinessName} • ₹${gig.pricePerUnit.toFixed(0)}/${gig.unit}`;
 }
 
 function buildClarificationQuestion(params: {
-  cropName: string | null;
+  product: string | null;
   quantity: number | null;
   unit: string | null;
 }) {
-  const missingCrop = !params.cropName;
+  const missingProduct = !params.product;
   const missingQuantity = !params.quantity;
   const missingUnit = !params.unit;
 
-  if (!missingCrop && !missingQuantity && !missingUnit) return null;
-  if (missingCrop && missingQuantity && missingUnit) {
-    return "Which crop do you need, and what quantity in which unit?";
+  if (!missingProduct && !missingQuantity && !missingUnit) return null;
+  if (missingProduct && missingQuantity && missingUnit) {
+    return "Which product do you need, and what quantity in which unit?";
   }
-  if (missingCrop && missingQuantity) {
-    return "Which crop do you need, and how much quantity?";
+  if (missingProduct && missingQuantity) {
+    return "Which product do you need, and how much quantity?";
   }
-  if (missingCrop && missingUnit) {
-    return "Which crop do you need, and what unit should we use?";
+  if (missingProduct && missingUnit) {
+    return "Which product do you need, and what unit should we use?";
   }
   if (missingQuantity && missingUnit) {
     return "How much do you need, and in which unit (kg, quintal, ton, bag, litre)?";
   }
-  if (missingCrop) return "Which crop or input product do you need?";
+  if (missingProduct) return "Which product do you need?";
   if (missingQuantity) return "How much quantity do you need?";
   return "Please confirm the unit (kg, quintal, ton, bag, or litre).";
 }
@@ -172,7 +172,7 @@ function findGigById(gigs: GigContext[], gigId: string | null | undefined) {
 
 function buildFallbackExtraction(): VoiceOrderExtraction {
   return {
-    cropName: null,
+    product: null,
     quantity: null,
     unit: null,
     matchedGigId: null,
@@ -243,7 +243,7 @@ async function callModelForExtraction(params: {
     pendingDraft: params.pendingDraft ?? null,
     availableGigs: params.gigs.map((gig) => ({
       id: gig.id,
-      cropName: gig.cropName,
+      product: gig.product,
       variety: gig.variety,
       unit: gig.unit,
       minQuantity: gig.minQuantity,
@@ -257,10 +257,10 @@ async function callModelForExtraction(params: {
     "You are an AI order extraction assistant for agriculture. Extract agricultural order intent based on the user transcript and available context.\n\n" +
     "CRITICAL RULES:\n" +
     "1. Respond with ONLY one valid JSON object and absolutely no extra text, markdown formatting, or preamble.\n" +
-    "2. JSON schema: { \"cropName\": string|null, \"quantity\": number|null, \"unit\": \"kg\"|\"quintal\"|\"ton\"|\"bag\"|\"litre\"|null, " +
+    "2. JSON schema: { \"product\": string|null, \"quantity\": number|null, \"unit\": \"kg\"|\"quintal\"|\"ton\"|\"bag\"|\"litre\"|null, " +
     "\"matchedGigId\": string|null, \"confidence\": number, \"needsClarification\": boolean, \"clarificationQuestion\": string|null }\n" +
-    "3. Prefer matching to `availableGigs` crop/unit/variety. Use `matchedGigId` ONLY from `availableGigs` IDs.\n" +
-    "4. When multiple gigs share the same cropName, use variety mentioned in transcript to pick the right gig.\n" +
+    "3. Prefer matching to `availableGigs` product/unit/variety. Use `matchedGigId` ONLY from `availableGigs` IDs.\n" +
+    "4. When multiple gigs share the same product, use variety mentioned in transcript to pick the right gig.\n" +
     "5. If transcript is ambiguous or missing quantity/unit, set `needsClarification` to true and ask one short clarification question.\n" +
     "6. If `conversationContext` or `pendingDraft` are provided, chain with them to fill missing fields across turns before asking clarification.\n" +
     "7. MUST USE KNOWLEDGE BASE: You MUST strictly adhere to the rules, definitions, policies, and unavailability constraints provided in the <knowledge_base> section below. It overrides all other information.\n\n" +
@@ -313,7 +313,7 @@ function mergeWithPendingDraft(params: {
   const draft = pendingDraft ?? null;
   if (!draft) {
     const question = buildClarificationQuestion({
-      cropName: extraction.cropName,
+      product: extraction.product,
       quantity: extraction.quantity,
       unit: extraction.unit,
     });
@@ -328,7 +328,8 @@ function mergeWithPendingDraft(params: {
     };
   }
 
-  const mergedCrop = extraction.cropName ?? sanitizeCropName(draft.cropName) ?? null;
+  const mergedProduct =
+    extraction.product ?? sanitizeProduct(draft.product) ?? null;
   const mergedQuantity =
     extraction.quantity ?? coerceQuantity(draft.quantity) ?? null;
   const mergedUnit = extraction.unit ?? normalizeUnit(draft.unit) ?? null;
@@ -340,21 +341,21 @@ function mergeWithPendingDraft(params: {
   const matchedGig =
     findGigById(gigs, explicitGigId);
 
-  const resolvedCropName = matchedGig?.cropName ?? mergedCrop;
+  const resolvedProduct = matchedGig?.product ?? mergedProduct;
   const resolvedUnit = matchedGig?.unit ?? mergedUnit;
   const clarificationQuestion = buildClarificationQuestion({
-    cropName: resolvedCropName,
+    product: resolvedProduct,
     quantity: mergedQuantity,
     unit: resolvedUnit,
   });
 
   const usedPendingContext =
-    (!extraction.cropName && Boolean(draft.cropName)) ||
+    (!extraction.product && Boolean(draft.product)) ||
     (!extraction.quantity && Boolean(draft.quantity)) ||
     (!extraction.unit && Boolean(draft.unit));
 
   return {
-    cropName: resolvedCropName,
+    product: resolvedProduct,
     quantity: mergedQuantity,
     unit: resolvedUnit,
     matchedGigId: matchedGig?.id ?? explicitGigId ?? null,
@@ -391,19 +392,19 @@ export async function extractVoiceOrderFromTranscript(params: {
     });
     if (!parsed) return fallback;
 
-    const cropName = sanitizeCropName(parsed.cropName);
+    const product = sanitizeProduct(parsed.product);
     const quantity = coerceQuantity(parsed.quantity);
     const unit = normalizeUnit(parsed.unit);
 
     const modelGigId =
       typeof parsed.matchedGigId === "string" ? parsed.matchedGigId : null;
     const matchedGig = findGigById(params.gigs, modelGigId);
-    const resolvedCropName = matchedGig?.cropName ?? cropName;
+    const resolvedProduct = matchedGig?.product ?? product;
     const resolvedUnit = matchedGig?.unit ?? unit;
 
     const merged = mergeWithPendingDraft({
       extraction: {
-        cropName: resolvedCropName,
+        product: resolvedProduct,
         quantity,
         unit: resolvedUnit,
         matchedGigId: matchedGig?.id ?? null,

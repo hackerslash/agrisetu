@@ -86,7 +86,7 @@ export function isClusterServiceableForVendor(params: {
 }
 
 async function findBestMatchingGig(
-  cropName: string,
+  product: string,
   unit: string,
   clusterLatitude?: number,
   clusterLongitude?: number,
@@ -96,7 +96,7 @@ async function findBestMatchingGig(
   const loadGigs = (withVariety: boolean) =>
     prisma.gig.findMany({
       where: {
-        cropName: { equals: cropName, mode: "insensitive" },
+        product: { equals: product, mode: "insensitive" },
         unit: { equals: unit, mode: "insensitive" },
         status: GigStatus.PUBLISHED,
         ...(withVariety && normalizedVariety
@@ -199,7 +199,7 @@ async function buildClusterLocationPatch(params: {
  */
 async function autoCreateBidsForVotingCluster(
   clusterId: string,
-  cropName: string,
+  product: string,
   unit: string,
   currentQuantity: number,
   options?: {
@@ -218,7 +218,7 @@ async function autoCreateBidsForVotingCluster(
     ? options.matchingGigs
     : await prisma.gig.findMany({
         where: {
-          cropName: { equals: cropName, mode: "insensitive" },
+          product: { equals: product, mode: "insensitive" },
           unit: { equals: unit, mode: "insensitive" },
           status: GigStatus.PUBLISHED,
         },
@@ -312,7 +312,7 @@ async function syncBidTotals(clusterId: string, currentQuantity: number) {
 }
 
 export async function findJoinableClusters(
-  cropName: string,
+  product: string,
   unit: string,
   district?: string,
   latitude?: number,
@@ -323,7 +323,7 @@ export async function findJoinableClusters(
   const normalizedVariety = normalizeVariety(preferredVariety);
   const allCandidateClusters = await prisma.cluster.findMany({
     where: {
-      cropName: { equals: cropName, mode: "insensitive" },
+      product: { equals: product, mode: "insensitive" },
       unit: { equals: normalizedUnit, mode: "insensitive" },
       status: { in: [ClusterStatus.FORMING, ClusterStatus.VOTING] },
     },
@@ -387,7 +387,7 @@ export async function findJoinableClusters(
 }
 
 async function createClusterForOrder(
-  cropName: string,
+  product: string,
   unit: string,
   district?: string,
   state?: string,
@@ -398,7 +398,7 @@ async function createClusterForOrder(
 ) {
   const normalizedUnit = normalizeUnit(unit);
   const matchingGig = await findBestMatchingGig(
-    cropName,
+    product,
     normalizedUnit,
     latitude,
     longitude,
@@ -408,7 +408,7 @@ async function createClusterForOrder(
 
   return prisma.cluster.create({
     data: {
-      cropName,
+      product,
       unit: normalizedUnit,
       targetQuantity,
       currentQuantity: 0,
@@ -477,7 +477,7 @@ export async function assignOrderToCluster(params: {
   if (updated.status === ClusterStatus.VOTING) {
     await autoCreateBidsForVotingCluster(
       updated.id,
-      updated.cropName,
+      updated.product,
       updated.unit,
       updated.currentQuantity,
     );
@@ -489,7 +489,7 @@ export async function assignOrderToCluster(params: {
     });
     await autoCreateBidsForVotingCluster(
       updated.id,
-      updated.cropName,
+      updated.product,
       updated.unit,
       updated.currentQuantity,
     );
@@ -510,7 +510,7 @@ export async function assignOrderToCluster(params: {
 export async function createNewClusterAndAssignOrder(params: {
   farmerId: string;
   orderId: string;
-  cropName: string;
+  product: string;
   quantity: number;
   unit: string;
   preferredVariety?: string;
@@ -521,7 +521,7 @@ export async function createNewClusterAndAssignOrder(params: {
   longitude?: number;
 }) {
   const cluster = await createClusterForOrder(
-    params.cropName,
+    params.product,
     params.unit,
     params.district,
     params.state,
@@ -546,7 +546,7 @@ export async function createNewClusterAndAssignOrder(params: {
 export async function autoAssignCluster(
   farmerId: string,
   orderId: string,
-  cropName: string,
+  product: string,
   quantity: number,
   unit: string,
   preferredVariety?: string,
@@ -558,7 +558,7 @@ export async function autoAssignCluster(
 ) {
   const normalizedUnit = normalizeUnit(unit);
   const joinable = await findJoinableClusters(
-    cropName,
+    product,
     normalizedUnit,
     district,
     latitude,
@@ -579,7 +579,7 @@ export async function autoAssignCluster(
   return createNewClusterAndAssignOrder({
     farmerId,
     orderId,
-    cropName,
+    product,
     quantity,
     unit: normalizedUnit,
     preferredVariety,
@@ -599,7 +599,7 @@ export async function autoAssignCluster(
  * Also auto-bid on any already-VOTING clusters that match.
  */
 export async function syncClustersForPublishedGig(
-  cropName: string,
+  product: string,
   unit: string,
   _minQuantity: number,
 ) {
@@ -608,7 +608,7 @@ export async function syncClustersForPublishedGig(
   // Pre-fetch matching gigs to prevent N+1 queries during batch operations
   const matchingGigs = await prisma.gig.findMany({
     where: {
-      cropName: { equals: cropName, mode: "insensitive" },
+      product: { equals: product, mode: "insensitive" },
       unit: { equals: unit, mode: "insensitive" },
       status: GigStatus.PUBLISHED,
     },
@@ -626,13 +626,13 @@ export async function syncClustersForPublishedGig(
   // Recompute target quantity for FORMING clusters using only serviceable gigs.
   const formingClusters = await prisma.cluster.findMany({
     where: {
-      cropName: { equals: cropName, mode: "insensitive" },
+      product: { equals: product, mode: "insensitive" },
       unit: { equals: unit, mode: "insensitive" },
       status: ClusterStatus.FORMING,
     },
     select: {
       id: true,
-      cropName: true,
+      product: true,
       unit: true,
       targetQuantity: true,
       currentQuantity: true,
@@ -679,7 +679,7 @@ export async function syncClustersForPublishedGig(
         value,
       ): value is {
         id: string;
-        cropName: string;
+        product: string;
         unit: string;
         targetQuantity: number;
         currentQuantity: number;
@@ -722,7 +722,7 @@ export async function syncClustersForPublishedGig(
       clustersToTransition.map((cluster) =>
         autoCreateBidsForVotingCluster(
           cluster.id,
-          cluster.cropName,
+          cluster.product,
           cluster.unit,
           cluster.currentQuantity,
           {
@@ -740,13 +740,13 @@ export async function syncClustersForPublishedGig(
   // Also auto-bid on already-VOTING clusters that match this gig
   const votingClusters = await prisma.cluster.findMany({
     where: {
-      cropName: { equals: cropName, mode: "insensitive" },
+      product: { equals: product, mode: "insensitive" },
       unit: { equals: unit, mode: "insensitive" },
       status: ClusterStatus.VOTING,
     },
     select: {
       id: true,
-      cropName: true,
+      product: true,
       unit: true,
       currentQuantity: true,
       latitude: true,
@@ -758,7 +758,7 @@ export async function syncClustersForPublishedGig(
     votingClusters.map((cluster) =>
       autoCreateBidsForVotingCluster(
         cluster.id,
-        cluster.cropName,
+        cluster.product,
         cluster.unit,
         cluster.currentQuantity,
         {

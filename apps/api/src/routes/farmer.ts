@@ -423,7 +423,7 @@ router.post("/voice/parse-order", upload.single("audio"), async (req, res) => {
 // ─── Orders ───────────────────────────────────────────────────────────────────
 
 const createOrderSchema = z.object({
-  cropName: z.string().min(1),
+  product: z.string().min(1),
   quantity: z.number().positive(),
   unit: z
     .string()
@@ -454,7 +454,7 @@ router.post("/orders", async (req, res) => {
       return;
     }
 
-    let resolvedCropName = parsed.data.cropName.trim();
+    let resolvedProduct = parsed.data.product.trim();
     let resolvedUnit = parsed.data.unit;
     let preferredVariety: string | undefined;
 
@@ -489,7 +489,7 @@ router.post("/orders", async (req, res) => {
           serviceRadiusKm: matchedGig.vendor.serviceRadiusKm,
         })
       ) {
-        resolvedCropName = matchedGig.cropName;
+        resolvedProduct = matchedGig.product;
         resolvedUnit = matchedGig.unit.toLowerCase().trim();
         preferredVariety = normalizeVariety(matchedGig.variety) || undefined;
       }
@@ -498,7 +498,7 @@ router.post("/orders", async (req, res) => {
     const order = await prisma.order.create({
       data: {
         farmerId: req.user!.id,
-        cropName: resolvedCropName,
+        product: resolvedProduct,
         quantity: parsed.data.quantity,
         unit: resolvedUnit,
         deliveryDate: parsed.data.deliveryDate
@@ -511,7 +511,7 @@ router.post("/orders", async (req, res) => {
     clearAllFarmerPendingOrderDrafts(req.user!.id);
 
     const availableClusters = await findJoinableClusters(
-      resolvedCropName,
+      resolvedProduct,
       resolvedUnit,
       farmer.district ?? undefined,
       farmer.latitude ?? undefined,
@@ -552,7 +552,7 @@ router.get("/orders/:id/cluster-options", async (req, res) => {
       where: { id: req.params.id, farmerId: req.user!.id },
       select: {
         id: true,
-        cropName: true,
+        product: true,
         unit: true,
         status: true,
       },
@@ -572,7 +572,7 @@ router.get("/orders/:id/cluster-options", async (req, res) => {
     });
 
     const clusters = await findJoinableClusters(
-      order.cropName,
+      order.product,
       order.unit,
       farmer?.district ?? undefined,
       farmer?.latitude ?? undefined,
@@ -610,7 +610,7 @@ router.post("/orders/:id/assign-cluster", async (req, res) => {
       where: { id: req.params.id, farmerId: req.user!.id },
       select: {
         id: true,
-        cropName: true,
+        product: true,
         quantity: true,
         unit: true,
         status: true,
@@ -649,7 +649,7 @@ router.post("/orders/:id/assign-cluster", async (req, res) => {
         where: { id: parsed.data.clusterId },
         select: {
           id: true,
-          cropName: true,
+          product: true,
           unit: true,
           district: true,
           status: true,
@@ -673,8 +673,8 @@ router.post("/orders/:id/assign-cluster", async (req, res) => {
         return;
       }
 
-      const sameCrop =
-        cluster.cropName.toLowerCase() === order.cropName.toLowerCase();
+      const sameProduct =
+        cluster.product.toLowerCase() === order.product.toLowerCase();
       const sameUnit = cluster.unit.toLowerCase() === order.unit.toLowerCase();
       const sameDistrict =
         !farmer.district ||
@@ -698,7 +698,7 @@ router.post("/orders/:id/assign-cluster", async (req, res) => {
         : null;
 
       if (
-        !sameCrop ||
+        !sameProduct ||
         !sameUnit ||
         !((sameGeo ?? false) || (!hasGeoContext && sameDistrict)) ||
         !clusterMatchesPreferredVariety(cluster, preferredVariety)
@@ -717,7 +717,7 @@ router.post("/orders/:id/assign-cluster", async (req, res) => {
       await createNewClusterAndAssignOrder({
         farmerId: req.user!.id,
         orderId: order.id,
-        cropName: order.cropName,
+        product: order.product,
         quantity: order.quantity,
         unit: order.unit,
         preferredVariety,
@@ -806,15 +806,17 @@ router.get("/orders/:id", async (req, res) => {
 // ─── Clusters ─────────────────────────────────────────────────────────────────
 
 router.get("/clusters", async (req, res) => {
-  const { crop } = req.query;
+  const rawProductQuery = req.query.product;
+  const product =
+    typeof rawProductQuery === "string" ? rawProductQuery.trim() : "";
   try {
     const fetchClusters = () =>
       prisma.cluster.findMany({
         where: {
           members: { some: { farmerId: req.user!.id } },
           status: { notIn: [ClusterStatus.COMPLETED, ClusterStatus.FAILED] },
-          ...(crop
-            ? { cropName: { contains: crop as string, mode: "insensitive" } }
+          ...(product
+            ? { product: { contains: product, mode: "insensitive" } }
             : {}),
         },
         include: {
@@ -856,7 +858,7 @@ router.post("/clusters/:id/join", async (req, res) => {
       where: { id: parsed.data.orderId, farmerId: req.user!.id },
       select: {
         id: true,
-        cropName: true,
+        product: true,
         quantity: true,
         unit: true,
         status: true,
@@ -880,7 +882,7 @@ router.post("/clusters/:id/join", async (req, res) => {
       where: { id: req.params.id },
       select: {
         id: true,
-        cropName: true,
+        product: true,
         unit: true,
         district: true,
         status: true,
@@ -897,8 +899,8 @@ router.post("/clusters/:id/join", async (req, res) => {
       return;
     }
 
-    const sameCrop =
-      cluster.cropName.toLowerCase() === order.cropName.toLowerCase();
+    const sameProduct =
+      cluster.product.toLowerCase() === order.product.toLowerCase();
     const sameUnit = cluster.unit.toLowerCase() === order.unit.toLowerCase();
     const sameDistrict =
       !farmer?.district ||
@@ -921,7 +923,7 @@ router.post("/clusters/:id/join", async (req, res) => {
         )
       : null;
     if (
-      !sameCrop ||
+      !sameProduct ||
       !sameUnit ||
       !((sameGeo ?? false) || (!hasGeoContext && sameDistrict))
     ) {

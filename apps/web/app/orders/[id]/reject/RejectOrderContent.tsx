@@ -262,7 +262,7 @@ export function RejectOrderContent({ id }: { id: string }) {
   const shortToken = cluster.id.slice(-3).toUpperCase();
   const orderCode = `ORD-${shortToken}`;
   const clusterCode = `CLU-${shortToken}`;
-  const productName = `${cluster.cropName} - ${cluster.unit}`;
+  const productName = `${cluster.product} - ${cluster.unit}`;
   const quantityLabel = `${cluster.currentQuantity} ${cluster.unit}`;
   const selectedReasonLabel =
     REJECT_REASONS.find((reason) => reason.code === selectedReason)?.label ?? "";

@@ -170,7 +170,7 @@ class _OrderCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(order.cropName, style: AppTextStyles.label),
+                      Text(order.product, style: AppTextStyles.label),
                       Text(
                         '#${order.id.substring(0, 8).toUpperCase()}',
                         style: AppTextStyles.caption,

@@ -307,11 +307,11 @@ class ApiClient {
 
   // ─── Clusters ────────────────────────────────────────────────────────────────
 
-  Future<List<dynamic>> getClusters({String? crop}) async {
+  Future<List<dynamic>> getClusters({String? product}) async {
     try {
       final res = await _dio.get(
         '/farmer/clusters',
-        queryParameters: crop != null ? {'crop': crop} : null,
+        queryParameters: product != null ? {'product': product} : null,
       );
       return _handleResponse(res) as List<dynamic>;
     } on DioException catch (e) {

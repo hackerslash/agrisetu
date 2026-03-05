@@ -53,7 +53,7 @@ export async function farmerUpdateProfile(data: {
 // ─── Orders ───────────────────────────────────────────────────────────────────
 
 export async function farmerCreateOrder(data: {
-  cropName: string;
+  product: string;
   quantity: number;
   unit: string;
   deliveryDate?: string;

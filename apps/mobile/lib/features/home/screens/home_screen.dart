@@ -483,7 +483,7 @@ class _ActiveOrderCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      order.cropName,
+                      order.product,
                       style:
                           AppTextStyles.h5.copyWith(color: AppColors.surface),
                     ),
@@ -1021,7 +1021,7 @@ class _ActivityItem extends StatelessWidget {
                 : 'Order placed';
     final subtitle = isCluster
         ? '${order.clusterMember?.cluster?.membersCount ?? 0} farmers  ·  ${order.clusterMember?.cluster?.targetQuantity.toStringAsFixed(0) ?? '0'}${order.clusterMember?.cluster?.unit ?? order.unit} target'
-        : '${order.cropName} · ₹${NumberFormat('#,###').format((order.quantity * 840).round())}';
+        : '${order.product} · ₹${NumberFormat('#,###').format((order.quantity * 840).round())}';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),

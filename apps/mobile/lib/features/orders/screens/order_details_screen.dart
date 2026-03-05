@@ -36,7 +36,7 @@ class OrderDetailsScreen extends ConsumerStatefulWidget {
 }
 
 class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
-  final _cropCtrl = TextEditingController();
+  final _productCtrl = TextEditingController();
   final _quantityCtrl = TextEditingController();
   final _unitCtrl = TextEditingController();
   String? _voiceTranscript;
@@ -51,7 +51,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
   void initState() {
     super.initState();
     if (widget.orderId == 'new') {
-      _cropCtrl.text = widget.prefill?['crop'] as String? ?? '';
+      _productCtrl.text = widget.prefill?['product'] as String? ?? '';
       _quantityCtrl.text = widget.prefill?['quantity']?.toString() ?? '';
       _unitCtrl.text = widget.prefill?['unit'] as String? ?? 'kg';
       _voiceTranscript = widget.prefill?['transcript'] as String?;
@@ -64,19 +64,19 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
 
   @override
   void dispose() {
-    _cropCtrl.dispose();
+    _productCtrl.dispose();
     _quantityCtrl.dispose();
     _unitCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _createOrder() async {
-    if (_cropCtrl.text.isEmpty || _quantityCtrl.text.isEmpty) return;
+    if (_productCtrl.text.isEmpty || _quantityCtrl.text.isEmpty) return;
     setState(() => _isCreating = true);
     try {
       final api = ref.read(apiClientProvider);
       final payload = <String, dynamic>{
-        'cropName': _cropCtrl.text.trim(),
+        'product': _productCtrl.text.trim(),
         'quantity': double.parse(_quantityCtrl.text),
         'unit': _unitCtrl.text.trim(),
       };
@@ -122,7 +122,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
       if (mounted) {
         context.go('/clusters', extra: {
           'orderId': orderId,
-          'cropName': orderData['cropName'] as String? ?? _cropCtrl.text.trim(),
+          'product': orderData['product'] as String? ?? _productCtrl.text.trim(),
           'matchedGigId': matchedGigId,
         });
       }
@@ -389,7 +389,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '${order.cropName}  ·  ${order.quantity.toStringAsFixed(0)} ${order.unit}',
+                  '${order.product}  ·  ${order.quantity.toStringAsFixed(0)} ${order.unit}',
                   style:
                       AppTextStyles.h4.copyWith(color: AppColors.textOnPrimary),
                 ),
@@ -870,7 +870,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                     icon: Icons.eco,
                     label: 'Product Name',
                     child: TextField(
-                      controller: _cropCtrl,
+                      controller: _productCtrl,
                       decoration: const InputDecoration(
                         hintText: 'e.g., Tomato Seeds',
                         border: InputBorder.none,

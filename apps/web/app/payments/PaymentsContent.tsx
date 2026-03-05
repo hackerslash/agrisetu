@@ -126,7 +126,7 @@ export function PaymentsContent() {
               borderBottom: "1px solid #F0EDE8",
             }}
           >
-            {["Cluster / Crop", "Amount", "Status", "Farmers"].map((h) => (
+            {["Cluster / Product", "Amount", "Status", "Farmers"].map((h) => (
               <span
                 key={h}
                 style={{
@@ -174,7 +174,7 @@ export function PaymentsContent() {
                   <p
                     style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}
                   >
-                    {row.cropName}
+                    {row.product}
                   </p>
                   <p style={{ fontSize: 12, color: "#A0A0A0" }}>
                     #{row.clusterId.slice(-6).toUpperCase()}
@@ -368,7 +368,7 @@ export function PaymentsContent() {
                           color: "#1A1A1A",
                         }}
                       >
-                        {row.cropName}
+                        {row.product}
                       </p>
                       <p style={{ fontSize: 12, color: "#A0A0A0" }}>
                         Cluster #{row.clusterId.slice(-6).toUpperCase()}

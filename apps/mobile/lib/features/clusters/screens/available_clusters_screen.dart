@@ -11,7 +11,7 @@ import '../../../core/models/order_model.dart';
 import '../../../core/providers/auth_provider.dart';
 
 typedef ClusterQuery = ({
-  String? cropName,
+  String? product,
   String? orderId,
   String? matchedGigId
 });
@@ -31,7 +31,7 @@ final availableClustersProvider = FutureProvider.autoDispose
         ))
           .map((e) => Cluster.fromJson(e as Map<String, dynamic>))
           .toList()
-      : (await api.getClusters(crop: query.cropName))
+      : (await api.getClusters(product: query.product))
           .map((e) => Cluster.fromJson(e as Map<String, dynamic>))
           .toList();
 
@@ -40,13 +40,13 @@ final availableClustersProvider = FutureProvider.autoDispose
 });
 
 class AvailableClustersScreen extends ConsumerStatefulWidget {
-  final String? cropName;
+  final String? product;
   final String? orderId;
   final String? matchedGigId;
 
   const AvailableClustersScreen({
     super.key,
-    this.cropName,
+    this.product,
     this.orderId,
     this.matchedGigId,
   });
@@ -131,7 +131,7 @@ class _AvailableClustersScreenState
   Widget build(BuildContext context) {
     final farmer = ref.watch(currentFarmerProvider);
     final query = (
-      cropName: widget.cropName,
+      product: widget.product,
       orderId: widget.orderId,
       matchedGigId: widget.matchedGigId,
     );
@@ -293,11 +293,11 @@ class _AvailableClustersScreenState
   }
 
   String _subtitleText(List<Cluster> clusters) {
-    final crop = (widget.cropName ?? clusters.first.cropName).trim();
+    final product = (widget.product ?? clusters.first.product).trim();
     final minTarget =
         clusters.map((c) => c.targetQuantity).reduce(math.min).round();
     final unit = clusters.first.unit;
-    return 'Clusters for $crop (${minTarget.toString()}$unit min)';
+    return 'Clusters for $product (${minTarget.toString()}$unit min)';
   }
 }
 
@@ -560,7 +560,7 @@ class _ClusterCard extends StatelessWidget {
     if ((cluster.district ?? '').trim().isNotEmpty) {
       return '${cluster.district!.trim()} Cluster';
     }
-    return '${cluster.cropName} Cluster';
+    return '${cluster.product} Cluster';
   }
 
   static String _locationText({
@@ -762,7 +762,7 @@ class _EmptyState extends StatelessWidget {
               children: [
                 Text('How Clusters Work', style: AppTextStyles.h5),
                 const SizedBox(height: 12),
-                _Step(num: 1, text: 'You place an order for a crop input'),
+                _Step(num: 1, text: 'You place an order for a product'),
                 const SizedBox(height: 8),
                 _Step(num: 2, text: 'You choose to join an active cluster'),
                 const SizedBox(height: 8),

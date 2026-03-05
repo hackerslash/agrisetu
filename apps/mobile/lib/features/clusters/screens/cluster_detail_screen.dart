@@ -224,7 +224,7 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
                                   .copyWith(color: AppColors.surface),
                             ),
                             Text(
-                              'need ${cluster.targetQuantity.toStringAsFixed(0)} ${cluster.unit} ${cluster.cropName}',
+                              'need ${cluster.targetQuantity.toStringAsFixed(0)} ${cluster.unit} ${cluster.product}',
                               style: AppTextStyles.bodySmall.copyWith(
                                   color: AppColors.textOnPrimaryMuted),
                             ),
@@ -634,7 +634,7 @@ class _DemandCard extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '${cluster.cropName} — Demand',
+                  '${cluster.product} — Demand',
                   style: AppTextStyles.h5.copyWith(
                     color: AppColors.primary,
                     fontSize: 14,

@@ -284,7 +284,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                       const Divider(height: 24),
                       _PriceRow(
                         label: 'Product',
-                        value: cluster.cropName,
+                        value: cluster.product,
                       ),
                       const SizedBox(height: 8),
                       _PriceRow(

@@ -148,7 +148,7 @@ export function GigsContent() {
         >
           {[
             "Gig Name",
-            "Crop",
+            "Product",
             "Min Qty",
             "Price/Unit",
             "Status",
@@ -211,7 +211,7 @@ export function GigsContent() {
             >
               <div>
                 <p style={{ fontSize: 14, fontWeight: 600, color: "#1A1A1A" }}>
-                  {gig.cropName} {gig.variety ? `(${gig.variety})` : ""}
+                  {gig.product} {gig.variety ? `(${gig.variety})` : ""}
                 </p>
                 {gig.description && (
                   <p style={{ fontSize: 12, color: "#A0A0A0", marginTop: 2 }}>
@@ -220,7 +220,7 @@ export function GigsContent() {
                 )}
               </div>
               <span style={{ fontSize: 13, color: "#1A1A1A" }}>
-                {gig.cropName}
+                {gig.product}
               </span>
               <span style={{ fontSize: 13, color: "#1A1A1A" }}>
                 {gig.minQuantity} {gig.unit}

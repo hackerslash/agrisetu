@@ -168,7 +168,7 @@ export function AnalyticsContent() {
             <BarChart data={analytics?.topProducts ?? []} barSize={28}>
               <CartesianGrid strokeDasharray="3 3" stroke="#F0EDE8" />
               <XAxis
-                dataKey="crop"
+                dataKey="product"
                 tick={{ fontSize: 11, fill: "#A0A0A0" }}
                 axisLine={false}
                 tickLine={false}
@@ -256,7 +256,7 @@ export function AnalyticsContent() {
           ) : (
             analytics?.topProducts.map((product, idx) => (
               <div
-                key={product.crop}
+                key={product.product}
                 className="grid items-center"
                 style={{
                   gridTemplateColumns: "2fr 1fr 1fr",
@@ -282,7 +282,7 @@ export function AnalyticsContent() {
                   <span
                     style={{ fontSize: 14, fontWeight: 600, color: "#1A1A1A" }}
                   >
-                    {product.crop}
+                    {product.product}
                   </span>
                 </div>
                 <span

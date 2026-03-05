@@ -125,7 +125,7 @@ async function getAvailableGigContextForFarmer(
     .slice(0, 60)
     .map((gig) => ({
       id: gig.id,
-      cropName: gig.cropName,
+      product: gig.product,
       variety: gig.variety,
       unit: gig.unit,
       minQuantity: gig.minQuantity,
@@ -160,7 +160,7 @@ export type ProcessVoiceOrderForFarmerParams = {
 export type ProcessVoiceOrderForFarmerResult = {
   transcript: string;
   extraction: {
-    cropName: string | null;
+    product: string | null;
     quantity: number | null;
     unit: string | null;
     matchedGigId: string | null;
@@ -188,7 +188,7 @@ export type ProcessVoiceOrderForFarmerResult = {
 };
 
 const UNPROCESSABLE_REQUEST_MESSAGE =
-  "I could not process this request. Please repeat your order with crop, quantity, and unit.";
+  "I could not process this request. Please repeat your order with product, quantity, and unit.";
 
 function normalizeConversationSessionId(input?: string | null) {
   const normalized = input?.trim();
@@ -205,7 +205,7 @@ export function buildUnprocessableVoiceOrderResult(params: {
   return {
     transcript,
     extraction: {
-      cropName: null,
+      product: null,
       quantity: null,
       unit: null,
       matchedGigId: null,

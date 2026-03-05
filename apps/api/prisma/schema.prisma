@@ -75,7 +75,7 @@ enum DocType {
 model Gig {
   id                String      @id @default(cuid())
   vendorId          String
-  cropName          String
+  product          String
   variety           String?
   unit              String
   minQuantity       Float
@@ -99,7 +99,7 @@ enum GigStatus {
 model Order {
   id           String        @id @default(cuid())
   farmerId     String
-  cropName     String
+  product     String
   quantity     Float
   unit         String
   deliveryDate DateTime?
@@ -125,7 +125,7 @@ enum OrderStatus {
 
 model Cluster {
   id              String          @id @default(cuid())
-  cropName        String
+  product        String
   unit            String
   targetQuantity  Float
   currentQuantity Float           @default(0)

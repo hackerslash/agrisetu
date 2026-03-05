@@ -139,7 +139,7 @@ class _DeliveryTrackingScreenState
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    cluster?.cropName ?? 'Your Order',
+                    cluster?.product ?? 'Your Order',
                     style: AppTextStyles.h3.copyWith(color: AppColors.surface),
                   ),
                   if (cluster?.vendor != null)

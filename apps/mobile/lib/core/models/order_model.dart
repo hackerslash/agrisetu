@@ -66,7 +66,7 @@ enum OrderStatus {
 class Order {
   final String id;
   final String farmerId;
-  final String cropName;
+  final String product;
   final double quantity;
   final String unit;
   final DateTime? deliveryDate;
@@ -77,7 +77,7 @@ class Order {
   const Order({
     required this.id,
     required this.farmerId,
-    required this.cropName,
+    required this.product,
     required this.quantity,
     required this.unit,
     this.deliveryDate,
@@ -90,7 +90,7 @@ class Order {
     return Order(
       id: json['id'] as String,
       farmerId: json['farmerId'] as String,
-      cropName: json['cropName'] as String,
+      product: json['product'] as String,
       quantity: (json['quantity'] as num).toDouble(),
       unit: json['unit'] as String,
       deliveryDate: json['deliveryDate'] != null
@@ -245,7 +245,7 @@ enum ClusterStatus {
 
 class Cluster {
   final String id;
-  final String cropName;
+  final String product;
   final String unit;
   final double targetQuantity;
   final double currentQuantity;
@@ -267,7 +267,7 @@ class Cluster {
 
   const Cluster({
     required this.id,
-    required this.cropName,
+    required this.product,
     required this.unit,
     required this.targetQuantity,
     required this.currentQuantity,
@@ -296,7 +296,7 @@ class Cluster {
   factory Cluster.fromJson(Map<String, dynamic> json) {
     return Cluster(
       id: json['id'] as String,
-      cropName: json['cropName'] as String,
+      product: json['product'] as String,
       unit: json['unit'] as String,
       targetQuantity: (json['targetQuantity'] as num).toDouble(),
       currentQuantity: (json['currentQuantity'] as num).toDouble(),

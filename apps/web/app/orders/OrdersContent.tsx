@@ -22,7 +22,7 @@ const TABS: { label: string; value: string }[] = [
 
 interface BidState {
   clusterId: string;
-  cropName: string;
+  product: string;
   unit: string;
   currentQuantity: number;
   gigId?: string;
@@ -161,12 +161,12 @@ export function OrdersContent() {
     // Find matching gig for this cluster
     const matchingGig = (gigs as Gig[]).find(
       (g) =>
-        g.cropName.toLowerCase() === cluster.cropName.toLowerCase() &&
+        g.product.toLowerCase() === cluster.product.toLowerCase() &&
         g.unit === cluster.unit,
     );
     setBidState({
       clusterId: cluster.id,
-      cropName: cluster.cropName,
+      product: cluster.product,
       unit: cluster.unit,
       currentQuantity: cluster.currentQuantity,
       gigId: matchingGig?.id,
@@ -268,7 +268,7 @@ export function OrdersContent() {
               }}
             >
               {[
-                "Crop / Location",
+                "Product / Location",
                 "Quantity",
                 "Target",
                 "Farmers",
@@ -305,7 +305,7 @@ export function OrdersContent() {
                   <p
                     style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}
                   >
-                    {cluster.cropName}
+                    {cluster.product}
                   </p>
                   <p style={{ fontSize: 12, color: "#A0A0A0" }}>
                     {cluster.district ?? "—"}
@@ -386,7 +386,7 @@ export function OrdersContent() {
               style={{ backgroundColor: "#F7F5F0", padding: "12px 16px" }}
             >
               <p style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}>
-                {bidState.cropName} — {bidState.currentQuantity} {bidState.unit}
+                {bidState.product} — {bidState.currentQuantity} {bidState.unit}
               </p>
               <p style={{ fontSize: 12, color: "#A0A0A0", marginTop: 2 }}>
                 Cluster needs {bidState.currentQuantity} {bidState.unit} total
@@ -565,7 +565,7 @@ export function OrdersContent() {
         >
           {[
             "Order ID",
-            "Cluster / Crop",
+            "Cluster / Product",
             "Qty",
             "Farmers",
             "Amount",
@@ -630,7 +630,7 @@ export function OrdersContent() {
                 </span>
                 <div>
                   <p style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}>
-                    {order.cropName}
+                    {order.product}
                   </p>
                   <p style={{ fontSize: 12, color: "#A0A0A0" }}>
                     {order.district ?? "Cluster"}

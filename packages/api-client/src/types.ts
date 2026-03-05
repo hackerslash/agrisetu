@@ -74,7 +74,7 @@ export interface Farmer {
 export interface Gig {
   id: string;
   vendorId: string;
-  cropName: string;
+  product: string;
   variety?: string | null;
   unit: string;
   minQuantity: number;
@@ -90,7 +90,7 @@ export interface Gig {
 export interface Order {
   id: string;
   farmerId: string;
-  cropName: string;
+  product: string;
   quantity: number;
   unit: string;
   deliveryDate?: string | null;
@@ -103,7 +103,7 @@ export interface Order {
 
 export interface Cluster {
   id: string;
-  cropName: string;
+  product: string;
   unit: string;
   targetQuantity: number;
   currentQuantity: number;
@@ -210,7 +210,7 @@ export interface AnalyticsData {
   bidWinRate: number;
   avgRating: number;
   revenueChart: { date: string; amount: number }[];
-  topProducts: { crop: string; revenue: number; orders: number }[];
+  topProducts: { product: string; revenue: number; orders: number }[];
   ratingsCount: number;
   ratingDistribution: Record<1 | 2 | 3 | 4 | 5, number>;
 }
@@ -223,7 +223,7 @@ export interface PaymentSummary {
 
 export interface VendorPaymentRow {
   clusterId: string;
-  cropName: string;
+  product: string;
   totalAmount: number;
   status: "released" | "escrow" | "pending" | "refunded";
   clusterStatus: ClusterStatus;

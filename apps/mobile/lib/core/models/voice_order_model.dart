@@ -1,5 +1,5 @@
 class VoiceOrderExtraction {
-  final String? cropName;
+  final String? product;
   final double? quantity;
   final String? unit;
   final String? matchedGigId;
@@ -11,7 +11,7 @@ class VoiceOrderExtraction {
   final String source;
 
   const VoiceOrderExtraction({
-    this.cropName,
+    this.product,
     this.quantity,
     this.unit,
     this.matchedGigId,
@@ -25,7 +25,7 @@ class VoiceOrderExtraction {
 
   factory VoiceOrderExtraction.fromJson(Map<String, dynamic> json) {
     return VoiceOrderExtraction(
-      cropName: json['cropName'] as String?,
+      product: json['product'] as String?,
       quantity: (json['quantity'] as num?)?.toDouble(),
       unit: json['unit'] as String?,
       matchedGigId: json['matchedGigId'] as String?,
@@ -62,7 +62,7 @@ class VoiceOrderResult {
   });
 
   bool get isActionable =>
-      (extraction.cropName?.trim().isNotEmpty ?? false) &&
+      (extraction.product?.trim().isNotEmpty ?? false) &&
       extraction.quantity != null &&
       extraction.quantity! > 0 &&
       (extraction.unit?.trim().isNotEmpty ?? false);

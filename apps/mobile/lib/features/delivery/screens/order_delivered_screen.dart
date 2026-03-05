@@ -107,7 +107,7 @@ class _OrderDeliveredScreenState extends ConsumerState<OrderDeliveredScreen> {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              cluster.cropName,
+                              cluster.product,
                               style: AppTextStyles.h5,
                             ),
                           ),

@@ -10,7 +10,7 @@ type FarmerProfileSnapshot = {
 };
 
 export type PendingOrderDraft = {
-  cropName: string | null;
+  product: string | null;
   quantity: number | null;
   unit: string | null;
   matchedGigId: string | null;
@@ -174,7 +174,7 @@ function addEntry(params: {
 }
 
 function summarizeExtraction(extraction: VoiceOrderExtraction) {
-  const product = extraction.cropName ?? "unknown";
+  const product = extraction.product ?? "unknown";
   const quantity =
     extraction.quantity == null ? "unknown" : extraction.quantity.toString();
   const unit = extraction.unit ?? "unknown";
@@ -264,7 +264,7 @@ export function setFarmerPendingOrderDraft(params: {
   const store = getStore(params.farmerId, params.conversationSessionId);
   store.lastTouchedAt = Date.now();
   store.pendingDraft = {
-    cropName: params.extraction.cropName ?? null,
+    product: params.extraction.product ?? null,
     quantity: params.extraction.quantity ?? null,
     unit: params.extraction.unit ?? null,
     matchedGigId: params.extraction.matchedGigId ?? null,

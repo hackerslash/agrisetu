@@ -60,7 +60,7 @@ class ClusterEmptyScreen extends StatelessWidget {
                     const SizedBox(height: 16),
                     _Step(
                       num: 1,
-                      text: 'Place an order for any crop input',
+                      text: 'Place an order for any product',
                       icon: Icons.shopping_cart_outlined,
                     ),
                     const Padding(

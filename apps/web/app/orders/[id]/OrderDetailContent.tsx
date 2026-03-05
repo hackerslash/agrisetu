@@ -447,7 +447,7 @@ export function OrderDetailContent({ id }: { id: string }) {
             </p>
             <div className="flex flex-col gap-3">
               {[
-                { label: "Crop", value: cluster.cropName },
+                { label: "Product", value: cluster.product },
                 {
                   label: "Quantity",
                   value: `${cluster.currentQuantity} ${cluster.unit}`,

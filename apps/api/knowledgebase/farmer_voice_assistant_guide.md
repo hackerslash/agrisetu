@@ -42,7 +42,7 @@ Return only one JSON object with this exact shape:
 
 ```json
 {
-  "cropName": "string|null",
+  "product": "string|null",
   "quantity": "number|null",
   "unit": "kg|quintal|ton|bag|litre|null",
   "matchedGigId": "string|null",
@@ -77,13 +77,13 @@ Ask one question that captures all missing critical fields in one go.
 
 Priority order of required fields:
 
-1. Product (`cropName`)
+1. Product (`product`)
 2. Quantity (`quantity`)
 3. Unit (`unit`)
 
 If all three missing:
 
-- "Which crop do you need, and what quantity in which unit?"
+- "Which product do you need, and what quantity in which unit?"
 
 If quantity and unit missing:
 
@@ -145,7 +145,7 @@ Map informal unit words to canonical units:
 ### 6.3 Product extraction
 
 1. Prefer exact or strong match with available gigs.
-2. If variety is spoken ("hybrid tomato seed"), keep the main product as `cropName` and rely on matching logic for `matchedGigId`.
+2. If variety is spoken ("hybrid tomato seed"), keep the main product as `product` and rely on matching logic for `matchedGigId`.
 3. If transcript is too broad ("seed chahiye"), ask product clarification.
 
 ---
@@ -153,7 +153,7 @@ Map informal unit words to canonical units:
 ## 7. Gig Matching Rules
 
 1. `matchedGigId` must refer to a valid available gig.
-2. Prefer gigs where crop + variety + unit align with transcript.
+2. Prefer gigs where product + variety + unit align with transcript.
 3. If multiple gigs are close, choose the best-supported match.
 4. If ambiguity remains high, set `matchedGigId` to null and ask clarification.
 5. Never fabricate a gig id.
@@ -173,7 +173,7 @@ Use this policy when the farmer asks for an item that cannot be fulfilled:
 Recommended clarification text patterns:
 
 1. Unsupported item:
-   - "This item is not available for ordering here. Please tell me a crop input like seeds, fertilizer, or pesticide."
+   - "This item is not available for ordering here. Please tell me an agricultural product like seeds, fertilizer, or pesticide."
 2. No matched gigs in region:
    - "I could not find this product from vendors in your area right now. Please choose another available product."
 
@@ -238,7 +238,7 @@ Output:
 
 ```json
 {
-  "cropName": "Tomato seed",
+  "product": "Tomato seed",
   "quantity": 50,
   "unit": "kg",
   "matchedGigId": "valid-gig-id-if-available-else-null",
@@ -257,7 +257,7 @@ Output:
 
 ```json
 {
-  "cropName": "Urea",
+  "product": "Urea",
   "quantity": 100,
   "unit": null,
   "matchedGigId": null,
@@ -271,7 +271,7 @@ Output:
 
 Pending draft:
 
-- cropName: "DAP"
+- product: "DAP"
 - quantity: 20
 - unit: null
 
@@ -282,7 +282,7 @@ Output:
 
 ```json
 {
-  "cropName": "DAP",
+  "product": "DAP",
   "quantity": 20,
   "unit": "bag",
   "matchedGigId": "valid-gig-id-if-available-else-null",
@@ -301,13 +301,13 @@ Output:
 
 ```json
 {
-  "cropName": null,
+  "product": null,
   "quantity": null,
   "unit": null,
   "matchedGigId": null,
   "confidence": 0.25,
   "needsClarification": true,
-  "clarificationQuestion": "Which crop do you need, and what quantity in which unit?"
+  "clarificationQuestion": "Which product do you need, and what quantity in which unit?"
 }
 ```
 
@@ -320,13 +320,13 @@ Output:
 
 ```json
 {
-  "cropName": null,
+  "product": null,
   "quantity": null,
   "unit": null,
   "matchedGigId": null,
   "confidence": 0.22,
   "needsClarification": true,
-  "clarificationQuestion": "This item is not available for ordering here. Please tell me a crop input like seeds, fertilizer, or pesticide."
+  "clarificationQuestion": "This item is not available for ordering here. Please tell me an agricultural product like seeds, fertilizer, or pesticide."
 }
 ```
 
@@ -343,7 +343,7 @@ Output:
 
 ```json
 {
-  "cropName": "Paddy seed",
+  "product": "Paddy seed",
   "quantity": 5,
   "unit": "bag",
   "matchedGigId": null,

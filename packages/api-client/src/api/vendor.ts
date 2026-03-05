@@ -53,7 +53,7 @@ export async function getGigs(status?: string): Promise<Gig[]> {
 }
 
 export async function createGig(data: {
-  cropName: string;
+  product: string;
   variety?: string;
   unit: string;
   minQuantity: number;

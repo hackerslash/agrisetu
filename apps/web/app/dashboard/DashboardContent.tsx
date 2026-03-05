@@ -299,7 +299,7 @@ export function DashboardContent() {
                         color: "#1A1A1A",
                       }}
                     >
-                      {order.cropName}
+                      {order.product}
                     </p>
                     <p style={{ fontSize: 12, color: "#A0A0A0" }}>
                       {order.currentQuantity} {order.unit} ·{" "}
@@ -335,7 +335,7 @@ export function DashboardContent() {
             >
               <div>
                 <p style={{ fontSize: 14, fontWeight: 600, color: "#1A1A1A" }}>
-                  {cluster.cropName} — {cluster.unit}
+                  {cluster.product} — {cluster.unit}
                 </p>
                 <p style={{ fontSize: 12, color: "#A0A0A0", marginTop: 2 }}>
                   {cluster.currentQuantity}/{cluster.targetQuantity}{" "}
@@ -393,7 +393,7 @@ export function DashboardContent() {
             >
               <div>
                 <p style={{ fontSize: 14, fontWeight: 600, color: "#1A1A1A" }}>
-                  Cluster #{order.id.slice(-6).toUpperCase()} — {order.cropName}
+                  Cluster #{order.id.slice(-6).toUpperCase()} — {order.product}
                 </p>
                 <p style={{ fontSize: 12, color: "#A0A0A0", marginTop: 2 }}>
                   {order.currentQuantity} {order.unit} ·{" "}

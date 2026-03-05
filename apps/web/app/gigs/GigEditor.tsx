@@ -10,7 +10,7 @@ import { vendorApi } from "@repo/api-client";
 import type { Gig } from "@repo/api-client";
 
 const gigSchema = z.object({
-  cropName: z.string().min(1, "Crop name is required"),
+  product: z.string().min(1, "Product name is required"),
   variety: z.string().optional(),
   unit: z.string().min(1, "Unit is required"),
   minQuantity: z.coerce.number().positive("Must be positive"),
@@ -83,7 +83,7 @@ export function GigEditor({ initialData }: GigEditorProps) {
     resolver: zodResolver(gigSchema),
     defaultValues: initialData
       ? {
-          cropName: initialData.cropName,
+          product: initialData.product,
           variety: initialData.variety ?? "",
           unit: initialData.unit,
           minQuantity: initialData.minQuantity,
@@ -163,11 +163,11 @@ export function GigEditor({ initialData }: GigEditorProps) {
           <div className="flex gap-4">
             <div className="flex-1">
               <FormInput
-                label="Crop Name"
+                label="Product"
                 placeholder="e.g. Wheat, Rice, Urea"
                 required
-                error={errors.cropName?.message}
-                {...register("cropName")}
+                error={errors.product?.message}
+                {...register("product")}
               />
             </div>
             <div className="flex-1">

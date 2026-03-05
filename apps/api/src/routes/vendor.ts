@@ -252,8 +252,17 @@ router.get("/gigs", async (req, res) => {
 });
 
 const createGigSchema = z.object({
-  cropName: z.string().min(1),
-  variety: z.string().optional(),
+  product: z
+    .string()
+    .min(1)
+    .transform((value) => value.trim()),
+  variety: z
+    .string()
+    .optional()
+    .transform((value) => {
+      const normalized = value?.trim();
+      return normalized && normalized.length > 0 ? normalized : undefined;
+    }),
   unit: z
     .string()
     .min(1)
@@ -272,13 +281,45 @@ router.post("/gigs", async (req, res) => {
     return;
   }
   try {
+    const duplicateGig = await prisma.gig.findFirst({
+      where: {
+        vendorId: req.user!.id,
+        status: { not: GigStatus.CLOSED },
+        product: {
+          equals: parsed.data.product,
+          mode: "insensitive",
+        },
+        unit: {
+          equals: parsed.data.unit,
+          mode: "insensitive",
+        },
+        ...(parsed.data.variety
+          ? {
+              variety: {
+                equals: parsed.data.variety,
+                mode: "insensitive",
+              },
+            }
+          : { variety: null }),
+      },
+      select: { id: true },
+    });
+    if (duplicateGig) {
+      error(
+        res,
+        "Duplicate gig not allowed. Change at least one key field (for example, variety, product, or unit).",
+        409,
+      );
+      return;
+    }
+
     const gig = await prisma.gig.create({
       data: { ...parsed.data, vendorId: req.user!.id },
     });
     // If published immediately, sync matching FORMING clusters
     if (gig.status === GigStatus.PUBLISHED) {
       await syncClustersForPublishedGig(
-        gig.cropName,
+        gig.product,
         gig.unit,
         gig.minQuantity,
       );
@@ -290,8 +331,17 @@ router.post("/gigs", async (req, res) => {
 });
 
 const updateGigSchema = z.object({
-  cropName: z.string().optional(),
-  variety: z.string().optional(),
+  product: z
+    .string()
+    .optional()
+    .transform((value) => value?.trim()),
+  variety: z
+    .string()
+    .optional()
+    .transform((value) => {
+      const normalized = value?.trim();
+      return normalized && normalized.length > 0 ? normalized : undefined;
+    }),
   unit: z
     .string()
     .optional()
@@ -319,6 +369,37 @@ router.patch("/gigs/:id", async (req, res) => {
       return;
     }
 
+    const candidateProduct = parsed.data.product ?? before.product;
+    const candidateUnit = parsed.data.unit ?? before.unit;
+    const candidateVariety = parsed.data.variety ?? before.variety ?? null;
+
+    const duplicateGig = await prisma.gig.findFirst({
+      where: {
+        vendorId: req.user!.id,
+        id: { not: before.id },
+        status: { not: GigStatus.CLOSED },
+        product: { equals: candidateProduct, mode: "insensitive" },
+        unit: { equals: candidateUnit, mode: "insensitive" },
+        ...(candidateVariety
+          ? {
+              variety: {
+                equals: candidateVariety,
+                mode: "insensitive",
+              },
+            }
+          : { variety: null }),
+      },
+      select: { id: true },
+    });
+    if (duplicateGig) {
+      error(
+        res,
+        "Duplicate gig not allowed. Change at least one key field (for example, variety, product, or unit).",
+        409,
+      );
+      return;
+    }
+
     const result = await prisma.gig.updateMany({
       where: { id: req.params.id, vendorId: req.user!.id },
       data: parsed.data,
@@ -338,7 +419,7 @@ router.patch("/gigs/:id", async (req, res) => {
       updated.status === GigStatus.PUBLISHED
     ) {
       await syncClustersForPublishedGig(
-        updated.cropName,
+        updated.product,
         updated.unit,
         updated.minQuantity,
       );
@@ -390,12 +471,12 @@ router.get("/clusters", async (req, res) => {
 
     const vendorGigs = await prisma.gig.findMany({
       where: { vendorId: req.user!.id, status: GigStatus.PUBLISHED },
-      select: { cropName: true, unit: true },
+      select: { product: true, unit: true },
     });
 
-    // Build case-insensitive crop+unit filter
+    // Build case-insensitive product+unit filter
     const gigFilters = vendorGigs.map((g) => ({
-      cropName: { equals: g.cropName, mode: "insensitive" as const },
+      product: { equals: g.product, mode: "insensitive" as const },
       unit: {
         equals: g.unit.toLowerCase().trim(),
         mode: "insensitive" as const,
@@ -1192,7 +1273,7 @@ router.get("/payments", async (req, res) => {
 
       return {
         clusterId: cluster.id,
-        cropName: cluster.cropName,
+        product: cluster.product,
         totalAmount,
         status: isRefunded
           ? "refunded"
@@ -1348,15 +1429,15 @@ router.get("/analytics", async (req, res) => {
       const revenue = c.payments
         .filter((p) => p.status === PaymentStatus.SUCCESS)
         .reduce((sum, p) => sum + p.amount, 0);
-      if (!productMap[c.cropName]) {
-        productMap[c.cropName] = { revenue: 0, orders: 0 };
+      if (!productMap[c.product]) {
+        productMap[c.product] = { revenue: 0, orders: 0 };
       }
-      productMap[c.cropName]!.revenue += revenue;
-      productMap[c.cropName]!.orders += 1;
+      productMap[c.product]!.revenue += revenue;
+      productMap[c.product]!.orders += 1;
     });
 
     const topProducts = Object.entries(productMap)
-      .map(([crop, data]) => ({ crop, ...data }))
+      .map(([product, data]) => ({ product, ...data }))
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 5);
 

@@ -32,7 +32,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
   final Random _random = Random();
   static const List<String> _processingHintPool = [
     'Tuning into your order…',
-    'Listening for crop and quantity…',
+    'Listening for product and quantity…',
     'Converting your voice into an order…',
     'Matching words with marketplace items…',
   ];
@@ -785,7 +785,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
                                     Expanded(
                                       child: _ExtractedField(
                                         label: 'Product',
-                                        value: extraction?.cropName ??
+                                        value: extraction?.product ??
                                             'Not detected',
                                       ),
                                     ),
@@ -887,8 +887,8 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
                                           context.push(
                                             '/orders/new',
                                             extra: {
-                                              'crop':
-                                                  resolvedExtraction.cropName,
+                                              'product':
+                                                  resolvedExtraction.product,
                                               'quantity': qty % 1 == 0
                                                   ? qty.toInt().toString()
                                                   : qty.toString(),
