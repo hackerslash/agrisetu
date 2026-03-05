@@ -30,7 +30,7 @@ import {
   withFarmerAvatarForClient,
 } from "../services/farmer-avatar.js";
 import {
-  clearFarmerPendingOrderDraft,
+  clearAllFarmerPendingOrderDrafts,
 } from "../services/conversation-memory.js";
 import { processVoiceOrderForFarmer } from "../services/voice-order-processing.js";
 
@@ -508,7 +508,7 @@ router.post("/orders", async (req, res) => {
     });
 
     // Once an order is successfully created, the pending voice-order draft is stale.
-    clearFarmerPendingOrderDraft(req.user!.id);
+    clearAllFarmerPendingOrderDrafts(req.user!.id);
 
     const availableClusters = await findJoinableClusters(
       resolvedCropName,

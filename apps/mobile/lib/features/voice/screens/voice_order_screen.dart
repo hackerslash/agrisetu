@@ -50,6 +50,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
   int _recordedSeconds = 0;
   int _processingHintIndex = 0;
   List<String> _processingHints = const [];
+  late String _voiceConversationSessionId;
   String? _errorMessage;
   String _liveTranscript = '';
   String? _liveDetectedLanguageCode;
@@ -58,6 +59,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
   @override
   void initState() {
     super.initState();
+    _voiceConversationSessionId = _buildConversationSessionId();
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1000),
@@ -272,6 +274,28 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
     );
   }
 
+  String _buildConversationSessionId() {
+    final timestamp = DateTime.now().microsecondsSinceEpoch;
+    final nonce = _random.nextInt(0x7fffffff).toRadixString(36);
+    return 'voice_${timestamp}_$nonce';
+  }
+
+  void _resetVoiceModuleContextOnExit() {
+    _recordingTimer?.cancel();
+    _stopProcessingHints();
+    _clarificationPlayer.stop();
+    _fallbackTts.stop();
+    unawaited(_closeVoiceStream());
+    _isRecording = false;
+    _isProcessing = false;
+    _recordedSeconds = 0;
+    _errorMessage = null;
+    _voiceResult = null;
+    _liveTranscript = '';
+    _liveDetectedLanguageCode = null;
+    _voiceConversationSessionId = _buildConversationSessionId();
+  }
+
   Future<void> _closeVoiceStream() async {
     await _audioStreamSub?.cancel();
     _audioStreamSub = null;
@@ -374,6 +398,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
         'type': 'start',
         'sampleRateHertz': 16000,
         'languageCode': languageHint,
+        'conversationSessionId': _voiceConversationSessionId,
       }),
     );
 
@@ -478,11 +503,9 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
   @override
   void deactivate() {
     if (_isRecording) {
-      _recordingTimer?.cancel();
       _recorder.stop().catchError((_) => null);
-      unawaited(_closeVoiceStream());
-      _isRecording = false;
     }
+    _resetVoiceModuleContextOnExit();
     super.deactivate();
   }
 
@@ -535,6 +558,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
       appBar: AppHeader(
         title: 'Voice Order',
         onBack: () {
+          _resetVoiceModuleContextOnExit();
           if (context.canPop()) {
             context.pop();
           } else {
@@ -853,10 +877,13 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
                                 child: ElevatedButton.icon(
                                   onPressed: canConfirm
                                       ? () {
+                                          final voiceResult = _voiceResult;
+                                          if (voiceResult == null) return;
                                           final resolvedExtraction =
-                                              _voiceResult!.extraction;
+                                              voiceResult.extraction;
                                           final qty =
                                               resolvedExtraction.quantity!;
+                                          _resetVoiceModuleContextOnExit();
                                           context.push(
                                             '/orders/new',
                                             extra: {
@@ -867,7 +894,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
                                                   : qty.toString(),
                                               'unit': resolvedExtraction.unit,
                                               'transcript':
-                                                  _voiceResult!.transcript,
+                                                  voiceResult.transcript,
                                               'confidence':
                                                   resolvedExtraction.confidence,
                                               'matchedGigId': resolvedExtraction

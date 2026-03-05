@@ -154,6 +154,7 @@ export type ProcessVoiceOrderForFarmerParams = {
   transcribedFromAudio: boolean;
   languageCode?: string | null;
   detectedLanguageCode?: string | null;
+  conversationSessionId?: string | null;
 };
 
 export type ProcessVoiceOrderForFarmerResult = {
@@ -186,6 +187,49 @@ export type ProcessVoiceOrderForFarmerResult = {
   };
 };
 
+const UNPROCESSABLE_REQUEST_MESSAGE =
+  "I could not process this request. Please repeat your order with crop, quantity, and unit.";
+
+function normalizeConversationSessionId(input?: string | null) {
+  const normalized = input?.trim();
+  return normalized && normalized.length > 0 ? normalized : null;
+}
+
+export function buildUnprocessableVoiceOrderResult(params: {
+  transcript: string;
+  transcribedFromAudio: boolean;
+  detectedLanguageCode?: string | null;
+  languageCode?: string | null;
+}): ProcessVoiceOrderForFarmerResult {
+  const transcript = params.transcript.trim();
+  return {
+    transcript,
+    extraction: {
+      cropName: null,
+      quantity: null,
+      unit: null,
+      matchedGigId: null,
+      matchedGigLabel: null,
+      confidence: 0,
+      needsClarification: true,
+      clarificationQuestion: UNPROCESSABLE_REQUEST_MESSAGE,
+      clarificationQuestionLocalized: UNPROCESSABLE_REQUEST_MESSAGE,
+      source: "fallback",
+    },
+    clarificationSpeech: null,
+    context: {
+      availableGigCount: 0,
+      transcribedFromAudio: params.transcribedFromAudio,
+      detectedLanguageCode: params.detectedLanguageCode ?? null,
+      clarificationLanguageCode:
+        params.detectedLanguageCode ?? params.languageCode ?? null,
+      memoryMatchesUsed: 0,
+      usedPendingDraft: false,
+      pendingDraftActive: false,
+    },
+  };
+}
+
 export async function processVoiceOrderForFarmer(
   params: ProcessVoiceOrderForFarmerParams,
 ): Promise<ProcessVoiceOrderForFarmerResult> {
@@ -195,14 +239,33 @@ export async function processVoiceOrderForFarmer(
   }
 
   const context = await getAvailableGigContextForFarmer(params.farmerId);
-  indexFarmerProfileMemory(params.farmerId, context.farmerProfile);
+  const conversationSessionId = normalizeConversationSessionId(
+    params.conversationSessionId,
+  );
+  if (conversationSessionId) {
+    indexFarmerProfileMemory(
+      {
+        farmerId: params.farmerId,
+        conversationSessionId,
+      },
+      context.farmerProfile,
+    );
+  }
 
-  const pendingDraft = getFarmerPendingOrderDraft(params.farmerId);
-  const memoryMatches = searchFarmerConversationMemory({
-    farmerId: params.farmerId,
-    query: transcript,
-    limit: 5,
-  });
+  const pendingDraft = conversationSessionId
+    ? getFarmerPendingOrderDraft({
+        farmerId: params.farmerId,
+        conversationSessionId,
+      })
+    : null;
+  const memoryMatches = conversationSessionId
+    ? searchFarmerConversationMemory({
+        farmerId: params.farmerId,
+        conversationSessionId,
+        query: transcript,
+        limit: 5,
+      })
+    : [];
 
   const extraction = await extractVoiceOrderFromTranscript({
     transcript,
@@ -219,17 +282,23 @@ export async function processVoiceOrderForFarmer(
     audioBase64: string;
   } | null = null;
 
-  rememberFarmerConversationTurn({
-    farmerId: params.farmerId,
-    transcript,
-    extraction,
-  });
-
-  if (extraction.needsClarification) {
-    setFarmerPendingOrderDraft({
+  if (conversationSessionId) {
+    rememberFarmerConversationTurn({
       farmerId: params.farmerId,
+      conversationSessionId,
+      transcript,
       extraction,
     });
+  }
+
+  if (extraction.needsClarification) {
+    if (conversationSessionId) {
+      setFarmerPendingOrderDraft({
+        farmerId: params.farmerId,
+        conversationSessionId,
+        extraction,
+      });
+    }
 
     if (extraction.clarificationQuestion) {
       const speech = await buildLocalizedClarificationSpeech({
@@ -250,7 +319,12 @@ export async function processVoiceOrderForFarmer(
       }
     }
   } else {
-    clearFarmerPendingOrderDraft(params.farmerId);
+    if (conversationSessionId) {
+      clearFarmerPendingOrderDraft({
+        farmerId: params.farmerId,
+        conversationSessionId,
+      });
+    }
   }
 
   return {

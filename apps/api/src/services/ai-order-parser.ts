@@ -57,7 +57,7 @@ const UNIT_ALIASES: Record<string, string> = {
 
 const SUPPORTED_UNITS = ["kg", "quintal", "ton", "bag", "litre"] as const;
 const FALLBACK_PROCESSING_MESSAGE =
-  "Sorry, we cannot proceed process your request.";
+  "I could not process this request. Please repeat your order with crop, quantity, and unit.";
 
 function normalizeTextForMatch(input: string) {
   return input
@@ -67,22 +67,6 @@ function normalizeTextForMatch(input: string) {
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim()
     .replace(/\s+/g, " ");
-}
-
-function containsWholePhrase(haystack: string, phrase: string) {
-  if (!haystack || !phrase) return false;
-  return ` ${haystack} `.includes(` ${phrase} `);
-}
-
-function countTokenOverlap(left: string, right: string) {
-  if (!left || !right) return 0;
-  const leftTokens = new Set(left.split(" ").filter(Boolean));
-  const rightTokens = new Set(right.split(" ").filter(Boolean));
-  let overlap = 0;
-  for (const token of leftTokens) {
-    if (rightTokens.has(token)) overlap += 1;
-  }
-  return overlap;
 }
 
 function logAiJson(label: string, payload: unknown) {
@@ -184,72 +168,6 @@ function findGigById(gigs: GigContext[], gigId: string | null | undefined) {
   const normalizedId = gigId.trim();
   if (!normalizedId) return null;
   return gigs.find((gig) => gig.id === normalizedId) ?? null;
-}
-
-function findBestGigByIntent(params: {
-  gigs: GigContext[];
-  cropName: string | null;
-  unit: string | null;
-  transcriptLower: string;
-}) {
-  const { gigs, cropName, unit, transcriptLower } = params;
-  const transcriptNormalized = normalizeTextForMatch(transcriptLower);
-  const cropNormalized = cropName ? normalizeTextForMatch(cropName) : "";
-  const normalizedUnit = unit?.toLowerCase().trim() ?? null;
-
-  const scored = gigs.map((gig) => {
-    const gigCropNormalized = normalizeTextForMatch(gig.cropName);
-    const gigVarietyNormalized = gig.variety
-      ? normalizeTextForMatch(gig.variety)
-      : "";
-    const gigProductNormalized = normalizeTextForMatch(
-      gig.variety ? `${gig.cropName} ${gig.variety}` : gig.cropName,
-    );
-    let score = 0;
-
-    if (cropNormalized && gigProductNormalized === cropNormalized) score += 120;
-    if (containsWholePhrase(transcriptNormalized, gigProductNormalized)) score += 100;
-
-    if (cropNormalized && gigCropNormalized === cropNormalized) score += 80;
-    if (cropNormalized && containsWholePhrase(gigCropNormalized, cropNormalized)) score += 30;
-    if (cropNormalized && containsWholePhrase(cropNormalized, gigCropNormalized)) score += 25;
-    if (containsWholePhrase(transcriptNormalized, gigCropNormalized)) score += 60;
-
-    if (gigVarietyNormalized) {
-      if (cropNormalized && gigVarietyNormalized === cropNormalized) score += 45;
-      if (cropNormalized && containsWholePhrase(cropNormalized, gigVarietyNormalized)) score += 30;
-      if (containsWholePhrase(transcriptNormalized, gigVarietyNormalized)) score += 80;
-    }
-
-    const overlapFromCrop = countTokenOverlap(gigCropNormalized, cropNormalized);
-    const overlapFromTranscript = countTokenOverlap(gigCropNormalized, transcriptNormalized);
-    const overlapProductFromCrop = countTokenOverlap(gigProductNormalized, cropNormalized);
-    const overlapProductFromTranscript = countTokenOverlap(
-      gigProductNormalized,
-      transcriptNormalized,
-    );
-    score += overlapFromCrop * 6;
-    score += overlapFromTranscript * 4;
-    score += overlapProductFromCrop * 8;
-    score += overlapProductFromTranscript * 6;
-
-    if (normalizedUnit && gig.unit.toLowerCase().trim() === normalizedUnit) {
-      score += 20;
-    } else if (normalizedUnit) {
-      score -= 4;
-    }
-
-    return { gig, score };
-  });
-
-  scored.sort(
-    (a, b) =>
-      b.score - a.score ||
-      b.gig.cropName.length - a.gig.cropName.length ||
-      a.gig.minQuantity - b.gig.minQuantity,
-  );
-  const top = scored[0];
-  return top && top.score >= 12 ? top.gig : null;
 }
 
 function buildFallbackExtraction(): VoiceOrderExtraction {
@@ -390,9 +308,8 @@ function mergeWithPendingDraft(params: {
   extraction: VoiceOrderExtraction;
   pendingDraft?: VoiceOrderDraft | null;
   gigs: GigContext[];
-  transcript: string;
 }): VoiceOrderExtraction {
-  const { extraction, pendingDraft, gigs, transcript } = params;
+  const { extraction, pendingDraft, gigs } = params;
   const draft = pendingDraft ?? null;
   if (!draft) {
     const question = buildClarificationQuestion({
@@ -421,13 +338,7 @@ function mergeWithPendingDraft(params: {
     (typeof draft.matchedGigId === "string" ? draft.matchedGigId : null);
 
   const matchedGig =
-    findGigById(gigs, explicitGigId) ??
-    findBestGigByIntent({
-      gigs,
-      cropName: mergedCrop,
-      unit: mergedUnit,
-      transcriptLower: transcript.toLowerCase(),
-    });
+    findGigById(gigs, explicitGigId);
 
   const resolvedCropName = matchedGig?.cropName ?? mergedCrop;
   const resolvedUnit = matchedGig?.unit ?? mergedUnit;
@@ -484,15 +395,9 @@ export async function extractVoiceOrderFromTranscript(params: {
     const quantity = coerceQuantity(parsed.quantity);
     const unit = normalizeUnit(parsed.unit);
 
-    const modelGigId = typeof parsed.matchedGigId === "string" ? parsed.matchedGigId : null;
-    const matchedGig =
-      findGigById(params.gigs, modelGigId) ??
-      findBestGigByIntent({
-        gigs: params.gigs,
-        cropName,
-        unit,
-        transcriptLower: transcript.toLowerCase(),
-      });
+    const modelGigId =
+      typeof parsed.matchedGigId === "string" ? parsed.matchedGigId : null;
+    const matchedGig = findGigById(params.gigs, modelGigId);
     const resolvedCropName = matchedGig?.cropName ?? cropName;
     const resolvedUnit = matchedGig?.unit ?? unit;
 
@@ -510,7 +415,6 @@ export async function extractVoiceOrderFromTranscript(params: {
       },
       pendingDraft: params.pendingDraft,
       gigs: params.gigs,
-      transcript,
     });
 
     return merged;

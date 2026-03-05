@@ -4,7 +4,10 @@ import { WebSocketServer, WebSocket, type RawData } from "ws";
 import { verifyToken, type JwtPayload } from "../lib/jwt.js";
 import { logger } from "../lib/logger.js";
 import { transcribeAudioStream } from "../services/transcribe-streaming.js";
-import { processVoiceOrderForFarmer } from "../services/voice-order-processing.js";
+import {
+  buildUnprocessableVoiceOrderResult,
+  processVoiceOrderForFarmer,
+} from "../services/voice-order-processing.js";
 import { transcribeAudioBuffer } from "../services/transcribe.js";
 
 const VOICE_STREAM_PATH = "/api/v1/farmer/voice/stream";
@@ -61,6 +64,7 @@ type ClientStartMessage = {
   type: "start";
   languageCode?: string;
   sampleRateHertz?: number;
+  conversationSessionId?: string;
 };
 
 type ClientEndMessage = {
@@ -186,6 +190,11 @@ function parseClientMessage(raw: string): ClientMessage | null {
           "number"
             ? (parsed as { sampleRateHertz: number }).sampleRateHertz
             : undefined,
+        conversationSessionId:
+          typeof (parsed as { conversationSessionId?: unknown })
+            .conversationSessionId === "string"
+            ? (parsed as { conversationSessionId: string }).conversationSessionId
+            : undefined,
       };
     }
 
@@ -225,6 +234,21 @@ function normalizeLanguageHint(input?: string) {
   return LANGUAGE_CODE_ALIASES[normalized] ?? null;
 }
 
+function normalizeConversationSessionId(input?: string) {
+  if (!input) return null;
+  const normalized = input.trim();
+  if (!normalized) return null;
+  if (normalized.length > 120) {
+    throw new Error("conversationSessionId is too long.");
+  }
+  if (!/^[A-Za-z0-9_-]+$/.test(normalized)) {
+    throw new Error(
+      "conversationSessionId can only include letters, numbers, underscores, and dashes.",
+    );
+  }
+  return normalized;
+}
+
 function pcm16MonoToWavBuffer(pcm: Buffer, sampleRateHertz: number) {
   const numChannels = 1;
   const bitsPerSample = 16;
@@ -250,41 +274,6 @@ function pcm16MonoToWavBuffer(pcm: Buffer, sampleRateHertz: number) {
   return Buffer.concat([header, pcm]);
 }
 
-function shouldFallbackToBatch(params: {
-  result: Awaited<ReturnType<typeof processVoiceOrderForFarmer>>;
-  detectedLanguageCode: string | null;
-  languageHintCode: string | null;
-}) {
-  const { result, detectedLanguageCode, languageHintCode } = params;
-  if (result.extraction.source === "fallback") return true;
-  const hasAnyOrderSignal =
-    Boolean(result.extraction.cropName?.trim()) ||
-    Boolean(result.extraction.quantity) ||
-    Boolean(result.extraction.unit?.trim());
-  if (!hasAnyOrderSignal) return true;
-  if (result.extraction.confidence < 0.35) return true;
-
-  if (
-    languageHintCode &&
-    detectedLanguageCode &&
-    detectedLanguageCode !== languageHintCode &&
-    result.extraction.needsClarification
-  ) {
-    return true;
-  }
-
-  if (
-    !languageHintCode &&
-    (detectedLanguageCode === "en-IN" || detectedLanguageCode === "hi-IN") &&
-    result.extraction.needsClarification &&
-    result.extraction.confidence < 0.9
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
 function setupVoiceConnection(ws: WebSocket, req: AuthedRequest) {
   const farmerId = req.voiceUser?.id;
   if (!farmerId) {
@@ -300,6 +289,9 @@ function setupVoiceConnection(ws: WebSocket, req: AuthedRequest) {
   let streamTimeout: NodeJS.Timeout | null = null;
   let sampleRateHertz = DEFAULT_SAMPLE_RATE_HZ;
   let languageHintCode: string | null = null;
+  let conversationSessionId: string | null = null;
+  let latestTranscript = "";
+  let latestDetectedLanguageCode: string | null = null;
   const capturedChunks: Buffer[] = [];
   let capturedBytes = 0;
   let endSignalResolve: (() => void) | null = null;
@@ -331,6 +323,9 @@ function setupVoiceConnection(ws: WebSocket, req: AuthedRequest) {
 
     try {
       sampleRateHertz = validateSampleRate(message.sampleRateHertz);
+      conversationSessionId = normalizeConversationSessionId(
+        message.conversationSessionId,
+      );
     } catch (err) {
       failSession(err instanceof Error ? err.message : "Invalid stream config");
       return;
@@ -352,6 +347,7 @@ function setupVoiceConnection(ws: WebSocket, req: AuthedRequest) {
       mediaEncoding: mode === "streaming" ? "pcm" : "pcm_batch",
       mode,
       languageHintCode,
+      conversationSessionId,
     });
 
     streamTimeout = setTimeout(() => {
@@ -359,13 +355,12 @@ function setupVoiceConnection(ws: WebSocket, req: AuthedRequest) {
     }, MAX_STREAM_DURATION_MS);
 
     void (async () => {
-      const tryBatchFallback = async (reason: string) => {
+      const processCapturedBatchAudio = async () => {
         if (capturedBytes === 0 || capturedChunks.length === 0) {
           return null;
         }
-        logger.info("[voice-stream] batch fallback triggered", {
+        logger.info("[voice-stream] processing captured batch audio", {
           farmerId,
-          reason,
           capturedBytes,
         });
 
@@ -377,6 +372,8 @@ function setupVoiceConnection(ws: WebSocket, req: AuthedRequest) {
           mimeType: "audio/wav",
           languageCode: languageHintCode ?? message.languageCode,
         });
+        latestTranscript = transcribed.transcript;
+        latestDetectedLanguageCode = transcribed.detectedLanguageCode;
 
         return processVoiceOrderForFarmer({
           farmerId,
@@ -384,6 +381,7 @@ function setupVoiceConnection(ws: WebSocket, req: AuthedRequest) {
           transcribedFromAudio: true,
           languageCode: languageHintCode ?? message.languageCode ?? null,
           detectedLanguageCode: transcribed.detectedLanguageCode,
+          conversationSessionId,
         });
       };
 
@@ -396,11 +394,23 @@ function setupVoiceConnection(ws: WebSocket, req: AuthedRequest) {
             languageHintCode,
           });
           await endSignal;
-          const batchResult = await tryBatchFallback(
-            "language_not_supported_realtime",
-          );
+          const batchResult = await processCapturedBatchAudio();
           if (!batchResult) {
-            throw new Error("Unable to process speech from captured audio.");
+            const unprocessable = buildUnprocessableVoiceOrderResult({
+              transcript: latestTranscript,
+              transcribedFromAudio: true,
+              detectedLanguageCode:
+                latestDetectedLanguageCode ?? languageHintCode,
+              languageCode: languageHintCode ?? message.languageCode ?? null,
+            });
+            finished = true;
+            sendJson(ws, {
+              type: "final_result",
+              data: unprocessable,
+            });
+            closeTimeout();
+            ws.close(1000, "completed_with_unprocessable_result");
+            return;
           }
           finished = true;
           sendJson(ws, {
@@ -424,8 +434,12 @@ function setupVoiceConnection(ws: WebSocket, req: AuthedRequest) {
               isPartial: event.isPartial,
               detectedLanguageCode: event.detectedLanguageCode,
             });
+            latestTranscript = event.transcript;
+            latestDetectedLanguageCode = event.detectedLanguageCode;
           },
         });
+        latestTranscript = transcribed.transcript;
+        latestDetectedLanguageCode = transcribed.detectedLanguageCode;
 
         sendJson(ws, {
           type: "processing",
@@ -433,26 +447,14 @@ function setupVoiceConnection(ws: WebSocket, req: AuthedRequest) {
           detectedLanguageCode: transcribed.detectedLanguageCode,
         });
 
-        let result = await processVoiceOrderForFarmer({
+        const result = await processVoiceOrderForFarmer({
           farmerId,
           transcript: transcribed.transcript,
           transcribedFromAudio: true,
           languageCode: languageHintCode ?? message.languageCode ?? null,
           detectedLanguageCode: transcribed.detectedLanguageCode,
+          conversationSessionId,
         });
-
-        if (
-          shouldFallbackToBatch({
-            result,
-            detectedLanguageCode: transcribed.detectedLanguageCode,
-            languageHintCode,
-          })
-        ) {
-          const fallback = await tryBatchFallback("low_confidence_or_no_signal");
-          if (fallback) {
-            result = fallback;
-          }
-        }
 
         finished = true;
         sendJson(ws, {
@@ -466,30 +468,19 @@ function setupVoiceConnection(ws: WebSocket, req: AuthedRequest) {
           farmerId,
           err,
         });
-        try {
-          const fallback = await tryBatchFallback("stream_error");
-          if (fallback) {
-            finished = true;
-            sendJson(ws, {
-              type: "final_result",
-              data: fallback,
-            });
-            closeTimeout();
-            ws.close(1000, "completed_with_batch_fallback");
-            return;
-          }
-        } catch (fallbackErr) {
-          logger.warn("[voice-stream] batch fallback failed", {
-            farmerId,
-            err: fallbackErr,
-          });
-        }
-
-        failSession(
-          err instanceof Error
-            ? err.message
-            : "Unable to process voice stream. Please retry.",
-        );
+        const unprocessable = buildUnprocessableVoiceOrderResult({
+          transcript: latestTranscript,
+          transcribedFromAudio: true,
+          detectedLanguageCode: latestDetectedLanguageCode ?? languageHintCode,
+          languageCode: languageHintCode ?? message.languageCode ?? null,
+        });
+        finished = true;
+        sendJson(ws, {
+          type: "final_result",
+          data: unprocessable,
+        });
+        closeTimeout();
+        ws.close(1000, "completed_with_unprocessable_result");
       }
     })();
   };

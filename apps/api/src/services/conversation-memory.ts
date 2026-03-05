@@ -32,6 +32,7 @@ type FarmerMemoryStore = {
   entries: MemoryEntry[];
   pendingDraft: PendingOrderDraft | null;
   sequence: number;
+  lastTouchedAt: number;
 };
 
 export type MemorySearchHit = {
@@ -42,19 +43,39 @@ export type MemorySearchHit = {
 
 const VECTOR_DIMENSION = 256;
 const MAX_CONVERSATION_ENTRIES = 80;
+const SESSION_TTL_MS = 30 * 60 * 1000;
 
 const farmerMemoryStore = new Map<string, FarmerMemoryStore>();
 
-function getStore(farmerId: string): FarmerMemoryStore {
-  const existing = farmerMemoryStore.get(farmerId);
+function buildSessionKey(farmerId: string, conversationSessionId: string) {
+  return `${farmerId}::${conversationSessionId}`;
+}
+
+function pruneExpiredStores(now: number) {
+  for (const [key, store] of farmerMemoryStore) {
+    if (now - store.lastTouchedAt > SESSION_TTL_MS) {
+      farmerMemoryStore.delete(key);
+    }
+  }
+}
+
+function getStore(
+  farmerId: string,
+  conversationSessionId: string,
+): FarmerMemoryStore {
+  const now = Date.now();
+  pruneExpiredStores(now);
+  const key = buildSessionKey(farmerId, conversationSessionId);
+  const existing = farmerMemoryStore.get(key);
   if (existing) return existing;
 
   const created: FarmerMemoryStore = {
     entries: [],
     pendingDraft: null,
     sequence: 0,
+    lastTouchedAt: now,
   };
-  farmerMemoryStore.set(farmerId, created);
+  farmerMemoryStore.set(key, created);
   return created;
 }
 
@@ -114,11 +135,18 @@ function cosineSimilarity(left: Float32Array, right: Float32Array) {
   return dot;
 }
 
-function addEntry(farmerId: string, kind: MemoryKind, text: string) {
+function addEntry(params: {
+  farmerId: string;
+  conversationSessionId: string;
+  kind: MemoryKind;
+  text: string;
+}) {
+  const { farmerId, conversationSessionId, kind, text } = params;
   const trimmedText = text.trim();
   if (!trimmedText) return;
 
-  const store = getStore(farmerId);
+  const store = getStore(farmerId, conversationSessionId);
+  store.lastTouchedAt = Date.now();
   const id = `${kind}-${Date.now()}-${store.sequence}`;
   store.sequence += 1;
 
@@ -162,10 +190,14 @@ function summarizeExtraction(extraction: VoiceOrderExtraction) {
 }
 
 export function indexFarmerProfileMemory(
-  farmerId: string,
+  params: {
+    farmerId: string;
+    conversationSessionId: string;
+  },
   profile: FarmerProfileSnapshot,
 ) {
-  const store = getStore(farmerId);
+  const store = getStore(params.farmerId, params.conversationSessionId);
+  store.lastTouchedAt = Date.now();
   store.entries = store.entries.filter((entry) => entry.kind !== "profile");
 
   const crops = (profile.cropsGrown ?? []).filter(Boolean).join(", ");
@@ -176,18 +208,25 @@ export function indexFarmerProfileMemory(
     `Crops grown: ${crops || "unknown"}.`,
   ].join(" ");
 
-  addEntry(farmerId, "profile", profileText);
+  addEntry({
+    farmerId: params.farmerId,
+    conversationSessionId: params.conversationSessionId,
+    kind: "profile",
+    text: profileText,
+  });
 }
 
 export function searchFarmerConversationMemory(params: {
   farmerId: string;
+  conversationSessionId: string;
   query: string;
   limit?: number;
 }): MemorySearchHit[] {
   const limit = params.limit ?? 4;
   if (limit <= 0) return [];
 
-  const store = getStore(params.farmerId);
+  const store = getStore(params.farmerId, params.conversationSessionId);
+  store.lastTouchedAt = Date.now();
   const queryVector = embedText(params.query);
   const scored = store.entries
     .map((entry) => ({
@@ -207,16 +246,23 @@ export function searchFarmerConversationMemory(params: {
 }
 
 export function getFarmerPendingOrderDraft(
-  farmerId: string,
+  params: {
+    farmerId: string;
+    conversationSessionId: string;
+  },
 ): PendingOrderDraft | null {
-  return getStore(farmerId).pendingDraft;
+  const store = getStore(params.farmerId, params.conversationSessionId);
+  store.lastTouchedAt = Date.now();
+  return store.pendingDraft;
 }
 
 export function setFarmerPendingOrderDraft(params: {
   farmerId: string;
+  conversationSessionId: string;
   extraction: VoiceOrderExtraction;
 }) {
-  const store = getStore(params.farmerId);
+  const store = getStore(params.farmerId, params.conversationSessionId);
+  store.lastTouchedAt = Date.now();
   store.pendingDraft = {
     cropName: params.extraction.cropName ?? null,
     quantity: params.extraction.quantity ?? null,
@@ -227,20 +273,43 @@ export function setFarmerPendingOrderDraft(params: {
   };
 }
 
-export function clearFarmerPendingOrderDraft(farmerId: string) {
-  const store = getStore(farmerId);
+export function clearFarmerPendingOrderDraft(params: {
+  farmerId: string;
+  conversationSessionId: string;
+}) {
+  const store = getStore(params.farmerId, params.conversationSessionId);
+  store.lastTouchedAt = Date.now();
   store.pendingDraft = null;
+}
+
+export function clearAllFarmerPendingOrderDrafts(farmerId: string) {
+  const prefix = `${farmerId}::`;
+  const now = Date.now();
+  for (const [key, store] of farmerMemoryStore) {
+    if (!key.startsWith(prefix)) continue;
+    store.pendingDraft = null;
+    store.lastTouchedAt = now;
+  }
 }
 
 export function rememberFarmerConversationTurn(params: {
   farmerId: string;
+  conversationSessionId: string;
   transcript: string;
   extraction: VoiceOrderExtraction;
 }) {
-  addEntry(params.farmerId, "conversation", `Farmer said: ${params.transcript}`);
+  addEntry({
+    farmerId: params.farmerId,
+    conversationSessionId: params.conversationSessionId,
+    kind: "conversation",
+    text: `Farmer said: ${params.transcript}`,
+  });
   addEntry(
-    params.farmerId,
-    "conversation",
-    `Assistant result: ${summarizeExtraction(params.extraction)}`,
+    {
+      farmerId: params.farmerId,
+      conversationSessionId: params.conversationSessionId,
+      kind: "conversation",
+      text: `Assistant result: ${summarizeExtraction(params.extraction)}`,
+    },
   );
 }
