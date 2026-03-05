@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../../shared/widgets/app_brand_icon.dart';
 import '../../../core/constants/app_constants.dart';
 
 class LandingScreen extends StatefulWidget {
@@ -66,10 +67,10 @@ class _LandingScreenState extends State<LandingScreen> {
                       color: AppColors.surface.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(36),
                     ),
-                    child: const Icon(
-                      Icons.eco,
+                    child: const AppBrandIcon(
                       color: AppColors.surface,
                       size: 36,
+                      padding: EdgeInsets.all(10),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -133,7 +134,8 @@ class _LandingScreenState extends State<LandingScreen> {
 
                       Text(
                         'Welcome to AgriSetu',
-                        style: AppTextStyles.h1.copyWith(color: AppColors.primary),
+                        style:
+                            AppTextStyles.h1.copyWith(color: AppColors.primary),
                       ),
                       const SizedBox(height: 12),
                       Text(
@@ -200,7 +202,8 @@ class _LandingScreenState extends State<LandingScreen> {
                         height: 56,
                         child: ElevatedButton.icon(
                           onPressed: () => context.push('/login'),
-                          icon: const Icon(Icons.verified_user_outlined, size: 20),
+                          icon: const Icon(Icons.verified_user_outlined,
+                              size: 20),
                           label: const Text('Login with Aadhaar'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,

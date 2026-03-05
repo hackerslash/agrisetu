@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../../shared/widgets/app_brand_icon.dart';
 import '../../../core/providers/auth_provider.dart';
 
 class PhoneLoginScreen extends ConsumerStatefulWidget {
@@ -85,8 +86,11 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
                         color: AppColors.surface.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(32),
                       ),
-                      child: const Icon(Icons.eco,
-                          color: AppColors.surface, size: 32),
+                      child: const AppBrandIcon(
+                        color: AppColors.surface,
+                        size: 32,
+                        padding: EdgeInsets.all(8),
+                      ),
                     ),
                     const SizedBox(height: 16),
                   ],

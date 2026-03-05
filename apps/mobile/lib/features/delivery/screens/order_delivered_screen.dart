@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../../shared/widgets/app_brand_icon.dart';
 import '../../../shared/widgets/app_header.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/constants/app_constants.dart';
@@ -71,8 +72,7 @@ class _OrderDeliveredScreenState extends ConsumerState<OrderDeliveredScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final clusterAsync =
-        ref.watch(clusterDetailProvider(widget.clusterId));
+    final clusterAsync = ref.watch(clusterDetailProvider(widget.clusterId));
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -100,8 +100,10 @@ class _OrderDeliveredScreenState extends ConsumerState<OrderDeliveredScreen> {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.eco,
-                              color: AppColors.primary, size: 22),
+                          const AppBrandIcon(
+                            color: AppColors.primary,
+                            size: 22,
+                          ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
@@ -159,8 +161,7 @@ class _OrderDeliveredScreenState extends ConsumerState<OrderDeliveredScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Rate Your Experience',
-                          style: AppTextStyles.h5),
+                      Text('Rate Your Experience', style: AppTextStyles.h5),
                       const SizedBox(height: 4),
                       Text(
                         'Help other farmers make better choices',
@@ -176,12 +177,10 @@ class _OrderDeliveredScreenState extends ConsumerState<OrderDeliveredScreen> {
                           (i) => GestureDetector(
                             onTap: () => setState(() => _rating = i + 1),
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 6),
                               child: Icon(
-                                i < _rating
-                                    ? Icons.star
-                                    : Icons.star_border,
+                                i < _rating ? Icons.star : Icons.star_border,
                                 color: i < _rating
                                     ? const Color(0xFFFBBF24)
                                     : AppColors.textMuted,
@@ -197,10 +196,8 @@ class _OrderDeliveredScreenState extends ConsumerState<OrderDeliveredScreen> {
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
-                        children:
-                            AppConstants.ratingTags.take(6).map((tag) {
-                          final isSelected =
-                              _selectedTags.contains(tag);
+                        children: AppConstants.ratingTags.take(6).map((tag) {
+                          final isSelected = _selectedTags.contains(tag);
                           return GestureDetector(
                             onTap: () {
                               setState(() {
@@ -284,8 +281,8 @@ class _OrderDeliveredScreenState extends ConsumerState<OrderDeliveredScreen> {
                       const SizedBox(height: 8),
                       Text(
                         'Rating Submitted!',
-                        style: AppTextStyles.h5
-                            .copyWith(color: AppColors.success),
+                        style:
+                            AppTextStyles.h5.copyWith(color: AppColors.success),
                       ),
                       Text(
                         'Thank you for helping the community.',
@@ -306,14 +303,12 @@ class _OrderDeliveredScreenState extends ConsumerState<OrderDeliveredScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Your Impact This Order',
-                        style: AppTextStyles.h5),
+                    Text('Your Impact This Order', style: AppTextStyles.h5),
                     const SizedBox(height: 16),
                     Row(
                       children: const [
                         _ImpactStat(label: 'Saved', value: '₹800'),
-                        _ImpactStat(
-                            label: 'CO₂ Saved', value: '12 kg'),
+                        _ImpactStat(label: 'CO₂ Saved', value: '12 kg'),
                         _ImpactStat(label: 'Waste', value: '0%'),
                       ],
                     ),
@@ -339,8 +334,8 @@ class _OrderDeliveredScreenState extends ConsumerState<OrderDeliveredScreen> {
                       const SizedBox(width: 8),
                       Text(
                         'Raise a dispute',
-                        style: AppTextStyles.body
-                            .copyWith(color: AppColors.error),
+                        style:
+                            AppTextStyles.body.copyWith(color: AppColors.error),
                       ),
                     ],
                   ),
@@ -368,8 +363,7 @@ class _ImpactStat extends StatelessWidget {
         children: [
           Text(
             value,
-            style:
-                AppTextStyles.h5.copyWith(color: AppColors.primary),
+            style: AppTextStyles.h5.copyWith(color: AppColors.primary),
           ),
           Text(label, style: AppTextStyles.caption),
         ],

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../../shared/widgets/app_brand_icon.dart';
 import '../../../shared/widgets/app_header.dart';
 import '../../../shared/widgets/status_badge.dart';
 import '../../../core/api/api_client.dart';
@@ -158,8 +159,11 @@ class _OrderCard extends StatelessWidget {
                     color: AppColors.primary.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child:
-                      const Icon(Icons.eco, color: AppColors.primary, size: 20),
+                  child: const AppBrandIcon(
+                    color: AppColors.primary,
+                    size: 20,
+                    padding: EdgeInsets.all(4),
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(

@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../../shared/widgets/app_brand_icon.dart';
 import '../../../core/providers/auth_provider.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
@@ -688,8 +689,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                                 color: AppColors.surface.withOpacity(0.15),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.eco,
-                                  color: AppColors.surface, size: 18),
+                              child: const AppBrandIcon(
+                                color: AppColors.surface,
+                                size: 18,
+                                padding: EdgeInsets.all(3),
+                              ),
                             ),
                             const SizedBox(width: 8),
                             Text(

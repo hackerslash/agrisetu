@@ -7,6 +7,9 @@ import type { Cluster } from "@repo/api-client";
 import { useNotifications } from "../../lib/NotificationContext";
 
 const emittedEventKeys = new Set<string>();
+const knownStatusesByOrderId = new Map<string, string>();
+let seededForSession = false;
+let activeSessionToken: string | null = null;
 
 function shortOrderId(id: string) {
   return id.slice(-6).toUpperCase();
@@ -21,25 +24,39 @@ function emitOnce(key: string, fn: () => void) {
 export function VendorOrderNotificationMonitor() {
   const { addNotification } = useNotifications();
   const queryClient = useQueryClient();
-  const seeded = useRef(false);
-  const knownStatuses = useRef<Map<string, string>>(new Map());
+  const token = getAuthToken();
+  const lastTokenRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (lastTokenRef.current === token) return;
+    lastTokenRef.current = token;
+
+    // Reset tracking only when auth session changes.
+    if (activeSessionToken !== token) {
+      activeSessionToken = token;
+      seededForSession = false;
+      knownStatusesByOrderId.clear();
+      emittedEventKeys.clear();
+    }
+  }, [token]);
 
   const { data: orders = [], isFetched } = useQuery({
     queryKey: ["vendor-orders"],
     queryFn: () => vendorApi.getOrders(),
     refetchInterval: 15_000,
-    enabled: !!getAuthToken(),
+    refetchIntervalInBackground: true,
+    enabled: !!token,
   });
 
   useEffect(() => {
     if (!isFetched) return;
 
     const currentOrders = orders as Cluster[];
-    const previous = knownStatuses.current;
+    const previous = knownStatusesByOrderId;
 
-    if (!seeded.current) {
+    if (!seededForSession) {
       currentOrders.forEach((order) => previous.set(order.id, order.status));
-      seeded.current = true;
+      seededForSession = true;
       return;
     }
 

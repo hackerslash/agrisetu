@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../../shared/widgets/app_brand_icon.dart';
 import '../../../shared/widgets/progress_bar.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/api/api_client.dart';
@@ -112,10 +113,10 @@ class HomeScreen extends ConsumerWidget {
                             color: AppColors.surface.withOpacity(0.15),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(
-                            Icons.eco,
+                          child: const AppBrandIcon(
                             color: AppColors.surface,
                             size: 18,
+                            padding: EdgeInsets.all(3),
                           ),
                         ),
                         const SizedBox(width: 8),
