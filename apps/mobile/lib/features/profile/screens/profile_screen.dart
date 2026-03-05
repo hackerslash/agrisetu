@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/models/farmer_model.dart';
 import '../../../core/utils/avatar_picker.dart';
@@ -44,22 +45,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   String _languageLabel(String? languageCode) {
-    switch ((languageCode ?? 'en').toLowerCase()) {
-      case 'kn':
-        return 'Kannada';
-      case 'hi':
-        return 'Hindi';
-      case 'ta':
-        return 'Tamil';
-      case 'te':
-        return 'Telugu';
-      case 'ml':
-        return 'Malayalam';
-      case 'mr':
-        return 'Marathi';
-      default:
-        return 'English';
+    final normalized = (languageCode ?? 'en').trim().toLowerCase();
+    final baseCode =
+        normalized.contains('-') ? normalized.split('-').first : normalized;
+    for (final language in AppConstants.audioSupportedLanguages) {
+      if (language['code'] == baseCode) {
+        return language['name'] ?? language['label'] ?? 'English';
+      }
     }
+    return 'English';
   }
 
   @override
@@ -337,7 +331,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ),
                     _ProfileInfoRow(
                       icon: Icons.language_outlined,
-                      label: 'Language Preference',
+                      label: 'Audio Language',
                       value: _languageLabel(farmer?.language),
                     ),
                   ],

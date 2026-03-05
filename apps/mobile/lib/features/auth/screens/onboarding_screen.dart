@@ -39,6 +39,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   String? _error;
   bool _prefilled = false;
 
+  String _normalizeLanguageCode(String? code) {
+    final trimmed = (code ?? '').trim().toLowerCase();
+    if (trimmed.isEmpty) return 'en';
+    final parts = trimmed.split('-');
+    return parts.first;
+  }
+
   final _cropOptions = [
     'Wheat',
     'Rice',
@@ -635,7 +642,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       _landAreaCtrl.text =
           farmer.landArea != null ? farmer.landArea!.toString() : '';
       _upiCtrl.text = farmer.upiId ?? '';
-      _selectedLanguage = farmer.language;
+      final normalizedLanguage = _normalizeLanguageCode(farmer.language);
+      final isAudioLanguageSupported = AppConstants.audioSupportedLanguages.any(
+        (lang) => lang['code'] == normalizedLanguage,
+      );
+      _selectedLanguage = isAudioLanguageSupported ? normalizedLanguage : 'en';
       _cropsGrown
         ..clear()
         ..addAll(farmer.cropsGrown);
@@ -765,7 +776,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Name, location & language are required to match you with the right cluster.',
+                              'Name, location & audio language are required to match you with the right cluster.',
                               style: AppTextStyles.bodySmall
                                   .copyWith(color: AppColors.primary),
                             ),
@@ -786,19 +797,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     const SizedBox(height: 16),
 
                     // Language
-                    Text('Preferred Language', style: AppTextStyles.label),
+                    Text('Audio Language', style: AppTextStyles.label),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
-                      children: [
-                        {'code': 'hi', 'label': 'हिंदी'},
-                        {'code': 'kn', 'label': 'ಕನ್ನಡ'},
-                        {'code': 'ta', 'label': 'தமிழ்'},
-                        {'code': 'bn', 'label': 'বাংলা'},
-                        {'code': 'te', 'label': 'తెలుగు'},
-                        {'code': 'en', 'label': 'English'},
-                      ].map((lang) {
+                      children:
+                          AppConstants.audioSupportedLanguages.map((lang) {
                         final isSelected = _selectedLanguage == lang['code'];
                         return GestureDetector(
                           onTap: () =>

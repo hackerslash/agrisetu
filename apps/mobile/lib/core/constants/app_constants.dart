@@ -36,6 +36,21 @@ class AppConstants {
     {'code': 'en', 'label': 'English', 'name': 'English'},
   ];
 
+  // Voice/audio order languages supported by backend speech pipeline.
+  static const List<Map<String, String>> audioSupportedLanguages = [
+    {'code': 'hi', 'label': 'हिंदी', 'name': 'Hindi'},
+    {'code': 'kn', 'label': 'ಕನ್ನಡ', 'name': 'Kannada'},
+    {'code': 'ta', 'label': 'தமிழ்', 'name': 'Tamil'},
+    {'code': 'te', 'label': 'తెలుగు', 'name': 'Telugu'},
+    {'code': 'bn', 'label': 'বাংলা', 'name': 'Bengali'},
+    {'code': 'mr', 'label': 'मराठी', 'name': 'Marathi'},
+    {'code': 'gu', 'label': 'ગુજરાતી', 'name': 'Gujarati'},
+    {'code': 'ml', 'label': 'മലയാളം', 'name': 'Malayalam'},
+    {'code': 'pa', 'label': 'ਪੰਜਾਬੀ', 'name': 'Punjabi'},
+    {'code': 'or', 'label': 'ଓଡ଼ିଆ', 'name': 'Odia'},
+    {'code': 'en', 'label': 'English', 'name': 'English'},
+  ];
+
   // UPI Apps
   static const List<Map<String, String>> upiApps = [
     {'name': 'PhonePe', 'package': 'com.phonepe.app'},
