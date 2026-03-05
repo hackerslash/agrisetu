@@ -2,7 +2,7 @@
 
 import { Bell, Calendar, LogOut, User, ChevronDown, ShoppingBag } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { clearAuthToken } from "@repo/api-client";
+import { authApi, clearAuthToken } from "@repo/api-client";
 import { useState, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNotifications } from "../../lib/NotificationContext";
@@ -30,9 +30,14 @@ export function TopBar({
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notifPanelRef = useRef<HTMLDivElement>(null);
 
-  function handleLogout() {
-    clearAuthToken();
-    router.push("/login");
+  async function handleLogout() {
+    try {
+      await authApi.logout();
+    } finally {
+      clearAuthToken();
+      queryClient.clear();
+      router.push("/login");
+    }
   }
 
   function handleBellClick() {

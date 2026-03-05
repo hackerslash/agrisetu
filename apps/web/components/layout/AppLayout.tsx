@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { getAuthToken, clearAuthToken } from "@repo/api-client";
+import { clearAuthToken } from "@repo/api-client";
 import { authApi } from "@repo/api-client";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
@@ -26,19 +26,10 @@ export function AppLayout({
 }: AppLayoutProps) {
   const router = useRouter();
 
-  // Redirect to login if no token in localStorage
-  useEffect(() => {
-    const token = getAuthToken();
-    if (!token) {
-      router.push("/login");
-    }
-  }, [router]);
-
   const { data: vendor, error: meError } = useQuery({
     queryKey: ["vendor-me"],
     queryFn: () => authApi.getMe(),
     retry: false,
-    enabled: !!getAuthToken(),
   });
 
   // If the API rejects the token (401/403), clear it and redirect
@@ -54,7 +45,7 @@ export function AppLayout({
 
   return (
     <div className="flex" style={{ minHeight: "100vh" }}>
-      <VendorOrderNotificationMonitor />
+      <VendorOrderNotificationMonitor vendorId={vendor?.id} />
       <Sidebar vendorName={vendor?.businessName} />
       <div
         className="flex flex-col flex-1"

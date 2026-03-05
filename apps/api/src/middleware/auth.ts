@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyToken, JwtPayload } from "../lib/jwt.js";
 
+export const AUTH_SESSION_COOKIE = "agrisetu_session";
+
 declare global {
   namespace Express {
     interface Request {
@@ -9,13 +11,38 @@ declare global {
   }
 }
 
+function parseCookieToken(cookieHeader?: string) {
+  if (!cookieHeader) return null;
+
+  const cookies = cookieHeader.split(";");
+  for (const part of cookies) {
+    const [rawKey, ...rawValue] = part.trim().split("=");
+    if (!rawKey || rawKey !== AUTH_SESSION_COOKIE) continue;
+    const joinedValue = rawValue.join("=").trim();
+    if (!joinedValue) return null;
+    try {
+      return decodeURIComponent(joinedValue);
+    } catch {
+      return joinedValue;
+    }
+  }
+
+  return null;
+}
+
 export function authenticate(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith("Bearer ")) {
+  const bearerToken = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice(7)
+    : null;
+  const cookieToken = parseCookieToken(req.headers.cookie);
+  const token = bearerToken ?? cookieToken;
+
+  if (!token) {
     res.status(401).json({ success: false, error: "Unauthorized" });
     return;
   }
-  const token = authHeader.slice(7);
+
   try {
     const payload = verifyToken(token);
     req.user = payload;

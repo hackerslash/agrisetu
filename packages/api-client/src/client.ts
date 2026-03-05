@@ -1,23 +1,16 @@
 import axios, { AxiosInstance, AxiosError } from "axios";
 
 let apiClient: AxiosInstance | null = null;
+let _memoryToken: string | null = null;
 
-// Injectable token handlers — default to localStorage (web), can be overridden for mobile
-let _getToken: () => string | null = () => {
-  if (typeof window !== "undefined" && typeof localStorage !== "undefined") {
-    return localStorage.getItem("agrisetu_token");
-  }
-  return null;
-};
+// Default token handlers are in-memory only.
+// Web auth should primarily use httpOnly cookie sessions.
+let _getToken: () => string | null = () => _memoryToken;
 let _setToken: (token: string) => void = (token) => {
-  if (typeof window !== "undefined" && typeof localStorage !== "undefined") {
-    localStorage.setItem("agrisetu_token", token);
-  }
+  _memoryToken = token;
 };
 let _clearToken: () => void = () => {
-  if (typeof window !== "undefined" && typeof localStorage !== "undefined") {
-    localStorage.removeItem("agrisetu_token");
-  }
+  _memoryToken = null;
 };
 let _onUnauthorized: (() => void) | null = () => {
   if (typeof window !== "undefined") {
@@ -63,6 +56,7 @@ export function getApiClient(): AxiosInstance {
     apiClient = axios.create({
       baseURL,
       headers: { "Content-Type": "application/json" },
+      withCredentials: true,
     });
 
     // Request interceptor — attach JWT

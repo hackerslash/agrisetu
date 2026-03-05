@@ -1,7 +1,11 @@
 import { Response } from "express";
 
 export function success(res: Response, data: unknown, status = 200) {
-  return res.status(status).json({ success: true, data });
+  return res.status(status).json({
+    success: true,
+    data,
+    requestId: res.req.requestId ?? "unknown",
+  });
 }
 
 export function error(
@@ -10,5 +14,10 @@ export function error(
   status = 400,
   details?: unknown,
 ) {
-  return res.status(status).json({ success: false, error: message, details });
+  return res.status(status).json({
+    success: false,
+    error: message,
+    details,
+    requestId: res.req.requestId ?? "unknown",
+  });
 }

@@ -1,9 +1,10 @@
-import { Router } from "express";
+import { Router, type CookieOptions, type Response } from "express";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { signToken } from "../lib/jwt.js";
 import {
+  AUTH_SESSION_COOKIE,
   authenticate,
   requireFarmer,
   requireVendor,
@@ -14,6 +15,50 @@ import { withVendorDocumentsForClient } from "../services/vendor-documents.js";
 import { authLimiter } from "../middleware/rate-limit.js";
 
 const router = Router();
+const AUTH_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+function getAuthCookieOptions(): CookieOptions {
+  const configuredSameSite = process.env.AUTH_COOKIE_SAMESITE?.toLowerCase();
+  const sameSite: "lax" | "strict" | "none" =
+    configuredSameSite === "lax" ||
+    configuredSameSite === "strict" ||
+    configuredSameSite === "none"
+      ? configuredSameSite
+      : process.env.NODE_ENV === "production"
+        ? "none"
+        : "lax";
+
+  const secure =
+    process.env.AUTH_COOKIE_SECURE === "true" ||
+    process.env.NODE_ENV === "production" ||
+    sameSite === "none";
+
+  const domain = process.env.AUTH_COOKIE_DOMAIN?.trim();
+
+  return {
+    httpOnly: true,
+    secure,
+    sameSite,
+    path: "/",
+    maxAge: AUTH_COOKIE_MAX_AGE_MS,
+    ...(domain ? { domain } : {}),
+  };
+}
+
+function setAuthSessionCookie(res: Response, token: string) {
+  res.cookie(AUTH_SESSION_COOKIE, token, getAuthCookieOptions());
+}
+
+function clearAuthSessionCookie(res: Response) {
+  const options = getAuthCookieOptions();
+  res.clearCookie(AUTH_SESSION_COOKIE, {
+    httpOnly: options.httpOnly,
+    secure: options.secure,
+    sameSite: options.sameSite,
+    path: options.path,
+    ...(options.domain ? { domain: options.domain } : {}),
+  });
+}
 
 // ─── Farmer Auth ──────────────────────────────────────────────────────────────
 
@@ -52,6 +97,7 @@ router.post("/farmer/verify-otp", authLimiter, async (req, res) => {
       farmer = await prisma.farmer.create({ data: { phone } });
     }
     const token = signToken({ id: farmer.id, role: "farmer" });
+    setAuthSessionCookie(res, token);
     const farmerForClient = await withFarmerAvatarForClient(farmer);
     success(res, { token, farmer: farmerForClient, isNewUser: !farmer.name });
   } catch (err) {
@@ -160,6 +206,7 @@ router.post("/vendor/register/step1", authLimiter, async (req, res) => {
       },
     });
     const token = signToken({ id: vendor.id, role: "vendor" });
+    setAuthSessionCookie(res, token);
     success(res, { vendor, token }, 201);
   } catch {
     error(res, "Internal server error", 500);
@@ -277,6 +324,7 @@ router.post("/vendor/login", authLimiter, async (req, res) => {
       return;
     }
     const token = signToken({ id: vendor.id, role: "vendor" });
+    setAuthSessionCookie(res, token);
     const { password: _pwd, ...vendorData } = vendor;
     success(res, { token, vendor: vendorData });
   } catch {
@@ -315,6 +363,11 @@ router.get("/vendor/me", authenticate, async (req, res) => {
   } catch {
     error(res, "Internal server error", 500);
   }
+});
+
+router.post("/logout", (_req, res) => {
+  clearAuthSessionCookie(res);
+  success(res, { loggedOut: true });
 });
 
 export default router;

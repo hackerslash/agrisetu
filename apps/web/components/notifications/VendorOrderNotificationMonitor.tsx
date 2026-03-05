@@ -2,14 +2,14 @@
 
 import { useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getAuthToken, vendorApi } from "@repo/api-client";
+import { vendorApi } from "@repo/api-client";
 import type { Cluster } from "@repo/api-client";
 import { useNotifications } from "../../lib/NotificationContext";
 
 const emittedEventKeys = new Set<string>();
 const knownStatusesByOrderId = new Map<string, string>();
 let seededForSession = false;
-let activeSessionToken: string | null = null;
+let activeVendorId: string | null = null;
 let lastSyncedAtForSession: number | null = null;
 
 const STORAGE_VERSION = 2;
@@ -21,35 +21,16 @@ type PersistedMonitorState = {
   knownStatuses: Record<string, string>;
 };
 
-function getTokenSubject(token: string | null): string | null {
-  if (!token) return null;
-  const parts = token.split(".");
-  if (parts.length < 2) return null;
-  try {
-    const payloadBase64 = parts[1]!
-      .replace(/-/g, "+")
-      .replace(/_/g, "/")
-      .padEnd(Math.ceil(parts[1]!.length / 4) * 4, "=");
-    const payload = JSON.parse(atob(payloadBase64)) as {
-      id?: string;
-      sub?: string;
-      role?: string;
-    };
-    return payload.id ?? payload.sub ?? null;
-  } catch {
-    return null;
-  }
+function getStorageKey(vendorId: string) {
+  return `${STORAGE_KEY_PREFIX}${vendorId}`;
 }
 
-function getStorageKey(token: string | null) {
-  const subject = getTokenSubject(token) ?? "unknown";
-  return `${STORAGE_KEY_PREFIX}${subject}`;
-}
-
-function readPersistedState(token: string | null): PersistedMonitorState | null {
-  if (typeof window === "undefined" || !token) return null;
+function readPersistedState(
+  vendorId: string | null | undefined,
+): PersistedMonitorState | null {
+  if (typeof window === "undefined" || !vendorId) return null;
   try {
-    const raw = window.localStorage.getItem(getStorageKey(token));
+    const raw = window.localStorage.getItem(getStorageKey(vendorId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as PersistedMonitorState;
     if (
@@ -67,8 +48,8 @@ function readPersistedState(token: string | null): PersistedMonitorState | null 
   }
 }
 
-function writePersistedState(token: string | null) {
-  if (typeof window === "undefined" || !token || !seededForSession) return;
+function writePersistedState(vendorId: string | null | undefined) {
+  if (typeof window === "undefined" || !vendorId || !seededForSession) return;
   try {
     const knownStatuses: Record<string, string> = {};
     for (const [orderId, status] of knownStatusesByOrderId.entries()) {
@@ -79,7 +60,7 @@ function writePersistedState(token: string | null) {
       lastSyncedAt: Date.now(),
       knownStatuses,
     };
-    window.localStorage.setItem(getStorageKey(token), JSON.stringify(payload));
+    window.localStorage.setItem(getStorageKey(vendorId), JSON.stringify(payload));
     lastSyncedAtForSession = payload.lastSyncedAt;
   } catch {
     // Ignore persistence failures; runtime detection still works for active session.
@@ -96,25 +77,28 @@ function emitOnce(key: string, fn: () => void) {
   fn();
 }
 
-export function VendorOrderNotificationMonitor() {
+export function VendorOrderNotificationMonitor({
+  vendorId,
+}: {
+  vendorId?: string | null;
+}) {
   const { addNotification } = useNotifications();
   const queryClient = useQueryClient();
-  const token = getAuthToken();
-  const lastTokenRef = useRef<string | null>(null);
+  const lastVendorIdRef = useRef<string | null | undefined>(null);
 
   useEffect(() => {
-    if (lastTokenRef.current === token) return;
-    lastTokenRef.current = token;
+    if (lastVendorIdRef.current === vendorId) return;
+    lastVendorIdRef.current = vendorId;
 
     // Reset tracking only when auth session changes.
-    if (activeSessionToken !== token) {
-      activeSessionToken = token;
+    if (activeVendorId !== vendorId) {
+      activeVendorId = vendorId ?? null;
       seededForSession = false;
       knownStatusesByOrderId.clear();
       emittedEventKeys.clear();
       lastSyncedAtForSession = null;
 
-      const restored = readPersistedState(token);
+      const restored = readPersistedState(vendorId);
       if (restored) {
         for (const [orderId, status] of Object.entries(restored.knownStatuses)) {
           if (typeof status === "string" && status.length > 0) {
@@ -125,7 +109,7 @@ export function VendorOrderNotificationMonitor() {
         lastSyncedAtForSession = restored.lastSyncedAt;
       }
     }
-  }, [token]);
+  }, [vendorId]);
 
   const { data: orders = [], isFetched, isFetchedAfterMount } = useQuery({
     queryKey: ["vendor-orders"],
@@ -133,7 +117,7 @@ export function VendorOrderNotificationMonitor() {
     refetchInterval: 15_000,
     refetchIntervalInBackground: true,
     refetchOnMount: "always",
-    enabled: !!token,
+    enabled: Boolean(vendorId),
   });
 
   useEffect(() => {
@@ -147,7 +131,7 @@ export function VendorOrderNotificationMonitor() {
     if (!seededForSession) {
       currentOrders.forEach((order) => previous.set(order.id, order.status));
       seededForSession = true;
-      writePersistedState(token);
+      writePersistedState(vendorId);
       return;
     }
 
@@ -211,8 +195,8 @@ export function VendorOrderNotificationMonitor() {
       if (!seenNow.has(id)) previous.delete(id);
     }
 
-    writePersistedState(token);
-  }, [orders, isFetched, isFetchedAfterMount, addNotification, queryClient, token]);
+    writePersistedState(vendorId);
+  }, [orders, isFetched, isFetchedAfterMount, addNotification, queryClient, vendorId]);
 
   return null;
 }

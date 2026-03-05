@@ -56,10 +56,8 @@ const UNIT_ALIASES: Record<string, string> = {
 };
 
 const SUPPORTED_UNITS = ["kg", "quintal", "ton", "bag", "litre"] as const;
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
+const FALLBACK_PROCESSING_MESSAGE =
+  "Sorry, we cannot proceed process your request.";
 
 function normalizeTextForMatch(input: string) {
   return input
@@ -85,15 +83,6 @@ function countTokenOverlap(left: string, right: string) {
     if (rightTokens.has(token)) overlap += 1;
   }
   return overlap;
-}
-
-function containsUnitAlias(text: string, alias: string) {
-  if (!text || !alias) return false;
-  const pattern = new RegExp(
-    `(^|[^\\p{L}])${escapeRegExp(alias)}([^\\p{L}]|$)`,
-    "iu",
-  );
-  return pattern.test(text);
 }
 
 function logAiJson(label: string, payload: unknown) {
@@ -263,83 +252,16 @@ function findBestGigByIntent(params: {
   return top && top.score >= 12 ? top.gig : null;
 }
 
-function fallbackExtraction(
-  transcript: string,
-  gigs: GigContext[],
-): VoiceOrderExtraction {
-  const transcriptLower = transcript.toLowerCase();
-  const transcriptNormalized = normalizeTextForMatch(transcriptLower);
-
-  const quantityMatch = transcriptLower.match(/(\d+(?:\.\d+)?)/);
-  const quantityToken = quantityMatch?.[1];
-  const quantity = quantityToken ? Number.parseFloat(quantityToken) : null;
-
-  let unit: string | null = null;
-  for (const alias of Object.keys(UNIT_ALIASES).sort((a, b) => b.length - a.length)) {
-    if (containsUnitAlias(transcriptLower, alias)) {
-      unit = UNIT_ALIASES[alias] ?? null;
-      break;
-    }
-  }
-
-  const mentionedGigs = gigs
-    .filter((gig) => {
-      const product = normalizeTextForMatch(
-        gig.variety ? `${gig.cropName} ${gig.variety}` : gig.cropName,
-      );
-      const crop = normalizeTextForMatch(gig.cropName);
-      const variety = gig.variety ? normalizeTextForMatch(gig.variety) : "";
-      return (
-        containsWholePhrase(transcriptNormalized, product) ||
-        containsWholePhrase(transcriptNormalized, crop) ||
-        (variety.length > 0 &&
-          containsWholePhrase(transcriptNormalized, variety))
-      );
-    })
-    .sort((a, b) => {
-      const aVariety = a.variety ? normalizeTextForMatch(a.variety) : "";
-      const bVariety = b.variety ? normalizeTextForMatch(b.variety) : "";
-      const aVarietyMentioned =
-        aVariety.length > 0 && containsWholePhrase(transcriptNormalized, aVariety);
-      const bVarietyMentioned =
-        bVariety.length > 0 && containsWholePhrase(transcriptNormalized, bVariety);
-
-      if (aVarietyMentioned !== bVarietyMentioned) {
-        return aVarietyMentioned ? -1 : 1;
-      }
-
-      const aProductLength = normalizeTextForMatch(
-        a.variety ? `${a.cropName} ${a.variety}` : a.cropName,
-      ).length;
-      const bProductLength = normalizeTextForMatch(
-        b.variety ? `${b.cropName} ${b.variety}` : b.cropName,
-      ).length;
-      return bProductLength - aProductLength || a.minQuantity - b.minQuantity;
-    });
-  const gigFromText = mentionedGigs[0] ?? null;
-
-  const cropName = gigFromText?.cropName ?? null;
-  const matchedGig = findBestGigByIntent({
-    gigs,
-    cropName,
-    unit,
-    transcriptLower,
-  });
-  const resolvedCropName = matchedGig?.cropName ?? cropName;
-  const resolvedUnit = matchedGig?.unit ?? unit;
-
-  const needsClarification = !resolvedCropName || !quantity || !resolvedUnit;
+function buildFallbackExtraction(): VoiceOrderExtraction {
   return {
-    cropName: resolvedCropName,
-    quantity: quantity && quantity > 0 ? quantity : null,
-    unit: resolvedUnit,
-    matchedGigId: matchedGig?.id ?? null,
-    matchedGigLabel: buildGigLabel(matchedGig),
-    confidence: needsClarification ? 0.35 : 0.65,
-    needsClarification,
-    clarificationQuestion: needsClarification
-      ? "Please confirm product, quantity, and unit."
-      : null,
+    cropName: null,
+    quantity: null,
+    unit: null,
+    matchedGigId: null,
+    matchedGigLabel: null,
+    confidence: 0,
+    needsClarification: true,
+    clarificationQuestion: FALLBACK_PROCESSING_MESSAGE,
     source: "fallback",
   };
 }
@@ -546,12 +468,7 @@ export async function extractVoiceOrderFromTranscript(params: {
   pendingDraft?: VoiceOrderDraft | null;
 }): Promise<VoiceOrderExtraction> {
   const transcript = params.transcript.trim();
-  const fallback = mergeWithPendingDraft({
-    extraction: fallbackExtraction(transcript, params.gigs),
-    pendingDraft: params.pendingDraft,
-    gigs: params.gigs,
-    transcript,
-  });
+  const fallback = buildFallbackExtraction();
 
   try {
     const parsed = await callModelForExtraction({
