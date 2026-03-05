@@ -22,10 +22,7 @@ import {
   PaymentStatus,
 } from "@prisma/client";
 import { isValidCoordinate, isWithinRadiusKm } from "../lib/geo.js";
-import {
-  extractVoiceOrderFromTranscript,
-  type GigContext,
-} from "../services/ai-order-parser.js";
+import { transcribeAudioBufferStreaming } from "../services/transcribe-streaming.js";
 import { transcribeAudioBuffer } from "../services/transcribe.js";
 import {
   deleteFarmerAvatarIfManaged,
@@ -34,13 +31,8 @@ import {
 } from "../services/farmer-avatar.js";
 import {
   clearFarmerPendingOrderDraft,
-  getFarmerPendingOrderDraft,
-  indexFarmerProfileMemory,
-  rememberFarmerConversationTurn,
-  searchFarmerConversationMemory,
-  setFarmerPendingOrderDraft,
 } from "../services/conversation-memory.js";
-import { buildLocalizedClarificationSpeech } from "../services/clarification-speech.js";
+import { processVoiceOrderForFarmer } from "../services/voice-order-processing.js";
 
 const router = Router();
 router.use(authenticate, requireFarmer);
@@ -251,97 +243,6 @@ function isGigServiceableForFarmer(params: {
   return true;
 }
 
-async function getAvailableGigContextForFarmer(
-  farmerId: string,
-): Promise<{
-  farmerLanguage: string | null;
-  farmerProfile: {
-    name: string | null;
-    village: string | null;
-    district: string | null;
-    state: string | null;
-    language: string | null;
-    cropsGrown: string[];
-  };
-  gigs: GigContext[];
-}> {
-  const [farmer, gigs] = await Promise.all([
-    prisma.farmer.findUnique({
-      where: { id: farmerId },
-      select: {
-        name: true,
-        village: true,
-        district: true,
-        language: true,
-        cropsGrown: true,
-        state: true,
-        latitude: true,
-        longitude: true,
-      },
-    }),
-    prisma.gig.findMany({
-      where: {
-        status: GigStatus.PUBLISHED,
-        availableQuantity: { gt: 0 },
-      },
-      include: {
-        vendor: {
-          select: {
-            businessName: true,
-            state: true,
-            latitude: true,
-            longitude: true,
-            serviceRadiusKm: true,
-          },
-        },
-      },
-      orderBy: [{ updatedAt: "desc" }],
-      take: 120,
-    })
-  ]);
-
-  if (!farmer) {
-    throw new Error("Farmer profile not found");
-  }
-
-  const serviceableGigs = gigs
-    .filter((gig) =>
-      isGigServiceableForFarmer({
-        farmerLatitude: farmer.latitude,
-        farmerLongitude: farmer.longitude,
-        farmerState: farmer.state,
-        vendorLatitude: gig.vendor.latitude,
-        vendorLongitude: gig.vendor.longitude,
-        vendorState: gig.vendor.state,
-        serviceRadiusKm: gig.vendor.serviceRadiusKm,
-      }),
-    )
-    .slice(0, 60)
-    .map((gig) => ({
-      id: gig.id,
-      cropName: gig.cropName,
-      variety: gig.variety,
-      unit: gig.unit,
-      minQuantity: gig.minQuantity,
-      pricePerUnit: gig.pricePerUnit,
-      vendorBusinessName: gig.vendor.businessName,
-      vendorState: gig.vendor.state,
-    }));
-
-  return {
-    farmerLanguage: farmer.language,
-    farmerProfile: {
-      name: farmer.name ?? null,
-      village: farmer.village ?? null,
-      district: farmer.district ?? null,
-      state: farmer.state ?? null,
-      language: farmer.language ?? null,
-      cropsGrown: farmer.cropsGrown ?? [],
-    },
-    gigs: serviceableGigs,
-  };
-}
-
 // ─── Profile ──────────────────────────────────────────────────────────────────
 
 router.get("/profile", async (req, res) => {
@@ -474,99 +375,44 @@ router.post("/voice/parse-order", upload.single("audio"), async (req, res) => {
 
   try {
     const languageCode = parsed.data.languageCode;
-
-    const [context, transcribed] = await Promise.all([
-      getAvailableGigContextForFarmer(req.user!.id),
-      audioFile
-        ? transcribeAudioBuffer({
+    if (audioFile) {
+      let transcribed;
+      try {
+        transcribed = await transcribeAudioBufferStreaming({
+          audioBuffer: audioFile.buffer,
+          fileName: audioFile.originalname,
+          mimeType: audioFile.mimetype,
+          languageCode: languageCode ?? undefined,
+        });
+      } catch (err) {
+        if (
+          err instanceof Error &&
+          err.message.includes("Unsupported audio format")
+        ) {
+          // Fallback for older client uploads (e.g., webm/aac multipart path).
+          transcribed = await transcribeAudioBuffer({
             audioBuffer: audioFile.buffer,
             fileName: audioFile.originalname,
             mimeType: audioFile.mimetype,
             languageCode: languageCode ?? undefined,
-          })
-        : Promise.resolve(null),
-    ]);
-
-    if (transcribed) {
+          });
+        } else {
+          throw err;
+        }
+      }
       transcript = transcribed.transcript;
       detectedLanguageCode = transcribed.detectedLanguageCode;
     }
 
-    indexFarmerProfileMemory(req.user!.id, context.farmerProfile);
-    const pendingDraft = getFarmerPendingOrderDraft(req.user!.id);
-    const memoryMatches = searchFarmerConversationMemory({
-      farmerId: req.user!.id,
-      query: transcript,
-      limit: 5,
-    });
-
-    const extraction = await extractVoiceOrderFromTranscript({
-      transcript,
-      gigs: context.gigs,
-      farmerLanguage: context.farmerLanguage,
-      conversationContext: memoryMatches.map((match) => match.text),
-      pendingDraft,
-    });
-
-    let clarificationQuestionLocalized = extraction.clarificationQuestion;
-    let clarificationSpeech: {
-      languageCode: string;
-      mimeType: string;
-      audioBase64: string;
-    } | null = null;
-
-    rememberFarmerConversationTurn({
+    const result = await processVoiceOrderForFarmer({
       farmerId: req.user!.id,
       transcript,
-      extraction,
+      transcribedFromAudio: Boolean(audioFile),
+      languageCode: languageCode ?? null,
+      detectedLanguageCode,
     });
 
-    if (extraction.needsClarification) {
-      setFarmerPendingOrderDraft({
-        farmerId: req.user!.id,
-        extraction,
-      });
-
-      if (extraction.clarificationQuestion) {
-        const speech = await buildLocalizedClarificationSpeech({
-          question: extraction.clarificationQuestion,
-          languageHint:
-            detectedLanguageCode ?? languageCode ?? context.farmerLanguage,
-        });
-        if (speech) {
-          clarificationQuestionLocalized = speech.localizedQuestion;
-          clarificationSpeech = {
-            languageCode: speech.languageCode,
-            mimeType: speech.mimeType,
-            audioBase64: speech.audioBase64,
-          };
-        }
-      }
-    } else {
-      clearFarmerPendingOrderDraft(req.user!.id);
-    }
-
-    success(res, {
-      transcript,
-      extraction: {
-        ...extraction,
-        clarificationQuestionLocalized,
-      },
-      clarificationSpeech,
-      context: {
-        availableGigCount: context.gigs.length,
-        transcribedFromAudio: Boolean(audioFile),
-        detectedLanguageCode,
-        clarificationLanguageCode:
-          clarificationSpeech?.languageCode ??
-          detectedLanguageCode ??
-          languageCode ??
-          context.farmerLanguage,
-        memoryMatchesUsed: memoryMatches.length,
-        usedPendingDraft: Boolean(pendingDraft),
-        pendingDraftActive: extraction.needsClarification,
-      },
-    });
+    success(res, result);
   } catch (e) {
     const message =
       e instanceof Error ? e.message : "Unable to process voice order";

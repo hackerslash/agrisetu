@@ -6,8 +6,10 @@ import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/widgets/app_brand_icon.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/auth_provider.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
@@ -539,6 +541,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         'upiId': _upiCtrl.text.trim().isNotEmpty ? _upiCtrl.text.trim() : null,
         'language': _selectedLanguage,
       });
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(AppConstants.languageKey, _selectedLanguage);
       if (!mounted) return;
       if (widget.isEditMode) {
         context.go('/profile');

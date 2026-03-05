@@ -1,17 +1,19 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:record/record.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/models/voice_order_model.dart';
+import '../../../core/providers/auth_provider.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/widgets/app_header.dart';
 
@@ -38,6 +40,10 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
   late final Animation<double> _pulseAnimation;
   Timer? _recordingTimer;
   Timer? _processingTextTimer;
+  StreamSubscription<Uint8List>? _audioStreamSub;
+  StreamSubscription<dynamic>? _voiceSocketSub;
+  WebSocketChannel? _voiceSocket;
+  Completer<VoiceOrderResult>? _voiceResultCompleter;
 
   bool _isRecording = false;
   bool _isProcessing = false;
@@ -45,6 +51,8 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
   int _processingHintIndex = 0;
   List<String> _processingHints = const [];
   String? _errorMessage;
+  String _liveTranscript = '';
+  String? _liveDetectedLanguageCode;
   VoiceOrderResult? _voiceResult;
 
   @override
@@ -66,6 +74,9 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
   void dispose() {
     _recordingTimer?.cancel();
     _processingTextTimer?.cancel();
+    _audioStreamSub?.cancel();
+    _voiceSocketSub?.cancel();
+    _voiceSocket?.sink.close();
     _clarificationPlayer.stop();
     _clarificationPlayer.dispose();
     _fallbackTts.stop();
@@ -98,6 +109,27 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
       case 'hi-in':
       case 'hindi':
         return 'hi-IN';
+      case 'mr':
+      case 'mr-in':
+      case 'marathi':
+        return 'mr-IN';
+      case 'gu':
+      case 'gu-in':
+      case 'gujarati':
+        return 'gu-IN';
+      case 'ml':
+      case 'ml-in':
+      case 'malayalam':
+        return 'ml-IN';
+      case 'pa':
+      case 'pa-in':
+      case 'punjabi':
+        return 'pa-IN';
+      case 'or':
+      case 'or-in':
+      case 'odia':
+      case 'oriya':
+        return 'or-IN';
       case 'ta':
       case 'ta-in':
       case 'tamil':
@@ -223,6 +255,148 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
     _processingHintIndex = 0;
   }
 
+  Uri _buildVoiceStreamUri(String token) {
+    final base = Uri.parse(AppConstants.apiBaseUrl);
+    final wsScheme = base.scheme == 'https' ? 'wss' : 'ws';
+    final pathSegments = [
+      ...base.pathSegments.where((segment) => segment.isNotEmpty),
+      'farmer',
+      'voice',
+      'stream',
+    ];
+    return base.replace(
+      scheme: wsScheme,
+      pathSegments: pathSegments,
+      queryParameters: {'token': token},
+      fragment: null,
+    );
+  }
+
+  Future<void> _closeVoiceStream() async {
+    await _audioStreamSub?.cancel();
+    _audioStreamSub = null;
+    await _voiceSocketSub?.cancel();
+    _voiceSocketSub = null;
+    try {
+      await _voiceSocket?.sink.close();
+    } catch (_) {}
+    _voiceSocket = null;
+    _voiceResultCompleter = null;
+  }
+
+  void _completeVoiceResultError(Object error) {
+    final completer = _voiceResultCompleter;
+    if (completer != null && !completer.isCompleted) {
+      completer.completeError(error);
+    }
+  }
+
+  void _handleVoiceSocketMessage(dynamic event) {
+    if (event is! String) return;
+    Map<String, dynamic> decoded;
+    try {
+      final raw = jsonDecode(event);
+      if (raw is! Map<String, dynamic>) return;
+      decoded = raw;
+    } catch (_) {
+      return;
+    }
+    final type = decoded['type'] as String?;
+    if (type == null) return;
+
+    if (type == 'transcript') {
+      final transcript = decoded['transcript'] as String? ?? '';
+      final language = decoded['detectedLanguageCode'] as String?;
+      if (!mounted) return;
+      setState(() {
+        _liveTranscript = transcript;
+        _liveDetectedLanguageCode = language;
+      });
+      return;
+    }
+
+    if (type == 'final_result') {
+      final data = decoded['data'];
+      if (data is! Map<String, dynamic>) {
+        _completeVoiceResultError(
+          const ApiException('Invalid response from voice stream.'),
+        );
+        return;
+      }
+      final completer = _voiceResultCompleter;
+      if (completer != null && !completer.isCompleted) {
+        completer.complete(VoiceOrderResult.fromJson(data));
+      }
+      return;
+    }
+
+    if (type == 'error') {
+      final message =
+          decoded['message'] as String? ?? 'Voice stream failed. Please retry.';
+      _completeVoiceResultError(ApiException(message));
+    }
+  }
+
+  Future<void> _startRealtimeRecording() async {
+    final token = await ref.read(apiClientProvider).getToken();
+    if (token == null || token.isEmpty) {
+      throw const ApiException('Session expired. Please login again.');
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final profileLanguageCode = ref.read(currentFarmerProvider)?.language;
+    final selectedLanguageCode = profileLanguageCode ??
+        prefs.getString(AppConstants.languageKey) ??
+        'en';
+    final languageHint = _normalizeTtsLanguageCode(selectedLanguageCode);
+
+    final streamUri = _buildVoiceStreamUri(token);
+    final socket = WebSocketChannel.connect(streamUri);
+    _voiceSocket = socket;
+    _voiceResultCompleter = Completer<VoiceOrderResult>();
+
+    _voiceSocketSub = socket.stream.listen(
+      _handleVoiceSocketMessage,
+      onError: (Object error) {
+        _completeVoiceResultError(error);
+      },
+      onDone: () {
+        if (!(_voiceResultCompleter?.isCompleted ?? true)) {
+          _completeVoiceResultError(
+            const ApiException('Voice stream disconnected unexpectedly.'),
+          );
+        }
+      },
+      cancelOnError: false,
+    );
+
+    socket.sink.add(
+      jsonEncode({
+        'type': 'start',
+        'sampleRateHertz': 16000,
+        'languageCode': languageHint,
+      }),
+    );
+
+    final audioStream = await _recorder.startStream(
+      const RecordConfig(
+        encoder: AudioEncoder.pcm16bits,
+        sampleRate: 16000,
+        numChannels: 1,
+      ),
+    );
+
+    _audioStreamSub = audioStream.listen(
+      (chunk) {
+        if (chunk.isEmpty) return;
+        _voiceSocket?.sink.add(chunk);
+      },
+      onError: (Object error) {
+        _completeVoiceResultError(error);
+      },
+      cancelOnError: false,
+    );
+  }
+
   Future<void> _startRecording() async {
     if (_isProcessing) return;
     try {
@@ -236,25 +410,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
         return;
       }
 
-      const config = RecordConfig(
-        encoder: kIsWeb ? AudioEncoder.opus : AudioEncoder.aacLc,
-        bitRate: 128000,
-        sampleRate: 44100,
-        numChannels: 1,
-      );
-
-      final filePath = kIsWeb
-          ? 'agrisetu_voice_${DateTime.now().millisecondsSinceEpoch}.webm'
-          : '${Directory.systemTemp.path}/agrisetu_voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
-      await _recorder.start(
-        config,
-        path: filePath,
-      );
-
-      final started = await _recorder.isRecording();
-      if (!started) {
-        throw Exception('Recorder did not start');
-      }
+      await _startRealtimeRecording();
 
       _recordingTimer?.cancel();
       _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -267,8 +423,12 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
         _isRecording = true;
         _recordedSeconds = 0;
         _errorMessage = null;
+        _voiceResult = null;
+        _liveTranscript = '';
+        _liveDetectedLanguageCode = null;
       });
     } catch (e) {
+      await _closeVoiceStream();
       if (!mounted) return;
       setState(() {
         _isRecording = false;
@@ -278,37 +438,8 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
   }
 
   Future<void> _stopRecordingAndProcess() async {
-    try {
-      _recordingTimer?.cancel();
-      final path = await _recorder.stop();
-      if (!mounted) return;
-
-      setState(() {
-        _isRecording = false;
-      });
-
-      if (path == null || path.isEmpty) {
-        setState(() => _errorMessage = 'No audio recorded. Please try again.');
-        return;
-      }
-
-      if (kIsWeb) {
-        await _processWebAudioBlob(path);
-        return;
-      }
-
-      await _processAudio(path);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isRecording = false;
-        _errorMessage = 'Unable to stop recording: $e';
-      });
-    }
-  }
-
-  Future<void> _processAudio(String filePath) async {
     setState(() {
+      _isRecording = false;
       _isProcessing = true;
       _errorMessage = null;
       _voiceResult = null;
@@ -316,54 +447,19 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
     _startProcessingHints();
 
     try {
-      final result = await ref.read(apiClientProvider).parseVoiceOrder(
-            audioFilePath: filePath,
-          );
-      if (!mounted) return;
-      setState(() => _voiceResult = result);
-      unawaited(_playClarificationQuestion(result));
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _errorMessage = e.toString());
-    } finally {
-      if (!kIsWeb) {
-        try {
-          final file = File(filePath);
-          if (await file.exists()) {
-            await file.delete();
-          }
-        } catch (_) {}
+      await _recorder.stop();
+      await _audioStreamSub?.cancel();
+      _audioStreamSub = null;
+      _voiceSocket?.sink.add(jsonEncode({'type': 'end'}));
+
+      final resultFuture = _voiceResultCompleter?.future;
+      if (resultFuture == null) {
+        throw const ApiException('Voice stream not initialized.');
       }
 
-      if (mounted) {
-        setState(() => _isProcessing = false);
-      }
-      _stopProcessingHints();
-    }
-  }
-
-  Future<void> _processWebAudioBlob(String blobUrl) async {
-    setState(() {
-      _isProcessing = true;
-      _errorMessage = null;
-      _voiceResult = null;
-    });
-    _startProcessingHints();
-
-    try {
-      final blobResp = await Dio().get<List<int>>(
-        blobUrl,
-        options: Options(responseType: ResponseType.bytes),
+      final result = await resultFuture.timeout(
+        const Duration(seconds: 50),
       );
-      final bytes = blobResp.data;
-      if (bytes == null || bytes.isEmpty) {
-        throw Exception('Recorded audio is empty.');
-      }
-
-      final result = await ref.read(apiClientProvider).parseVoiceOrder(
-            audioBytes: bytes,
-            audioFileName: 'agrisetu_voice.webm',
-          );
       if (!mounted) return;
       setState(() => _voiceResult = result);
       unawaited(_playClarificationQuestion(result));
@@ -371,11 +467,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
       if (!mounted) return;
       setState(() => _errorMessage = e.toString());
     } finally {
-      if (kIsWeb) {
-        try {
-          await _recorder.cancel();
-        } catch (_) {}
-      }
+      await _closeVoiceStream();
       if (mounted) {
         setState(() => _isProcessing = false);
       }
@@ -388,6 +480,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
     if (_isRecording) {
       _recordingTimer?.cancel();
       _recorder.stop().catchError((_) => null);
+      unawaited(_closeVoiceStream());
       _isRecording = false;
     }
     super.deactivate();
@@ -412,10 +505,13 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
   void _reset() {
     _clarificationPlayer.stop();
     _fallbackTts.stop();
+    unawaited(_closeVoiceStream());
     setState(() {
       _errorMessage = null;
       _voiceResult = null;
       _recordedSeconds = 0;
+      _liveTranscript = '';
+      _liveDetectedLanguageCode = null;
     });
   }
 
@@ -430,6 +526,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
                 ? 'Analyzing your voice order…'
                 : _processingHints[_processingHintIndex])
             : 'Tap to record · AI extraction enabled';
+    final liveTranscript = _liveTranscript.trim();
     final shouldCenterPrimaryContent =
         _voiceResult == null && _errorMessage == null;
 
@@ -551,6 +648,41 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
                           ),
                           textAlign: TextAlign.center,
                         ),
+                        if (_isRecording && liveTranscript.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: AppColors.inputBackground,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Live transcript',
+                                  style: AppTextStyles.caption,
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  liveTranscript,
+                                  style: AppTextStyles.body.copyWith(
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                                if ((_liveDetectedLanguageCode ?? '')
+                                    .isNotEmpty) ...[
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Language: $_liveDetectedLanguageCode',
+                                    style: AppTextStyles.caption,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 24),
                         if (_errorMessage != null) ...[
                           Container(
@@ -673,9 +805,9 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
                                     onPressed: _isProcessing
                                         ? null
                                         : () => unawaited(
-                                            _playClarificationQuestion(
-                                                _voiceResult!),
-                                          ),
+                                              _playClarificationQuestion(
+                                                  _voiceResult!),
+                                            ),
                                     icon: const Icon(
                                       Icons.volume_up,
                                       color: AppColors.surface,

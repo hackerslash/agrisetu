@@ -25,7 +25,8 @@ class AuthState {
 
   bool get isAuthenticated => status == AuthStatus.authenticated;
   bool get isLoading => status == AuthStatus.loading;
-  bool get needsProfile => isAuthenticated && !(farmer?.isProfileComplete ?? false);
+  bool get needsProfile =>
+      isAuthenticated && !(farmer?.isProfileComplete ?? false);
 }
 
 class AuthNotifier extends AsyncNotifier<AuthState> {
@@ -98,6 +99,10 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   Future<void> _cacheFarmer(Farmer farmer) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(AppConstants.farmerKey, jsonEncode(farmer.toJson()));
+    final language = farmer.language.trim();
+    if (language.isNotEmpty) {
+      await prefs.setString(AppConstants.languageKey, language);
+    }
   }
 }
 

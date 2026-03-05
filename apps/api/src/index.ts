@@ -3,6 +3,8 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import multer from "multer";
+import http from "http";
+import { WebSocketServer } from "ws";
 import { logger } from "./lib/logger.js";
 import authRouter from "./routes/auth.js";
 import farmerRouter from "./routes/farmer.js";
@@ -11,6 +13,10 @@ import {
   attachRequestContext,
   logRequestLifecycle,
 } from "./middleware/request-context.js";
+import {
+  attachVoiceStreamServer,
+  handleVoiceStreamUpgrade,
+} from "./ws/voice-stream.js";
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -94,7 +100,19 @@ app.use(
   },
 );
 
-app.listen(PORT, () => {
+const server = http.createServer(app);
+const voiceStreamWss = new WebSocketServer({ noServer: true });
+
+attachVoiceStreamServer(voiceStreamWss);
+
+server.on("upgrade", (req, socket, head) => {
+  const handled = handleVoiceStreamUpgrade(req, socket, head, voiceStreamWss);
+  if (!handled) {
+    socket.destroy();
+  }
+});
+
+server.listen(PORT, () => {
   logger.info(`AgriSetu API running on http://localhost:${PORT}`);
 });
 
