@@ -1,18 +1,24 @@
 import { Router, type CookieOptions, type Response } from "express";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { prisma } from "../lib/prisma.js";
+
 import { signToken } from "../lib/jwt.js";
+import { prisma } from "../lib/prisma.js";
+import { error, success } from "../lib/response.js";
 import {
   AUTH_SESSION_COOKIE,
   authenticate,
   requireFarmer,
   requireVendor,
 } from "../middleware/auth.js";
-import { success, error } from "../lib/response.js";
-import { withFarmerAvatarForClient } from "../services/farmer-avatar.js";
-import { withVendorDocumentsForClient } from "../services/vendor-documents.js";
 import { authLimiter } from "../middleware/rate-limit.js";
+import { withFarmerAvatarForClient } from "../services/farmer-avatar.js";
+import {
+  normalizeNotificationPreferences,
+  registerFarmerDeviceToken,
+  unregisterFarmerDeviceToken,
+} from "../services/push-notifications.js";
+import { withVendorDocumentsForClient } from "../services/vendor-documents.js";
 
 const router = Router();
 const AUTH_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -60,8 +66,6 @@ function clearAuthSessionCookie(res: Response) {
   });
 }
 
-// ─── Farmer Auth ──────────────────────────────────────────────────────────────
-
 const requestOtpSchema = z.object({
   phone: z.string().min(10),
 });
@@ -72,6 +76,7 @@ router.post("/farmer/request-otp", authLimiter, async (req, res) => {
     error(res, "Invalid request", 422, parsed.error.flatten());
     return;
   }
+
   success(res, { message: "OTP sent successfully" });
 });
 
@@ -86,21 +91,25 @@ router.post("/farmer/verify-otp", authLimiter, async (req, res) => {
     error(res, "Invalid request", 422, parsed.error.flatten());
     return;
   }
+
   const { phone, otp } = parsed.data;
   if (otp !== "123456") {
     error(res, "Invalid OTP", 400);
     return;
   }
+
   try {
     let farmer = await prisma.farmer.findUnique({ where: { phone } });
     if (!farmer) {
       farmer = await prisma.farmer.create({ data: { phone } });
     }
+
     const token = signToken({ id: farmer.id, role: "farmer" });
     setAuthSessionCookie(res, token);
+
     const farmerForClient = await withFarmerAvatarForClient(farmer);
     success(res, { token, farmer: farmerForClient, isNewUser: !farmer.name });
-  } catch (err) {
+  } catch {
     error(res, "Internal server error", 500);
   }
 });
@@ -120,6 +129,12 @@ const farmerProfileSchema = z.object({
   aadhaarLinked: z.boolean().optional(),
 });
 
+const farmerNotificationDeviceSchema = z.object({
+  token: z.string().min(20),
+  platform: z.literal("ANDROID").default("ANDROID"),
+  preferences: z.record(z.boolean()).optional(),
+});
+
 router.get("/farmer/me", authenticate, requireFarmer, async (req, res) => {
   try {
     const farmer = await prisma.farmer.findUnique({
@@ -129,6 +144,7 @@ router.get("/farmer/me", authenticate, requireFarmer, async (req, res) => {
       error(res, "Farmer not found", 404);
       return;
     }
+
     success(res, await withFarmerAvatarForClient(farmer));
   } catch {
     error(res, "Internal server error", 500);
@@ -145,6 +161,7 @@ router.post(
       error(res, "Invalid request", 422, parsed.error.flatten());
       return;
     }
+
     try {
       const farmer = await prisma.farmer.update({
         where: { id: req.user!.id },
@@ -157,7 +174,59 @@ router.post(
   },
 );
 
-// ─── Vendor Auth ──────────────────────────────────────────────────────────────
+router.post(
+  "/farmer/notification-device",
+  authenticate,
+  requireFarmer,
+  async (req, res) => {
+    const parsed = farmerNotificationDeviceSchema.safeParse(req.body);
+    if (!parsed.success) {
+      error(res, "Invalid request", 422, parsed.error.flatten());
+      return;
+    }
+
+    try {
+      const device = await registerFarmerDeviceToken({
+        farmerId: req.user!.id,
+        token: parsed.data.token,
+        preferences: normalizeNotificationPreferences(parsed.data.preferences),
+      });
+      success(res, {
+        id: device.id,
+        token: device.token,
+        platform: device.platform,
+        lastSeenAt: device.lastSeenAt,
+      });
+    } catch {
+      error(res, "Unable to register notification device", 500);
+    }
+  },
+);
+
+router.delete(
+  "/farmer/notification-device",
+  authenticate,
+  requireFarmer,
+  async (req, res) => {
+    const parsed = farmerNotificationDeviceSchema.pick({ token: true }).safeParse(
+      req.body,
+    );
+    if (!parsed.success) {
+      error(res, "Invalid request", 422, parsed.error.flatten());
+      return;
+    }
+
+    try {
+      await unregisterFarmerDeviceToken({
+        farmerId: req.user!.id,
+        token: parsed.data.token,
+      });
+      success(res, { removed: true });
+    } catch {
+      error(res, "Unable to unregister notification device", 500);
+    }
+  },
+);
 
 const vendorStep1Schema = z.object({
   email: z.string().email(),
@@ -179,13 +248,16 @@ router.post("/vendor/register/step1", authLimiter, async (req, res) => {
     error(res, "Invalid request", 422, parsed.error.flatten());
     return;
   }
+
   const { email, password, ...rest } = parsed.data;
+
   try {
     const existing = await prisma.vendor.findUnique({ where: { email } });
     if (existing) {
       error(res, "Email already registered", 400);
       return;
     }
+
     const hashed = await bcrypt.hash(password, 10);
     const vendor = await prisma.vendor.create({
       data: { email, password: hashed, ...rest },
@@ -205,6 +277,7 @@ router.post("/vendor/register/step1", authLimiter, async (req, res) => {
         createdAt: true,
       },
     });
+
     const token = signToken({ id: vendor.id, role: "vendor" });
     setAuthSessionCookie(res, token);
     success(res, { vendor, token }, 201);
@@ -229,6 +302,7 @@ router.post("/vendor/register/step2", authenticate, async (req, res) => {
     error(res, "Invalid request", 422, parsed.error.flatten());
     return;
   }
+
   try {
     const vendor = await prisma.vendor.update({
       where: { id: req.user!.id },
@@ -263,15 +337,16 @@ router.post("/vendor/register/step3", authenticate, async (req, res) => {
     error(res, "Invalid request", 422, parsed.error.flatten());
     return;
   }
+
   try {
     const docs = await prisma.$transaction(async (tx) => {
-      const upserted = [] as Array<{
+      const upserted: Array<{
         id: string;
         vendorId: string;
         docType: "PAN" | "GST" | "QUALITY_CERT";
         fileUrl: string;
         uploadedAt: Date;
-      }>;
+      }> = [];
 
       for (const doc of parsed.data.documents) {
         await tx.vendorDocument.deleteMany({
@@ -291,7 +366,7 @@ router.post("/vendor/register/step3", authenticate, async (req, res) => {
     );
 
     const normalizedDocs = docsForClient
-      .map((v) => v.documents?.[0])
+      .map((vendor) => vendor.documents?.[0])
       .filter(Boolean);
     success(res, { documents: normalizedDocs }, 201);
   } catch {
@@ -310,6 +385,7 @@ router.post("/vendor/login", authLimiter, async (req, res) => {
     error(res, "Invalid request", 422, parsed.error.flatten());
     return;
   }
+
   try {
     const vendor = await prisma.vendor.findUnique({
       where: { email: parsed.data.email },
@@ -318,21 +394,23 @@ router.post("/vendor/login", authLimiter, async (req, res) => {
       error(res, "Invalid credentials", 401);
       return;
     }
+
     const valid = await bcrypt.compare(parsed.data.password, vendor.password);
     if (!valid) {
       error(res, "Invalid credentials", 401);
       return;
     }
+
     const token = signToken({ id: vendor.id, role: "vendor" });
     setAuthSessionCookie(res, token);
-    const { password: _pwd, ...vendorData } = vendor;
+    const { password: _password, ...vendorData } = vendor;
     success(res, { token, vendor: vendorData });
   } catch {
     error(res, "Internal server error", 500);
   }
 });
 
-router.get("/vendor/me", authenticate, async (req, res) => {
+router.get("/vendor/me", authenticate, requireVendor, async (req, res) => {
   try {
     const vendor = await prisma.vendor.findUnique({
       where: { id: req.user!.id },
@@ -359,6 +437,7 @@ router.get("/vendor/me", authenticate, async (req, res) => {
       error(res, "Vendor not found", 404);
       return;
     }
+
     success(res, await withVendorDocumentsForClient(vendor));
   } catch {
     error(res, "Internal server error", 500);

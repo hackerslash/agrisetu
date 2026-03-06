@@ -33,6 +33,10 @@ import {
   clearAllFarmerPendingOrderDrafts,
 } from "../services/conversation-memory.js";
 import { processVoiceOrderForFarmer } from "../services/voice-order-processing.js";
+import {
+  sendPaymentConfirmedNotification,
+  sendPaymentPendingNotification,
+} from "../services/farmer-notification-events.js";
 
 const router = Router();
 router.use(authenticate, requireFarmer);
@@ -1060,6 +1064,7 @@ router.post("/clusters/:id/vote", async (req, res) => {
           where: { id: { in: members.map((m) => m.orderId) } },
           data: { status: OrderStatus.PAYMENT_PENDING },
         });
+        await sendPaymentPendingNotification(req.params.id);
       }
     }
 
@@ -1241,6 +1246,10 @@ router.post("/payments/confirm", async (req, res) => {
 
     // Check if all members paid → transition cluster
     await checkAndTransitionPayment(parsed.data.clusterId);
+    await sendPaymentConfirmedNotification({
+      clusterId: parsed.data.clusterId,
+      farmerId: req.user!.id,
+    });
 
     success(res, { confirmed: true, payment });
   } catch {
@@ -1699,3 +1708,4 @@ router.get("/dashboard", async (req, res) => {
 });
 
 export default router;
+

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1087716640234",
+    "project_id": "agrisetu-ec5fd",
+    "storage_bucket": "agrisetu-ec5fd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1087716640234:android:11d37b80a917cf0a5dde93",
+        "android_client_info": {
+          "package_name": "com.agrisetu.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBXYJyToyfv89uqHMwESTqPe03ImYtJWTY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -176,6 +176,31 @@ class ApiClient {
     }
   }
 
+  Future<void> registerNotificationDevice({
+    required String token,
+    required Map<String, bool> preferences,
+  }) async {
+    try {
+      await _dio.post('/auth/farmer/notification-device', data: {
+        'token': token,
+        'platform': 'ANDROID',
+        'preferences': preferences,
+      });
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<void> unregisterNotificationDevice({required String token}) async {
+    try {
+      await _dio.delete('/auth/farmer/notification-device', data: {
+        'token': token,
+      });
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
   // ─── Orders ─────────────────────────────────────────────────────────────────
 
   Future<Map<String, dynamic>> createOrder(Map<String, dynamic> data) async {
@@ -476,3 +501,4 @@ class ApiClient {
 
 // Riverpod provider
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient.instance);
+

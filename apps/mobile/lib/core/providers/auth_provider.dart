@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../api/api_client.dart';
 import '../models/farmer_model.dart';
 import '../constants/app_constants.dart';
+import '../services/push_notification_service.dart';
 
 enum AuthStatus { loading, authenticated, unauthenticated }
 
@@ -90,6 +91,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   }
 
   Future<void> logout() async {
+    await PushNotificationService.unregisterCurrentDevice();
     await _api.clearToken();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(AppConstants.farmerKey);
@@ -115,3 +117,4 @@ final currentFarmerProvider = Provider<Farmer?>((ref) {
   final authState = ref.watch(authProvider);
   return authState.valueOrNull?.farmer;
 });
+

@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/providers/auth_provider.dart';
+import 'core/providers/notification_provider.dart';
 import 'core/services/app_notification_service.dart';
+import 'core/services/push_notification_service.dart';
 import 'core/utils/router.dart';
 import 'shared/theme/app_theme.dart';
 
@@ -22,7 +25,7 @@ void main() async {
   ));
 
   await AppNotificationService.initialize();
-  await AppNotificationService.registerBackgroundSync();
+  await PushNotificationService.initialize();
 
   runApp(
     const ProviderScope(
@@ -40,15 +43,21 @@ class AgriSetuApp extends ConsumerStatefulWidget {
 
 class _AgriSetuAppState extends ConsumerState<AgriSetuApp> {
   StreamSubscription<String>? _notificationRouteSubscription;
+  ProviderSubscription<AsyncValue<AuthState>>? _authSubscription;
+  ProviderSubscription<AsyncValue<Map<String, bool>>>?
+      _notificationPreferenceSubscription;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await AppNotificationService.requestPermissions();
-      await AppNotificationService.startForegroundSync();
+      await PushNotificationService.requestPermissions();
+      await _syncNotificationRegistration();
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
+
       final router = ref.read(routerProvider);
       final initialRoute = AppNotificationService.consumeInitialRoute();
       if (initialRoute != null) {
@@ -59,12 +68,59 @@ class _AgriSetuAppState extends ConsumerState<AgriSetuApp> {
           AppNotificationService.routeStream.listen((route) {
         router.push(route);
       });
+
+      _authSubscription ??= ref.listenManual(authProvider, (previous, next) {
+        final authState = next.valueOrNull;
+        if (!(authState?.isAuthenticated ?? false)) {
+          return;
+        }
+
+        final preferences =
+            ref.read(notificationPreferencesProvider).valueOrNull ??
+                defaultNotificationPreferences;
+        unawaited(
+          PushNotificationService.syncDeviceRegistration(
+            preferences: preferences,
+          ),
+        );
+      });
+
+      _notificationPreferenceSubscription ??=
+          ref.listenManual(notificationPreferencesProvider, (previous, next) {
+        final authState = ref.read(authProvider).valueOrNull;
+        if (!(authState?.isAuthenticated ?? false)) {
+          return;
+        }
+
+        final preferences = next.valueOrNull ?? defaultNotificationPreferences;
+        unawaited(
+          PushNotificationService.syncDeviceRegistration(
+            preferences: preferences,
+          ),
+        );
+      });
     });
+  }
+
+  Future<void> _syncNotificationRegistration() async {
+    final authState = ref.read(authProvider).valueOrNull;
+    if (!(authState?.isAuthenticated ?? false)) {
+      return;
+    }
+
+    final preferences =
+        ref.read(notificationPreferencesProvider).valueOrNull ??
+            defaultNotificationPreferences;
+    await PushNotificationService.syncDeviceRegistration(
+      preferences: preferences,
+    );
   }
 
   @override
   void dispose() {
     _notificationRouteSubscription?.cancel();
+    _authSubscription?.close();
+    _notificationPreferenceSubscription?.close();
     super.dispose();
   }
 

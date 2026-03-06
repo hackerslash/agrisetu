@@ -11,6 +11,11 @@ import {
   isValidCoordinate,
   isWithinRadiusKm,
 } from "../lib/geo.js";
+import {
+  sendClusterFailedNotification,
+  sendClusterJoinedNotification,
+  sendVotingStartedNotification,
+} from "./farmer-notification-events.js";
 
 const DEFAULT_TARGET_QUANTITY = 1000;
 const DEFAULT_FARMER_CLUSTER_RADIUS_KM = 50;
@@ -474,6 +479,11 @@ export async function assignOrderToCluster(params: {
     data: { status: OrderStatus.CLUSTERED },
   });
 
+  await sendClusterJoinedNotification({
+    clusterId: updated.id,
+    farmerId,
+  });
+
   if (updated.status === ClusterStatus.VOTING) {
     await autoCreateBidsForVotingCluster(
       updated.id,
@@ -493,6 +503,7 @@ export async function assignOrderToCluster(params: {
       updated.unit,
       updated.currentQuantity,
     );
+    await sendVotingStartedNotification(updated.id);
   }
 
   return prisma.cluster.findUnique({
@@ -735,6 +746,11 @@ export async function syncClustersForPublishedGig(
         )
       ),
     );
+    await Promise.all(
+      clustersToTransition.map((cluster) =>
+        sendVotingStartedNotification(cluster.id),
+      ),
+    );
   }
 
   // Also auto-bid on already-VOTING clusters that match this gig
@@ -872,6 +888,8 @@ export async function expireClusterIfPaymentWindowElapsed(
     });
   });
 
+  await sendClusterFailedNotification(clusterId);
+
   return true;
 }
 
@@ -975,3 +993,7 @@ export async function checkAndTransitionPayment(clusterId: string) {
     });
   }
 }
+
+
+
+

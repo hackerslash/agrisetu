@@ -23,6 +23,12 @@ import {
   withVendorDocumentForClient,
   withVendorDocumentsForClient,
 } from "../services/vendor-documents.js";
+import {
+  sendDeliveredNotification,
+  sendDispatchedNotification,
+  sendProcessingStartedNotification,
+  sendRejectedNotification,
+} from "../services/farmer-notification-events.js";
 
 const router = Router();
 router.use(authenticate, requireVendor);
@@ -915,6 +921,8 @@ router.post("/orders/:id/reject", async (req, res) => {
       });
     });
 
+    await sendRejectedNotification(req.params.id);
+
     success(res, {
       rejected: true,
       reason: parsed.data.reason,
@@ -990,6 +998,10 @@ router.patch("/orders/:id/process", async (req, res) => {
       });
     }
 
+    if (cluster.status === ClusterStatus.PAYMENT) {
+      await sendProcessingStartedNotification(req.params.id);
+    }
+
     success(res, { processing: true });
   } catch {
     error(res, "Internal server error", 500);
@@ -1048,6 +1060,8 @@ router.patch("/orders/:id/out-for-delivery", async (req, res) => {
       where: { id: { in: cluster.members.map((m) => m.orderId) } },
       data: { status: OrderStatus.DISPATCHED },
     });
+
+    await sendDispatchedNotification(req.params.id);
 
     success(res, { dispatched: true });
   } catch {
@@ -1111,6 +1125,8 @@ router.patch("/orders/:id/dispatch", async (req, res) => {
       where: { id: { in: cluster.members.map((m) => m.orderId) } },
       data: { status: OrderStatus.DISPATCHED },
     });
+
+    await sendDispatchedNotification(req.params.id);
 
     success(res, { dispatched: true });
   } catch {
@@ -1233,6 +1249,8 @@ router.patch("/orders/:id/deliver", async (req, res) => {
         ],
       },
     });
+
+    await sendDeliveredNotification(req.params.id);
 
     success(res, { delivered: true });
   } catch {
@@ -1457,3 +1475,4 @@ router.get("/analytics", async (req, res) => {
 });
 
 export default router;
+

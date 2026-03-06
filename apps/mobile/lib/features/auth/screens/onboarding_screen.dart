@@ -919,7 +919,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                                 urlTemplate:
                                     'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                                 userAgentPackageName:
-                                    'com.example.agrisetu_app',
+                                    'com.agrisetu.mobile',
                               ),
                               CircleLayer(
                                 circles: [
@@ -1097,3 +1097,4 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
   }
 }
+

@@ -499,7 +499,7 @@ class _MapSection extends StatelessWidget {
           children: [
             TileLayer(
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'com.example.agrisetu_app',
+              userAgentPackageName: 'com.agrisetu.mobile',
             ),
             CircleLayer(
               circles: [
@@ -959,3 +959,4 @@ class _VendorBidCard extends StatelessWidget {
     );
   }
 }
+

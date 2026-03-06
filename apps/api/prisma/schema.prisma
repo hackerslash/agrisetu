@@ -30,6 +30,7 @@ model Farmer {
   votes          VendorVote[]
   payments       Payment[]
   ratings        Rating[]
+  deviceTokens   FarmerDeviceToken[]
 }
 
 model Vendor {
@@ -222,6 +223,25 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum DevicePlatform {
+  ANDROID
+}
+
+model FarmerDeviceToken {
+  id          String         @id @default(cuid())
+  farmerId    String
+  token       String         @unique
+  platform    DevicePlatform
+  preferences Json?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  lastSeenAt  DateTime       @default(now())
+  farmer      Farmer         @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+
+  @@index([farmerId, platform])
+  @@index([farmerId, lastSeenAt])
+}
+
 model Delivery {
   id            String    @id @default(cuid())
   clusterId     String    @unique
@@ -245,3 +265,4 @@ model Rating {
   vendor    Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
   cluster   Cluster  @relation(fields: [clusterId], references: [id], onDelete: Cascade)
 }
+
