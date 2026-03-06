@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/providers/notification_provider.dart';
 import '../../../core/models/farmer_model.dart';
 import '../../../core/utils/avatar_picker.dart';
 import '../../home/screens/home_screen.dart' show homeDashboardProvider;
@@ -60,6 +61,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget build(BuildContext context) {
     final farmer = ref.watch(currentFarmerProvider);
     final dashboardAsync = ref.watch(homeDashboardProvider);
+    final unreadNotificationCount = ref.watch(unreadNotificationCountProvider);
     final avatarUrl = (farmer?.avatarUrl ?? '').trim();
     final villageDistrict = [
       farmer?.village?.trim(),
@@ -339,31 +341,36 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 const SizedBox(height: 20),
                 const _SectionTitle(title: 'Settings'),
                 const SizedBox(height: 12),
-                const _ProfileCard(
+                _ProfileCard(
                   children: [
                     _SettingsRow(
                       icon: Icons.notifications_none_outlined,
                       label: 'Notification Settings',
+                      onTap: () => context.push('/profile/notifications'),
+                      badgeCount: unreadNotificationCount,
                     ),
-                    _SettingsDivider(),
-                    _SettingsRow(
+                    const _SettingsDivider(),
+                    const _SettingsRow(
                       icon: Icons.location_on_outlined,
                       label: 'Manage Farm Locations',
                     ),
-                    _SettingsDivider(),
+                    const _SettingsDivider(),
                     _SettingsRow(
                       icon: Icons.shield_outlined,
                       label: 'Privacy & Data',
+                      onTap: () => context.push('/profile/privacy-data'),
                     ),
-                    _SettingsDivider(),
+                    const _SettingsDivider(),
                     _SettingsRow(
                       icon: Icons.chat_bubble_outline,
                       label: 'Help & Support',
+                      onTap: () => context.push('/profile/help-support'),
                     ),
-                    _SettingsDivider(),
+                    const _SettingsDivider(),
                     _SettingsRow(
                       icon: Icons.info_outline,
                       label: 'About AgriSetu',
+                      onTap: () => context.push('/profile/about'),
                     ),
                   ],
                 ),
@@ -594,16 +601,20 @@ class _SettingsDivider extends StatelessWidget {
 class _SettingsRow extends StatelessWidget {
   final IconData icon;
   final String label;
+  final VoidCallback? onTap;
+  final int badgeCount;
 
   const _SettingsRow({
     required this.icon,
     required this.label,
+    this.onTap,
+    this.badgeCount = 0,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {},
+      onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -620,6 +631,24 @@ class _SettingsRow extends StatelessWidget {
                 ),
               ),
             ),
+            if (badgeCount > 0) ...[
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  badgeCount > 99 ? '99+' : '$badgeCount',
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.surface,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
             const SizedBox(width: 4),
             const Icon(
               Icons.chevron_right,

@@ -6,6 +6,7 @@ import { z } from "zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Upload, AlertTriangle, LocateFixed } from "lucide-react";
+import { INDIAN_STATES_AND_UTS } from "../../lib/indiaStates";
 
 function Toggle({ defaultChecked = true }: { defaultChecked?: boolean }) {
   const [on, setOn] = useState(defaultChecked);
@@ -394,18 +395,7 @@ export function SettingsContent() {
                   }}
                 >
                   <option value="">Select state</option>
-                  {[
-                    "Maharashtra",
-                    "Karnataka",
-                    "Uttar Pradesh",
-                    "Punjab",
-                    "Gujarat",
-                    "Rajasthan",
-                    "Madhya Pradesh",
-                    "Tamil Nadu",
-                    "Andhra Pradesh",
-                    "Telangana",
-                  ].map((s) => (
+                  {INDIAN_STATES_AND_UTS.map((s) => (
                     <option key={s} value={s}>
                       {s}
                     </option>

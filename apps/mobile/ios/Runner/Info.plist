@@ -30,6 +30,11 @@
 	<string>AgriSetu uses your location to match nearby clusters and show delivery maps.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>AgriSetu uses the microphone so you can place orders by voice.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -72,3 +77,4 @@
 	</array>
 </dict>
 </plist>
+

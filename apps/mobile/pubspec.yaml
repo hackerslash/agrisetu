@@ -53,6 +53,8 @@ dependencies:
   audioplayers: ^6.1.0
   image_picker: ^1.1.2
   web_socket_channel: ^3.0.1
+  flutter_local_notifications: ^17.1.2
+  workmanager: ^0.5.2
 
   # Local storage
   shared_preferences: ^2.3.4
@@ -77,3 +79,4 @@ flutter:
     - assets/lottie/
 
   # Fonts are loaded via google_fonts package at runtime; no local TTF needed.
+

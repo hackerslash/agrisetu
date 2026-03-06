@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { authApi, vendorApi } from "@repo/api-client";
 import { LocateFixed, Upload } from "lucide-react";
+import { INDIAN_STATES_AND_UTS } from "../../lib/indiaStates";
 
 // ─── Step 1 Schema ────────────────────────────────────────────────────────────
 
@@ -415,18 +416,7 @@ export function RegisterWizard() {
                 }}
               >
                 <option value="">Select state</option>
-                {[
-                  "Maharashtra",
-                  "Karnataka",
-                  "Uttar Pradesh",
-                  "Punjab",
-                  "Gujarat",
-                  "Rajasthan",
-                  "Madhya Pradesh",
-                  "Tamil Nadu",
-                  "Andhra Pradesh",
-                  "Telangana",
-                ].map((s) => (
+                {INDIAN_STATES_AND_UTS.map((s) => (
                   <option key={s} value={s}>
                     {s}
                   </option>

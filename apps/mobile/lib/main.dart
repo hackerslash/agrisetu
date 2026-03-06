@@ -1,23 +1,28 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'shared/theme/app_theme.dart';
+
+import 'core/services/app_notification_service.dart';
 import 'core/utils/router.dart';
+import 'shared/theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Lock to portrait
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
 
-  // Status bar transparent
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.dark,
   ));
+
+  await AppNotificationService.initialize();
+  await AppNotificationService.registerBackgroundSync();
 
   runApp(
     const ProviderScope(
@@ -26,11 +31,45 @@ void main() async {
   );
 }
 
-class AgriSetuApp extends ConsumerWidget {
+class AgriSetuApp extends ConsumerStatefulWidget {
   const AgriSetuApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AgriSetuApp> createState() => _AgriSetuAppState();
+}
+
+class _AgriSetuAppState extends ConsumerState<AgriSetuApp> {
+  StreamSubscription<String>? _notificationRouteSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await AppNotificationService.requestPermissions();
+      await AppNotificationService.startForegroundSync();
+
+      if (!mounted) return;
+      final router = ref.read(routerProvider);
+      final initialRoute = AppNotificationService.consumeInitialRoute();
+      if (initialRoute != null) {
+        router.push(initialRoute);
+      }
+
+      _notificationRouteSubscription ??=
+          AppNotificationService.routeStream.listen((route) {
+        router.push(route);
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _notificationRouteSubscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
