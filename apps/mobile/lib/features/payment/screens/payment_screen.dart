@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -74,6 +75,18 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
       }
     } finally {
       if (mounted) setState(() => _isInitiating = false);
+    }
+  }
+
+  Future<void> _showUpiPinSheet() async {
+    final confirmed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => const _UpiPinScreen(),
+      ),
+    );
+    if (confirmed == true) {
+      await _payNow();
     }
   }
 
@@ -357,22 +370,22 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                     _UpiApp(
                       label: 'PhonePe',
                       icon: Icons.phone_android,
-                      onTap: _payNow,
+                      onTap: _showUpiPinSheet,
                     ),
                     _UpiApp(
                       label: 'GPay',
                       icon: Icons.g_mobiledata,
-                      onTap: _payNow,
+                      onTap: _showUpiPinSheet,
                     ),
                     _UpiApp(
                       label: 'Scan QR',
                       icon: Icons.qr_code_scanner,
-                      onTap: _payNow,
+                      onTap: _showUpiPinSheet,
                     ),
                     _UpiApp(
                       label: 'BHIM',
                       icon: Icons.account_balance,
-                      onTap: _payNow,
+                      onTap: _showUpiPinSheet,
                     ),
                   ],
                 ),
@@ -382,7 +395,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                   width: double.infinity,
                   height: 56,
                   child: ElevatedButton(
-                    onPressed: (_isPaying || _isInitiating) ? null : _payNow,
+                    onPressed: (_isPaying || _isInitiating) ? null : _showUpiPinSheet,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       shape: const StadiumBorder(),
@@ -440,6 +453,250 @@ class _PriceRow extends StatelessWidget {
             style: AppTextStyles.body.copyWith(color: AppColors.textMuted)),
         Text(value, style: AppTextStyles.body),
       ],
+    );
+  }
+}
+
+class _UpiPinScreen extends StatefulWidget {
+  const _UpiPinScreen();
+
+  @override
+  State<_UpiPinScreen> createState() => _UpiPinScreenState();
+}
+
+class _UpiPinScreenState extends State<_UpiPinScreen> {
+  static const _kUpiBlue = Color(0xFF1A237E);
+  static const _kKeyBg = Color(0xFFEEEEEE);
+
+  String _pin = '';
+  bool _showPin = false;
+
+  void _onDigit(String d) {
+    if (_pin.length >= 4) return;
+    setState(() => _pin += d);
+  }
+
+  void _onBackspace() {
+    if (_pin.isEmpty) return;
+    setState(() => _pin = _pin.substring(0, _pin.length - 1));
+  }
+
+  void _onConfirm() {
+    if (_pin.length == 4) Navigator.of(context).pop(true);
+  }
+
+  Widget _numKey(String label) {
+    return _KeyButton(
+      onTap: () => _onDigit(label),
+      color: Colors.white,
+      child: Text(
+        label,
+        style: const TextStyle(fontSize: 26, color: Colors.black87, fontWeight: FontWeight.w400),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(56),
+        child: AppBar(
+          backgroundColor: _kUpiBlue,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 28),
+            onPressed: () => Navigator.of(context).pop(false),
+          ),
+          title: const Text(
+            'AgriSetu Bank',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: SvgPicture.network(
+                'https://upload.wikimedia.org/wikipedia/commons/e/e1/UPI-Logo-vector.svg',
+                height: 28,
+                placeholderBuilder: (_) => const SizedBox(width: 60),
+              ),
+            ),
+          ],
+        ),
+      ),
+      body: Column(
+        children: [
+          // Accent bar
+          Container(height: 4, color: _kUpiBlue),
+
+          // PIN area
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Header row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'ENTER UPI PIN',
+                      style: TextStyle(
+                        color: Colors.grey[500],
+                        fontSize: 14,
+                        letterSpacing: 1.2,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () => setState(() => _showPin = !_showPin),
+                      child: Icon(
+                        _showPin ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                        color: _kUpiBlue,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: () => setState(() => _showPin = !_showPin),
+                      child: Text(
+                        _showPin ? 'HIDE' : 'SHOW',
+                        style: const TextStyle(
+                          color: _kUpiBlue,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 40),
+                // PIN indicators
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(4, (i) {
+                    final filled = i < _pin.length;
+                    if (filled && _showPin) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          _pin[i],
+                          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                        ),
+                      );
+                    }
+                    if (filled) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          '*',
+                          style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.black87),
+                        ),
+                      );
+                    }
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 16),
+                      width: 28,
+                      height: 3,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[400],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    );
+                  }),
+                ),
+              ],
+            ),
+          ),
+
+          // Keyboard
+          Container(
+            color: _kKeyBg,
+            padding: EdgeInsets.fromLTRB(8, 10, 8, 10 + bottomPad),
+            child: Column(
+              children: [
+                _KeyRow(children: [
+                  _numKey('1'),
+                  _numKey('2'),
+                  _numKey('3'),
+                  _KeyButton(color: Colors.grey[350]!, onTap: () {}, child: const Text('\u2212', style: TextStyle(fontSize: 22, color: Colors.black54))),
+                ]),
+                const SizedBox(height: 8),
+                _KeyRow(children: [
+                  _numKey('4'),
+                  _numKey('5'),
+                  _numKey('6'),
+                  _KeyButton(color: Colors.grey[350]!, onTap: () {}, child: const Icon(Icons.keyboard_return, color: Colors.black54)),
+                ]),
+                const SizedBox(height: 8),
+                _KeyRow(children: [
+                  _numKey('7'),
+                  _numKey('8'),
+                  _numKey('9'),
+                  _KeyButton(
+                    color: const Color(0xFFBBCCEE),
+                    onTap: _onBackspace,
+                    child: const Icon(Icons.backspace_outlined, color: _kUpiBlue, size: 22),
+                  ),
+                ]),
+                const SizedBox(height: 8),
+                _KeyRow(children: [
+                  _KeyButton(color: Colors.white, onTap: () {}, child: Text(',', style: TextStyle(fontSize: 22, color: Colors.grey[500]))),
+                  _numKey('0'),
+                  _KeyButton(color: Colors.white, onTap: () {}, child: Text('.', style: TextStyle(fontSize: 22, color: Colors.grey[500]))),
+                  _KeyButton(
+                    color: const Color(0xFFBBCCEE),
+                    onTap: _onConfirm,
+                    child: Icon(Icons.check, color: _pin.length == 4 ? _kUpiBlue : Colors.grey[400], size: 26),
+                  ),
+                ]),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _KeyRow extends StatelessWidget {
+  final List<Widget> children;
+  const _KeyRow({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: children
+          .map((c) => Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: c)))
+          .toList(),
+    );
+  }
+}
+
+class _KeyButton extends StatelessWidget {
+  final VoidCallback onTap;
+  final Color color;
+  final Widget child;
+
+  const _KeyButton({required this.onTap, required this.color, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 58,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 2, offset: const Offset(0, 1))],
+        ),
+        alignment: Alignment.center,
+        child: child,
+      ),
     );
   }
 }

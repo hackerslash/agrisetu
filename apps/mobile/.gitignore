@@ -46,3 +46,7 @@ app.*.map.json
 
 # Google Services (contains API keys)
 /android/app/google-services.json
+
+# Desktop platform directories (not targeting desktop)
+/linux/
+/windows/
