@@ -1572,74 +1572,107 @@ router.get("/mandi-prices", async (req, res) => {
   try {
     const farmer = await prisma.farmer.findUnique({
       where: { id: req.user!.id },
+      select: { district: true },
     });
 
-    // Mock data — replace with real Agmarknet API call in production
     const district = farmer?.district ?? "Delhi";
-    const mockPrices = [
-      {
-        commodity: "Tomato",
-        variety: "Local",
-        district,
-        market: `${district} Mandi`,
-        minPrice: 400,
-        maxPrice: 900,
-        modalPrice: 840,
-        unit: "quintal",
-        date: new Date().toISOString().split("T")[0],
-        changePercent: 12.5,
-      },
-      {
-        commodity: "Onion",
-        variety: "Local",
-        district,
-        market: `${district} Mandi`,
-        minPrice: 280,
-        maxPrice: 380,
-        modalPrice: 320,
-        unit: "quintal",
-        date: new Date().toISOString().split("T")[0],
-        changePercent: -8.2,
-      },
-      {
-        commodity: "Wheat",
-        variety: "Local",
-        district,
-        market: `${district} Mandi`,
-        minPrice: 1900,
-        maxPrice: 2200,
-        modalPrice: 2060,
-        unit: "quintal",
-        date: new Date().toISOString().split("T")[0],
-        changePercent: 3.1,
-      },
-      {
-        commodity: "Rice",
-        variety: "Common",
-        district,
-        market: `${district} Mandi`,
-        minPrice: 1600,
-        maxPrice: 2000,
-        modalPrice: 1780,
-        unit: "quintal",
-        date: new Date().toISOString().split("T")[0],
-        changePercent: 0.0,
-      },
-      {
-        commodity: "Urea",
-        variety: "Standard",
-        district,
-        market: `${district} Agri Store`,
-        minPrice: 240,
-        maxPrice: 290,
-        modalPrice: 266,
-        unit: "bag",
-        date: new Date().toISOString().split("T")[0],
-        changePercent: 0.0,
-      },
+    const today = new Date().toISOString().split("T")[0];
+
+    // Price variation: ±8% random around modal
+    const vary = (base: number) =>
+      Math.round(base * (1 + (Math.random() - 0.5) * 0.16));
+
+    // Change percent: random realistic swing
+    const change = (magnitude: number) =>
+      parseFloat(((Math.random() - 0.5) * magnitude).toFixed(1));
+
+    type CommodityDef = {
+      commodity: string;
+      variety: string;
+      modal: number;
+      spread: number; // min/max ± spread from modal
+      unit: string;
+      baseChange: number; // typical % swing magnitude
+    };
+
+    const COMMODITIES: CommodityDef[] = [
+      // Vegetables
+      { commodity: "Tomato",       variety: "Local",      modal: 1100,  spread: 400, unit: "quintal", baseChange: 18 },
+      { commodity: "Onion",        variety: "Local",      modal: 2200,  spread: 600, unit: "quintal", baseChange: 12 },
+      { commodity: "Potato",       variety: "Jyoti",      modal: 1200,  spread: 300, unit: "quintal", baseChange: 8  },
+      { commodity: "Brinjal",      variety: "Local",      modal: 800,   spread: 300, unit: "quintal", baseChange: 14 },
+      { commodity: "Cauliflower",  variety: "Local",      modal: 700,   spread: 250, unit: "quintal", baseChange: 12 },
+      { commodity: "Cabbage",      variety: "Local",      modal: 500,   spread: 200, unit: "quintal", baseChange: 10 },
+      { commodity: "Lady Finger",  variety: "Local",      modal: 1200,  spread: 400, unit: "quintal", baseChange: 15 },
+      { commodity: "Green Chilli", variety: "Local",      modal: 2500,  spread: 800, unit: "quintal", baseChange: 20 },
+      { commodity: "Bitter Gourd", variety: "Local",      modal: 1100,  spread: 350, unit: "quintal", baseChange: 12 },
+      { commodity: "Bottle Gourd", variety: "Local",      modal: 600,   spread: 200, unit: "quintal", baseChange: 10 },
+      { commodity: "Peas",         variety: "Green",      modal: 2000,  spread: 600, unit: "quintal", baseChange: 16 },
+      { commodity: "Carrot",       variety: "Local",      modal: 900,   spread: 300, unit: "quintal", baseChange: 10 },
+      { commodity: "Coriander",    variety: "Fresh",      modal: 1500,  spread: 500, unit: "quintal", baseChange: 18 },
+      { commodity: "Garlic",       variety: "Local",      modal: 4500,  spread: 1200, unit: "quintal", baseChange: 14 },
+      { commodity: "Ginger",       variety: "Fresh",      modal: 6000,  spread: 2000, unit: "quintal", baseChange: 16 },
+      // Grains & Cereals
+      { commodity: "Wheat",        variety: "Lok-1",      modal: 2150,  spread: 150, unit: "quintal", baseChange: 3  },
+      { commodity: "Paddy",        variety: "Common",     modal: 2300,  spread: 200, unit: "quintal", baseChange: 4  },
+      { commodity: "Maize",        variety: "Yellow",     modal: 2000,  spread: 200, unit: "quintal", baseChange: 5  },
+      { commodity: "Jowar",        variety: "Local",      modal: 3300,  spread: 300, unit: "quintal", baseChange: 5  },
+      { commodity: "Bajra",        variety: "Local",      modal: 2700,  spread: 250, unit: "quintal", baseChange: 4  },
+      { commodity: "Ragi",         variety: "Local",      modal: 3850,  spread: 300, unit: "quintal", baseChange: 4  },
+      // Pulses
+      { commodity: "Tur Dal",      variety: "Local",      modal: 7500,  spread: 800, unit: "quintal", baseChange: 8  },
+      { commodity: "Moong Dal",    variety: "Green",      modal: 8500,  spread: 900, unit: "quintal", baseChange: 7  },
+      { commodity: "Urad Dal",     variety: "Black",      modal: 7800,  spread: 1000, unit: "quintal", baseChange: 8 },
+      { commodity: "Chana",        variety: "Desi",       modal: 5500,  spread: 600, unit: "quintal", baseChange: 6  },
+      { commodity: "Masoor",       variety: "Local",      modal: 5200,  spread: 500, unit: "quintal", baseChange: 5  },
+      // Oilseeds
+      { commodity: "Groundnut",    variety: "Bold",       modal: 5800,  spread: 600, unit: "quintal", baseChange: 6  },
+      { commodity: "Mustard",      variety: "Yellow",     modal: 5100,  spread: 500, unit: "quintal", baseChange: 5  },
+      { commodity: "Soybean",      variety: "Yellow",     modal: 4300,  spread: 400, unit: "quintal", baseChange: 5  },
+      { commodity: "Sunflower",    variety: "Local",      modal: 5600,  spread: 500, unit: "quintal", baseChange: 5  },
+      // Fruits
+      { commodity: "Banana",       variety: "Robusta",    modal: 1200,  spread: 400, unit: "quintal", baseChange: 10 },
+      { commodity: "Papaya",       variety: "Local",      modal: 900,   spread: 300, unit: "quintal", baseChange: 12 },
+      { commodity: "Pomegranate",  variety: "Bhagwa",     modal: 7000,  spread: 1500, unit: "quintal", baseChange: 10 },
+      { commodity: "Grapes",       variety: "Thompson",   modal: 3500,  spread: 1000, unit: "quintal", baseChange: 12 },
+      { commodity: "Watermelon",   variety: "Local",      modal: 600,   spread: 200, unit: "quintal", baseChange: 14 },
+      { commodity: "Lemon",        variety: "Local",      modal: 4000,  spread: 1500, unit: "quintal", baseChange: 18 },
+      // Spices
+      { commodity: "Turmeric",     variety: "Finger",     modal: 9500,  spread: 2000, unit: "quintal", baseChange: 10 },
+      { commodity: "Cumin",        variety: "Local",      modal: 22000, spread: 4000, unit: "quintal", baseChange: 12 },
+      { commodity: "Coriander Seed", variety: "Eagle",   modal: 7500,  spread: 1500, unit: "quintal", baseChange: 8  },
+      // Fertilisers
+      { commodity: "Urea",         variety: "Standard",   modal: 266,   spread: 10,  unit: "bag",     baseChange: 0  },
+      { commodity: "DAP",          variety: "Standard",   modal: 1350,  spread: 30,  unit: "bag",     baseChange: 0  },
+      { commodity: "NPK",          variety: "10-26-26",   modal: 1200,  spread: 40,  unit: "bag",     baseChange: 0  },
     ];
 
-    success(res, { district, prices: mockPrices });
+    // Fisher-Yates shuffle with Math.random(), pick 6
+    const shuffled = [...COMMODITIES];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const picked = shuffled.slice(0, 6);
+
+    const prices = picked.map((c) => {
+      const modal = vary(c.modal);
+      const changePercent = change(c.baseChange);
+      return {
+        commodity: c.commodity,
+        variety: c.variety,
+        district,
+        market: `${district} Mandi`,
+        minPrice: Math.round(modal - c.spread * 0.4),
+        maxPrice: Math.round(modal + c.spread * 0.4),
+        modalPrice: modal,
+        unit: c.unit,
+        date: today,
+        changePercent,
+      };
+    });
+
+    success(res, { district, prices });
   } catch {
     error(res, "Internal server error", 500);
   }

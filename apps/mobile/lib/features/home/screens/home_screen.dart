@@ -25,8 +25,10 @@ final homeDashboardProvider =
   return api.getDashboard();
 });
 
+typedef MandiPriceData = ({String district, List<Map<String, dynamic>> prices});
+
 final homeMandiPricesProvider =
-    FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
+    FutureProvider.autoDispose<MandiPriceData>((ref) async {
   final timer = Timer.periodic(const Duration(seconds: 30), (_) {
     ref.invalidateSelf();
   });
@@ -34,15 +36,16 @@ final homeMandiPricesProvider =
 
   final api = ref.read(apiClientProvider);
   final data = await api.getMandiPrices();
-  final prices = data['prices'] as List<dynamic>;
-  return prices
+  final district = (data['district'] as String?) ?? '';
+  final prices = (data['prices'] as List<dynamic>)
       .map((p) => {
             'name': p['commodity'] as String,
             'price': p['modalPrice'] as int,
             'change': (p['changePercent'] as num).toDouble(),
-            'unit': p['unit'] == 'quintal' ? 'q' : p['unit'] as String,
+            'unit': p['unit'] == 'quintal' ? '/q' : ' ${p['unit']}',
           })
       .toList();
+  return (district: district, prices: prices);
 });
 
 class HomeScreen extends ConsumerWidget {
@@ -290,7 +293,10 @@ class HomeScreen extends ConsumerWidget {
 
                   // Mandi Prices Today — from /farmer/mandi-prices
                   pricesAsync.when(
-                    data: (prices) => _MandiPricesCard(prices: prices),
+                    data: (data) => _MandiPricesCard(
+                      prices: data.prices,
+                      district: data.district,
+                    ),
                     loading: () => _shimmerCard(),
                     error: (_, __) => const SizedBox.shrink(),
                   ),
@@ -868,8 +874,9 @@ class _HomeAvatarFallback extends StatelessWidget {
 
 class _MandiPricesCard extends StatelessWidget {
   final List<Map<String, dynamic>> prices;
+  final String district;
 
-  const _MandiPricesCard({required this.prices});
+  const _MandiPricesCard({required this.prices, required this.district});
 
   @override
   Widget build(BuildContext context) {
@@ -906,7 +913,7 @@ class _MandiPricesCard extends StatelessWidget {
                 ],
               ),
               Text(
-                'Live · Mandya',
+                district.isNotEmpty ? 'Live · $district' : 'Live',
                 style: AppTextStyles.caption.copyWith(
                   color: AppColors.textOnPrimaryMuted,
                   fontWeight: FontWeight.w500,
@@ -974,10 +981,10 @@ class _MandiPriceTile extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '₹${price['price']}',
+            '₹${price['price']}${price['unit']}',
             style: AppTextStyles.h4.copyWith(
               color: AppColors.surface,
-              fontSize: 18,
+              fontSize: 16,
             ),
           ),
           const SizedBox(height: 4),
