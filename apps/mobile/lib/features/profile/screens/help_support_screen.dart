@@ -8,7 +8,7 @@ import '../../../shared/theme/app_theme.dart';
 class HelpSupportScreen extends StatelessWidget {
   const HelpSupportScreen({super.key});
 
-  static const String _supportEmail = 'agrisetu@support.com';
+  static const String _supportEmail = 'support@agrisetu.com';
 
   Future<void> _composeSupportEmail(
     BuildContext context, {

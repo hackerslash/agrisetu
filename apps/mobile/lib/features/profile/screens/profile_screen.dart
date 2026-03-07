@@ -350,11 +350,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       badgeCount: unreadNotificationCount,
                     ),
                     const _SettingsDivider(),
-                    const _SettingsRow(
-                      icon: Icons.location_on_outlined,
-                      label: 'Manage Farm Locations',
-                    ),
-                    const _SettingsDivider(),
                     _SettingsRow(
                       icon: Icons.shield_outlined,
                       label: 'Privacy & Data',
