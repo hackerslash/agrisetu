@@ -188,7 +188,7 @@ class InAppNotificationsNotifier
   Future<List<AppNotificationItem>> build() async {
     final farmer = ref.watch(currentFarmerProvider);
     final preferences =
-        ref.watch(notificationPreferencesProvider).valueOrNull ??
+        ref.read(notificationPreferencesProvider).valueOrNull ??
             defaultNotificationPreferences;
 
     if (farmer == null) {
