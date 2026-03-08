@@ -799,13 +799,6 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
               ),
             ],
           ),
-          if ((extraction.matchedGigLabel ?? '').isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _ExtractedField(
-              label: 'Matched Gig',
-              value: extraction.matchedGigLabel!,
-            ),
-          ],
           const SizedBox(height: 10),
           Text(
             'Confidence ${(extraction.confidence * 100).toStringAsFixed(0)}% · ${extraction.source.toUpperCase()}',
@@ -1018,7 +1011,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
     }
   }
 
-  void _confirmPlaceOrder() {
+  Future<void> _confirmPlaceOrder() async {
     final voiceResult = _voiceResult;
     if (voiceResult == null) return;
 
@@ -1026,20 +1019,39 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
     final qty = extraction.quantity;
     if (qty == null) return;
 
-    _resetVoiceModuleContextOnExit();
-    context.push(
-      '/orders/new',
-      extra: {
-        'product': extraction.product,
-        'quantity': qty % 1 == 0 ? qty.toInt().toString() : qty.toString(),
-        'unit': extraction.unit,
-        'transcript': voiceResult.transcript,
-        'confidence': extraction.confidence,
-        'matchedGigId': extraction.matchedGigId,
-        'matchedGigLabel': extraction.matchedGigLabel,
-        'extractionSource': extraction.source,
-      },
-    );
+    setState(() => _isProcessing = true);
+
+    try {
+      final api = ref.read(apiClientProvider);
+      final payload = <String, dynamic>{
+        'product': extraction.product?.trim() ?? '',
+        'quantity': qty,
+        'unit': extraction.unit?.trim() ?? 'kg',
+      };
+
+      final createRes = await api.createOrder(payload);
+
+      final orderData = (createRes['order'] is Map<String, dynamic>)
+          ? createRes['order'] as Map<String, dynamic>
+          : createRes;
+      final assignedClusterData = createRes['assignedCluster'] as Map<String, dynamic>?;
+
+      if (!mounted) return;
+      _resetVoiceModuleContextOnExit();
+
+      if (assignedClusterData != null) {
+        final assignedClusterId = assignedClusterData['id'] as String;
+        context.push('/clusters/$assignedClusterId');
+      } else {
+        context.go('/home');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isProcessing = false;
+        _errorMessage = e.toString();
+      });
+    }
   }
 
   @override

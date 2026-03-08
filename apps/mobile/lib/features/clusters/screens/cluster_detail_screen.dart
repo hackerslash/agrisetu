@@ -102,6 +102,24 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
     }
   }
 
+  Future<void> _cancelOrder(String orderId) async {
+    try {
+      final api = ref.read(apiClientProvider);
+      await api.cancelOrder(orderId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Order cancelled successfully!')),
+        );
+        context.go('/clusters');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final clusterAsync = ref.watch(clusterDetailProvider(widget.clusterId));
@@ -436,6 +454,29 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
                       ],
                     ),
                   ),
+
+                if (cluster.status == ClusterStatus.forming || cluster.status == ClusterStatus.voting) ...[
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        if (myMembers.isNotEmpty) {
+                          _cancelOrder(myMembers.first.orderId);
+                        }
+                      },
+                      icon: const Icon(Icons.cancel_outlined, size: 20),
+                      label: const Text('Cancel Order'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.error,
+                        side: const BorderSide(color: AppColors.error, width: 1.5),
+                        shape: const StadiumBorder(),
+                        textStyle: AppTextStyles.button,
+                      ),
+                    ),
+                  ),
+                ],
 
                 const SizedBox(height: 80),
               ]),

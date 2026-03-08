@@ -73,8 +73,6 @@ class VoiceOrderExtraction {
   final String? product;
   final double? quantity;
   final String? unit;
-  final String? matchedGigId;
-  final String? matchedGigLabel;
   final double confidence;
   final bool needsClarification;
   final String? clarificationQuestion;
@@ -85,8 +83,6 @@ class VoiceOrderExtraction {
     this.product,
     this.quantity,
     this.unit,
-    this.matchedGigId,
-    this.matchedGigLabel,
     required this.confidence,
     required this.needsClarification,
     this.clarificationQuestion,
@@ -99,8 +95,6 @@ class VoiceOrderExtraction {
       product: json['product'] as String?,
       quantity: (json['quantity'] as num?)?.toDouble(),
       unit: json['unit'] as String?,
-      matchedGigId: json['matchedGigId'] as String?,
-      matchedGigLabel: json['matchedGigLabel'] as String?,
       confidence: (json['confidence'] as num?)?.toDouble() ?? 0,
       needsClarification: json['needsClarification'] as bool? ?? false,
       clarificationQuestion: json['clarificationQuestion'] as String?,
@@ -115,7 +109,7 @@ class VoiceOrderResult {
   final String transcript;
   final VoiceAssistantMeta assistant;
   final VoiceOrderExtraction extraction;
-  final int availableGigCount;
+  final int activeClusterProductCount;
   final bool transcribedFromAudio;
   final String? detectedLanguageCode;
   final String? clarificationLanguageCode;
@@ -129,7 +123,7 @@ class VoiceOrderResult {
     required this.transcript,
     required this.assistant,
     required this.extraction,
-    required this.availableGigCount,
+    required this.activeClusterProductCount,
     required this.transcribedFromAudio,
     this.detectedLanguageCode,
     this.clarificationLanguageCode,
@@ -182,7 +176,7 @@ class VoiceOrderResult {
       transcript: json['transcript'] as String? ?? '',
       assistant: assistant,
       extraction: extraction,
-      availableGigCount: context['availableGigCount'] as int? ?? 0,
+      activeClusterProductCount: context['activeClusterProductCount'] as int? ?? 0,
       transcribedFromAudio: context['transcribedFromAudio'] as bool? ?? false,
       detectedLanguageCode: context['detectedLanguageCode'] as String?,
       clarificationLanguageCode:

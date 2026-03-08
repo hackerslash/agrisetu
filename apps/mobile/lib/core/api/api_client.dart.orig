@@ -380,15 +380,6 @@ class ApiClient {
 
   // ─── Payments ────────────────────────────────────────────────────────────────
 
-  Future<Map<String, dynamic>> cancelOrder(String orderId) async {
-    try {
-      final res = await _dio.post('/farmer/orders/$orderId/cancel');
-      return res.data['data'] as Map<String, dynamic>;
-    } catch (e) {
-      throw _handleError(e);
-    }
-  }
-
   Future<Map<String, dynamic>> initiatePayment(String clusterId) async {
     try {
       final res = await _dio.post('/farmer/payments/initiate', data: {
@@ -510,4 +501,3 @@ class ApiClient {
 
 // Riverpod provider
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient.instance);
-

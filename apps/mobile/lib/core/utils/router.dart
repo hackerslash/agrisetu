@@ -8,7 +8,6 @@ import '../../features/auth/screens/phone_login_screen.dart';
 import '../../features/auth/screens/otp_verify_screen.dart';
 import '../../features/auth/screens/onboarding_screen.dart';
 import '../../features/home/screens/home_screen.dart';
-import '../../features/orders/screens/order_details_screen.dart';
 import '../../features/orders/screens/order_history_screen.dart';
 import '../../features/clusters/screens/available_clusters_screen.dart';
 import '../../features/clusters/screens/cluster_detail_screen.dart';
@@ -191,19 +190,6 @@ final routerProvider = Provider<GoRouter>((ref) {
               state: state,
               child: const OrderHistoryScreen(),
             ),
-          ),
-          GoRoute(
-            path: '/orders/:id',
-            pageBuilder: (_, state) {
-              final prefill = state.extra as Map<String, dynamic>?;
-              return _smoothDissolvePage(
-                state: state,
-                child: OrderDetailsScreen(
-                  orderId: state.pathParameters['id']!,
-                  prefill: prefill,
-                ),
-              );
-            },
           ),
           GoRoute(
             path: '/clusters',
