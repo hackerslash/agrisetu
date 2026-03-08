@@ -1220,22 +1220,23 @@ export async function sweepStaleClusters(): Promise<void> {
 
   for (const staleCluster of staleClusters) {
     try {
-      // Mark cluster as FAILED
-      await prisma.cluster.update({
-        where: { id: staleCluster.id },
-        data: {
-          status: ClusterStatus.FAILED,
-          failureReason: "stale",
-        },
-      });
-
-      // Release orders back to PENDING
       const orderIds = staleCluster.members
         .map((m) => m.order.id)
         .filter(Boolean);
 
-      if (orderIds.length > 0) {
-        await prisma.order.updateMany({
+      await prisma.$transaction([
+        prisma.cluster.update({
+          where: { id: staleCluster.id },
+          data: {
+            status: ClusterStatus.FAILED,
+            currentQuantity: 0,
+            failureReason: "stale",
+          },
+        }),
+        prisma.clusterMember.deleteMany({
+          where: { clusterId: staleCluster.id },
+        }),
+        prisma.order.updateMany({
           where: {
             id: { in: orderIds },
             status: {
@@ -1243,8 +1244,8 @@ export async function sweepStaleClusters(): Promise<void> {
             },
           },
           data: { status: OrderStatus.PENDING },
-        });
-      }
+        }),
+      ]);
 
       // Re-run assignment for orders with requirementKey
       for (const member of staleCluster.members) {

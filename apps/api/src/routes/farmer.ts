@@ -121,6 +121,14 @@ function sortLevel(score: number) {
   return 1; // L4
 }
 
+function buildFallbackRequirementKey(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 function scoreAndSortClusterBids<T extends ClusterBidForRanking>(
   bids: T[],
   ratings: ClusterRatingForRanking[],
@@ -434,8 +442,10 @@ router.post("/orders", async (req, res) => {
       farmerId: req.user!.id,
     });
 
-    const requirementProduct = resolved.requirementProduct || parsed.data.product.trim();
-    const requirementKey = resolved.requirementKey || null;
+    const requirementProduct =
+      resolved.requirementProduct || parsed.data.product.trim();
+    const requirementKey =
+      resolved.requirementKey || buildFallbackRequirementKey(requirementProduct);
     const resolvedUnit = parsed.data.unit;
 
     const order = await prisma.order.create({
@@ -444,13 +454,13 @@ router.post("/orders", async (req, res) => {
         product: requirementProduct,
         quantity: parsed.data.quantity,
         unit: resolvedUnit,
-        requirement: JSON.stringify({
+        requirement: {
           rawProduct: resolved.rawProduct,
           product: requirementProduct,
           quantity: parsed.data.quantity,
           unit: resolvedUnit,
-        }),
-        requirementKey,
+        },
+        requirementKey: requirementKey || null,
         deliveryDate: parsed.data.deliveryDate
           ? new Date(parsed.data.deliveryDate)
           : null,
@@ -481,7 +491,7 @@ router.post("/orders", async (req, res) => {
         assignedCluster = await autoAssignClusterByRequirement({
           farmerId: req.user!.id,
           orderId: order.id,
-          requirementKey: requirementProduct.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+          requirementKey: buildFallbackRequirementKey(requirementProduct),
           requirementProduct,
           quantity: parsed.data.quantity,
           unit: resolvedUnit,
@@ -1483,4 +1493,3 @@ router.get("/dashboard", async (req, res) => {
 });
 
 export default router;
-
