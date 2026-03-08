@@ -8,7 +8,8 @@ enum OrderStatus {
   dispatched,
   delivered,
   rejected,
-  failed;
+  failed,
+  cancelled;
 
   static OrderStatus fromString(String value) {
     switch (value.toUpperCase()) {
@@ -32,6 +33,8 @@ enum OrderStatus {
         return OrderStatus.rejected;
       case 'FAILED':
         return OrderStatus.failed;
+      case 'CANCELLED':
+        return OrderStatus.cancelled;
       default:
         return OrderStatus.pending;
     }
@@ -59,6 +62,8 @@ enum OrderStatus {
         return 'Rejected';
       case OrderStatus.failed:
         return 'Failed';
+      case OrderStatus.cancelled:
+        return 'Cancelled';
     }
   }
 }
@@ -243,6 +248,20 @@ enum ClusterStatus {
   }
 }
 
+class VoteRef {
+  final String vendorBidId;
+  final int revision;
+
+  const VoteRef({required this.vendorBidId, required this.revision});
+
+  factory VoteRef.fromJson(Map<String, dynamic> json) {
+    return VoteRef(
+      vendorBidId: json['vendorBidId'] as String,
+      revision: json['revision'] as int? ?? 0,
+    );
+  }
+}
+
 class Cluster {
   final String id;
   final String product;
@@ -259,11 +278,13 @@ class Cluster {
   final String? gigId;
   final DateTime? paymentDeadlineAt;
   final DateTime createdAt;
+  final int votingRevision;
   final List<ClusterMember> members;
   final List<VendorBid> bids;
   final Delivery? delivery;
   final Vendor? vendor;
   final List<Rating> ratings;
+  final VoteRef? myVote;
 
   const Cluster({
     required this.id,
@@ -281,11 +302,13 @@ class Cluster {
     this.gigId,
     this.paymentDeadlineAt,
     required this.createdAt,
+    this.votingRevision = 0,
     this.members = const [],
     this.bids = const [],
     this.delivery,
     this.vendor,
     this.ratings = const [],
+    this.myVote,
   });
 
   double get fillPercent => targetQuantity > 0
@@ -312,6 +335,7 @@ class Cluster {
           ? DateTime.parse(json['paymentDeadlineAt'] as String)
           : null,
       createdAt: DateTime.parse(json['createdAt'] as String),
+      votingRevision: json['votingRevision'] as int? ?? 0,
       members: (json['members'] as List<dynamic>?)
               ?.map((e) => ClusterMember.fromJson(e as Map<String, dynamic>))
               .toList() ??
@@ -330,6 +354,9 @@ class Cluster {
               ?.map((e) => Rating.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
+      myVote: json['myVote'] != null
+          ? VoteRef.fromJson(json['myVote'] as Map<String, dynamic>)
+          : null,
     );
   }
 }

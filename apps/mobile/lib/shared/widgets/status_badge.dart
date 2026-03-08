@@ -66,6 +66,7 @@ class StatusBadge extends StatelessWidget {
         );
       case OrderStatus.rejected:
       case OrderStatus.failed:
+      case OrderStatus.cancelled:
         return StatusBadge(
           label: status.displayLabel,
           color: AppColors.error,

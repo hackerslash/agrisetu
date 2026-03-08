@@ -10,143 +10,29 @@ import '../../../core/api/api_client.dart';
 import '../../../core/models/order_model.dart';
 import '../../../core/providers/auth_provider.dart';
 
-typedef ClusterQuery = ({
-  String? product,
-  String? orderId,
-  String? matchedGigId
-});
-
-final availableClustersProvider = FutureProvider.autoDispose
-    .family<List<Cluster>, ClusterQuery>((ref, query) async {
+final myClustersProvider =
+    FutureProvider.autoDispose<List<Cluster>>((ref) async {
   final timer = Timer.periodic(const Duration(seconds: 8), (_) {
     ref.invalidateSelf();
   });
   ref.onDispose(timer.cancel);
 
   final api = ref.read(apiClientProvider);
-  final clusters = query.orderId != null
-      ? (await api.getOrderClusterOptions(
-          query.orderId!,
-          matchedGigId: query.matchedGigId,
-        ))
-          .map((e) => Cluster.fromJson(e as Map<String, dynamic>))
-          .toList()
-      : (await api.getClusters(product: query.product))
-          .map((e) => Cluster.fromJson(e as Map<String, dynamic>))
-          .toList();
-
+  final clusters = await api.getClusters();
   final seen = <String>{};
-  return clusters.where((c) => seen.add(c.id)).toList();
+  return clusters
+      .map((e) => Cluster.fromJson(e as Map<String, dynamic>))
+      .where((c) => seen.add(c.id))
+      .toList();
 });
 
-class AvailableClustersScreen extends ConsumerStatefulWidget {
-  final String? product;
-  final String? orderId;
-  final String? matchedGigId;
-
-  const AvailableClustersScreen({
-    super.key,
-    this.product,
-    this.orderId,
-    this.matchedGigId,
-  });
+class AvailableClustersScreen extends ConsumerWidget {
+  const AvailableClustersScreen({super.key});
 
   @override
-  ConsumerState<AvailableClustersScreen> createState() =>
-      _AvailableClustersScreenState();
-}
-
-class _AvailableClustersScreenState
-    extends ConsumerState<AvailableClustersScreen> {
-  String? _joiningClusterId;
-  bool _isCreatingNew = false;
-
-  Future<void> _joinCluster(String clusterId) async {
-    final orderId = widget.orderId;
-    if (orderId == null) {
-      context.push('/clusters/$clusterId');
-      return;
-    }
-
-    setState(() => _joiningClusterId = clusterId);
-    try {
-      final api = ref.read(apiClientProvider);
-      final assigned =
-          await api.assignOrderToCluster(orderId, clusterId: clusterId);
-      final resolvedClusterId =
-          ((assigned['clusterMember'] as Map<String, dynamic>?)?['cluster']
-              as Map<String, dynamic>?)?['id'] as String?;
-
-      if (!mounted) return;
-      if (resolvedClusterId != null) {
-        context.go('/clusters/$resolvedClusterId');
-      } else {
-        context.go('/clusters/$clusterId');
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
-      }
-    } finally {
-      if (mounted) setState(() => _joiningClusterId = null);
-    }
-  }
-
-  Future<void> _createNewCluster() async {
-    final orderId = widget.orderId;
-    if (orderId == null) {
-      context.push('/voice');
-      return;
-    }
-
-    setState(() => _isCreatingNew = true);
-    try {
-      final api = ref.read(apiClientProvider);
-      final assigned = await api.assignOrderToCluster(
-        orderId,
-        createNew: true,
-        matchedGigId: widget.matchedGigId,
-      );
-      final clusterId =
-          ((assigned['clusterMember'] as Map<String, dynamic>?)?['cluster']
-              as Map<String, dynamic>?)?['id'] as String?;
-      if (!mounted) return;
-      if (clusterId != null) {
-        context.go('/clusters/$clusterId');
-      } else {
-        context.go('/clusters');
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
-      }
-    } finally {
-      if (mounted) setState(() => _isCreatingNew = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final farmer = ref.watch(currentFarmerProvider);
-    final query = (
-      product: widget.product,
-      orderId: widget.orderId,
-      matchedGigId: widget.matchedGigId,
-    );
-    final clustersAsync = ref.watch(availableClustersProvider(query));
-    final selectionMode = widget.orderId != null;
-    void handleBack() {
-      final orderId = widget.orderId;
-      if (context.canPop()) {
-        context.pop();
-      } else if (orderId != null) {
-        context.go('/orders/$orderId');
-      } else {
-        context.go('/orders');
-      }
-    }
+    final clustersAsync = ref.watch(myClustersProvider);
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -164,7 +50,9 @@ class _AvailableClustersScreenState
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 GestureDetector(
-                  onTap: handleBack,
+                  onTap: () => context.canPop()
+                      ? context.pop()
+                      : context.go('/home'),
                   child: const Icon(
                     Icons.arrow_back,
                     size: 24,
@@ -172,7 +60,7 @@ class _AvailableClustersScreenState
                   ),
                 ),
                 Text(
-                  selectionMode ? 'Choose Cluster' : 'Available Clusters',
+                  'Your Active Clusters',
                   style: AppTextStyles.h3.copyWith(color: AppColors.surface),
                 ),
                 const SizedBox(width: 24),
@@ -183,21 +71,14 @@ class _AvailableClustersScreenState
             child: clustersAsync.when(
               data: (clusters) {
                 if (clusters.isEmpty) {
-                  if (selectionMode) {
-                    return _SelectionEmptyState(
-                      onCreateNew: _createNewCluster,
-                      isCreating: _isCreatingNew,
-                    );
-                  }
                   return _EmptyState(
-                    onCreateOrder: () => context.push('/voice'),
+                    onPlaceOrder: () => context.push('/voice'),
                   );
                 }
 
                 return RefreshIndicator(
                   color: AppColors.primary,
-                  onRefresh: () async =>
-                      ref.invalidate(availableClustersProvider(query)),
+                  onRefresh: () async => ref.invalidate(myClustersProvider),
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
                     children: [
@@ -210,70 +91,21 @@ class _AvailableClustersScreenState
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'Available Clusters Near You',
+                            'Your clusters near you',
                             style: AppTextStyles.h4
                                 .copyWith(color: AppColors.primary),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _subtitleText(clusters),
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.textMuted,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
                       const SizedBox(height: 16),
-                      ...clusters.asMap().entries.map((entry) {
-                        final index = entry.key;
-                        final cluster = entry.value;
-                        return Padding(
+                      ...clusters.map(
+                        (cluster) => Padding(
                           padding: const EdgeInsets.only(bottom: 12),
                           child: _ClusterCard(
                             cluster: cluster,
-                            selectionMode: selectionMode,
-                            isPrimaryCard: index == 0,
-                            showPrimaryAction: !selectionMode || index == 0,
                             currentFarmerId: farmer?.id,
                             farmerLat: farmer?.latitude,
                             farmerLng: farmer?.longitude,
-                            isBusy: _joiningClusterId == cluster.id ||
-                                _isCreatingNew,
-                            onPrimaryTap: () => _joinCluster(cluster.id),
-                          ),
-                        );
-                      }),
-                      const SizedBox(height: 4),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: OutlinedButton.icon(
-                          onPressed: _joiningClusterId != null || _isCreatingNew
-                              ? null
-                              : selectionMode
-                                  ? _createNewCluster
-                                  : () => context.push('/voice'),
-                          icon: _isCreatingNew
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Icon(Icons.add_circle_outline, size: 22),
-                          label: Text(
-                            selectionMode
-                                ? 'Create New Cluster'
-                                : 'Start a New Order',
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.primary,
-                            side: const BorderSide(
-                                color: AppColors.primary, width: 2),
-                            shape: const StadiumBorder(),
-                            textStyle: AppTextStyles.h5
-                                .copyWith(color: AppColors.primary),
                           ),
                         ),
                       ),
@@ -291,37 +123,19 @@ class _AvailableClustersScreenState
       ),
     );
   }
-
-  String _subtitleText(List<Cluster> clusters) {
-    final product = (widget.product ?? clusters.first.product).trim();
-    final minTarget =
-        clusters.map((c) => c.targetQuantity).reduce(math.min).round();
-    final unit = clusters.first.unit;
-    return 'Clusters for $product (${minTarget.toString()}$unit min)';
-  }
 }
 
 class _ClusterCard extends StatelessWidget {
   final Cluster cluster;
-  final bool selectionMode;
-  final bool isPrimaryCard;
-  final bool showPrimaryAction;
   final String? currentFarmerId;
   final double? farmerLat;
   final double? farmerLng;
-  final bool isBusy;
-  final VoidCallback onPrimaryTap;
 
   const _ClusterCard({
     required this.cluster,
-    required this.selectionMode,
-    required this.isPrimaryCard,
-    required this.showPrimaryAction,
     required this.currentFarmerId,
     required this.farmerLat,
     required this.farmerLng,
-    required this.isBusy,
-    required this.onPrimaryTap,
   });
 
   @override
@@ -340,9 +154,8 @@ class _ClusterCard extends StatelessWidget {
       final current = paidByFarmer[member.farmerId] ?? false;
       paidByFarmer[member.farmerId] = current || member.hasPaid;
     }
-    final paidFarmers = paidByFarmer.values.where((paid) => paid).length;
-    final totalFarmers = paidByFarmer.length;
-    final allFarmersPaid = totalFarmers > 0 && paidFarmers == totalFarmers;
+    final allFarmersPaid = paidByFarmer.isNotEmpty &&
+        paidByFarmer.values.every((paid) => paid);
     final canTrackDelivery = isTrackingPhase || (isPayment && allFarmersPaid);
     final locationText = _locationText(
       cluster: cluster,
@@ -354,18 +167,12 @@ class _ClusterCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
-        onTap: selectionMode
-            ? onPrimaryTap
-            : () => context.push('/clusters/${cluster.id}'),
+        onTap: () => context.push('/clusters/${cluster.id}'),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: AppColors.inputBackground,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isPrimaryCard ? AppColors.primary : Colors.transparent,
-              width: 2,
-            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -417,11 +224,8 @@ class _ClusterCard extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(
-                          Icons.groups_2_outlined,
-                          size: 14,
-                          color: AppColors.primary,
-                        ),
+                        const Icon(Icons.groups_2_outlined,
+                            size: 14, color: AppColors.primary),
                         const SizedBox(width: 6),
                         Text(
                           '${cluster.membersCount} Farmers',
@@ -469,86 +273,37 @@ class _ClusterCard extends StatelessWidget {
                 foregroundColor: AppColors.primary,
                 height: 10,
               ),
-              const SizedBox(height: 6),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '${cluster.currentQuantity.toStringAsFixed(0)} ${cluster.unit} collected',
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textMuted,
-                      fontWeight: FontWeight.w500,
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: () => canTrackDelivery
+                      ? context.push('/delivery/${cluster.id}')
+                      : context.push('/clusters/${cluster.id}'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
                     ),
+                    elevation: 0,
                   ),
-                  Text(
-                    '${(cluster.targetQuantity - cluster.currentQuantity).clamp(0, cluster.targetQuantity).toStringAsFixed(0)} ${cluster.unit} needed',
-                    style: AppTextStyles.caption.copyWith(
-                      color: const Color(0xFFE69A28),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-              if (showPrimaryAction) ...[
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: isBusy
-                        ? null
-                        : selectionMode
-                            ? onPrimaryTap
-                            : canTrackDelivery
-                                ? () => context.push('/delivery/${cluster.id}')
-                                : () => context.push('/clusters/${cluster.id}'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: isBusy
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              if (selectionMode) ...[
-                                const Icon(
-                                  Icons.check_circle_outline,
-                                  size: 20,
-                                  color: AppColors.surface,
-                                ),
-                                const SizedBox(width: 8),
-                              ],
-                              Text(
-                                selectionMode
-                                    ? 'Join This Cluster'
-                                    : canTrackDelivery
-                                        ? 'Track Delivery'
-                                        : isVoting
-                                            ? 'Vote for Vendor'
-                                            : isPayment
-                                                ? (currentFarmerPaid
-                                                    ? 'Waiting for Others'
-                                                    : 'Pay Now')
-                                                : 'View Cluster',
-                                style: AppTextStyles.h5
-                                    .copyWith(color: AppColors.surface),
-                              ),
-                            ],
-                          ),
+                  child: Text(
+                    canTrackDelivery
+                        ? 'Track Delivery'
+                        : isVoting
+                            ? (cluster.myVote != null
+                                ? 'Change Vote'
+                                : 'Vote for Vendor')
+                            : isPayment
+                                ? (currentFarmerPaid
+                                    ? 'Waiting for Others'
+                                    : 'Pay Now')
+                                : 'View Cluster',
+                    style: AppTextStyles.h5.copyWith(color: AppColors.surface),
                   ),
                 ),
-              ],
+              ),
             ],
           ),
         ),
@@ -643,86 +398,17 @@ class _StatBlock extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           value,
-          style: AppTextStyles.h3.copyWith(
-            fontSize: 20,
-            color: valueColor,
-          ),
+          style: AppTextStyles.h3.copyWith(fontSize: 20, color: valueColor),
         ),
       ],
     );
   }
 }
 
-class _SelectionEmptyState extends StatelessWidget {
-  final VoidCallback onCreateNew;
-  final bool isCreating;
-
-  const _SelectionEmptyState({
-    required this.onCreateNew,
-    required this.isCreating,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: AppColors.inputBackground,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Icon(Icons.hub_outlined,
-                size: 40, color: AppColors.textMuted),
-          ),
-          const SizedBox(height: 20),
-          Text('No matching cluster found',
-              style: AppTextStyles.h3.copyWith(color: AppColors.textPrimary)),
-          const SizedBox(height: 10),
-          Text(
-            'No active FORMING/VOTING cluster matches your order right now. Create a new cluster to get started.',
-            style: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton.icon(
-              onPressed: isCreating ? null : onCreateNew,
-              icon: isCreating
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.add, size: 20),
-              label: Text(isCreating ? 'Creating…' : 'Create New Cluster'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                shape: const StadiumBorder(),
-                elevation: 0,
-                textStyle: AppTextStyles.button,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _EmptyState extends StatelessWidget {
-  final VoidCallback onCreateOrder;
+  final VoidCallback onPlaceOrder;
 
-  const _EmptyState({required this.onCreateOrder});
+  const _EmptyState({required this.onPlaceOrder});
 
   @override
   Widget build(BuildContext context) {
@@ -742,41 +428,21 @@ class _EmptyState extends StatelessWidget {
                 size: 40, color: AppColors.textMuted),
           ),
           const SizedBox(height: 20),
-          Text('No clusters yet',
+          Text('No active clusters',
               style: AppTextStyles.h3.copyWith(color: AppColors.textPrimary)),
           const SizedBox(height: 12),
           Text(
-            'Place an order first. AgriSetu will help you join nearby farmers with similar demand.',
+            'Place an order and AgriSetu will automatically assign you to the best matching cluster.',
             style: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 32),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.inputBackground,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('How Clusters Work', style: AppTextStyles.h5),
-                const SizedBox(height: 12),
-                _Step(num: 1, text: 'You place an order for a product'),
-                const SizedBox(height: 8),
-                _Step(num: 2, text: 'You choose to join an active cluster'),
-                const SizedBox(height: 8),
-                _Step(num: 3, text: 'Farmers vote on the best vendor bid'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
             height: 52,
             child: ElevatedButton.icon(
-              onPressed: onCreateOrder,
-              icon: const Icon(Icons.add, size: 20),
+              onPressed: onPlaceOrder,
+              icon: const Icon(Icons.mic, size: 20),
               label: const Text('Place an Order'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
@@ -786,51 +452,8 @@ class _EmptyState extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 12),
-          GestureDetector(
-            onTap: () => context.push('/clusters-empty'),
-            child: Text(
-              'Learn how clusters work →',
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary),
-              textAlign: TextAlign.center,
-            ),
-          ),
         ],
       ),
-    );
-  }
-}
-
-class _Step extends StatelessWidget {
-  final int num;
-  final String text;
-
-  const _Step({required this.num, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 24,
-          height: 24,
-          decoration: const BoxDecoration(
-            color: AppColors.primary,
-            shape: BoxShape.circle,
-          ),
-          child: Center(
-            child: Text(
-              num.toString(),
-              style: AppTextStyles.caption.copyWith(
-                color: AppColors.surface,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(child: Text(text, style: AppTextStyles.body)),
-      ],
     );
   }
 }

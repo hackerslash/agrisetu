@@ -1,9 +1,8 @@
-import { GigStatus, OrderStatus } from "@prisma/client";
+import { ClusterStatus, OrderStatus } from "@prisma/client";
 import { isValidCoordinate, isWithinRadiusKm } from "../lib/geo.js";
 import { prisma } from "../lib/prisma.js";
 import {
   extractVoiceAssistantFromTranscript,
-  type GigContext,
   type VoiceAssistantIntent,
 } from "./ai-order-parser.js";
 import { buildLocalizedClarificationSpeech } from "./clarification-speech.js";
@@ -16,55 +15,9 @@ import {
   setFarmerPendingOrderDraft,
 } from "./conversation-memory.js";
 
-function isGigServiceableForFarmer(params: {
-  farmerLatitude?: number | null;
-  farmerLongitude?: number | null;
-  farmerState?: string | null;
-  vendorLatitude?: number | null;
-  vendorLongitude?: number | null;
-  vendorState?: string | null;
-  serviceRadiusKm?: number | null;
-}) {
-  const {
-    farmerLatitude,
-    farmerLongitude,
-    farmerState,
-    vendorLatitude,
-    vendorLongitude,
-    vendorState,
-    serviceRadiusKm,
-  } = params;
+const DEFAULT_CLUSTER_CONTEXT_RADIUS_KM = 50;
 
-  const farmerHasCoords = isValidCoordinate(farmerLatitude, farmerLongitude);
-  const vendorHasCoords = isValidCoordinate(vendorLatitude, vendorLongitude);
-
-  if (farmerHasCoords && vendorHasCoords) {
-    const radiusKm =
-      typeof serviceRadiusKm === "number" && serviceRadiusKm > 0
-        ? serviceRadiusKm
-        : 0;
-    if (radiusKm <= 0) return false;
-    return isWithinRadiusKm(
-      {
-        latitude: farmerLatitude as number,
-        longitude: farmerLongitude as number,
-      },
-      {
-        latitude: vendorLatitude as number,
-        longitude: vendorLongitude as number,
-      },
-      radiusKm,
-    );
-  }
-
-  if (farmerState && vendorState) {
-    return farmerState.toLowerCase() === vendorState.toLowerCase();
-  }
-
-  return true;
-}
-
-async function getAvailableGigContextForFarmer(farmerId: string): Promise<{
+async function getActiveClusterContextForFarmer(farmerId: string): Promise<{
   farmerLanguage: string | null;
   farmerProfile: {
     name: string | null;
@@ -74,70 +27,64 @@ async function getAvailableGigContextForFarmer(farmerId: string): Promise<{
     language: string | null;
     cropsGrown: string[];
   };
-  gigs: GigContext[];
+  activeClusterProducts: string[];
 }> {
-  const [farmer, gigs] = await Promise.all([
-    prisma.farmer.findUnique({
-      where: { id: farmerId },
-      select: {
-        name: true,
-        village: true,
-        district: true,
-        language: true,
-        cropsGrown: true,
-        state: true,
-        latitude: true,
-        longitude: true,
-      },
-    }),
-    prisma.gig.findMany({
-      where: {
-        status: GigStatus.PUBLISHED,
-        availableQuantity: { gt: 0 },
-      },
-      include: {
-        vendor: {
-          select: {
-            businessName: true,
-            state: true,
-            latitude: true,
-            longitude: true,
-            serviceRadiusKm: true,
-          },
-        },
-      },
-      orderBy: [{ updatedAt: "desc" }],
-      take: 120,
-    }),
-  ]);
+  const farmer = await prisma.farmer.findUnique({
+    where: { id: farmerId },
+    select: {
+      name: true,
+      village: true,
+      district: true,
+      language: true,
+      cropsGrown: true,
+      state: true,
+      latitude: true,
+      longitude: true,
+    },
+  });
 
   if (!farmer) {
     throw new Error("Farmer profile not found");
   }
 
-  const serviceableGigs = gigs
-    .filter((gig) =>
-      isGigServiceableForFarmer({
-        farmerLatitude: farmer.latitude,
-        farmerLongitude: farmer.longitude,
-        farmerState: farmer.state,
-        vendorLatitude: gig.vendor.latitude,
-        vendorLongitude: gig.vendor.longitude,
-        vendorState: gig.vendor.state,
-        serviceRadiusKm: gig.vendor.serviceRadiusKm,
-      }),
-    )
-    .slice(0, 60)
-    .map((gig) => ({
-      id: gig.id,
-      product: gig.product,
-      variety: gig.variety,
-      unit: gig.unit,
-      minQuantity: gig.minQuantity,
-      pricePerUnit: gig.pricePerUnit,
-      vendorBusinessName: gig.vendor.businessName,
-      vendorState: gig.vendor.state,
-    }));
+  const clusters = await prisma.cluster.findMany({
+    where: {
+      status: { in: [ClusterStatus.FORMING, ClusterStatus.VOTING] },
+    },
+    select: {
+      product: true,
+      district: true,
+      latitude: true,
+      longitude: true,
+    },
+  });
+
+  const filtered = clusters.filter((cluster) => {
+    if (
+      isValidCoordinate(farmer.latitude, farmer.longitude) &&
+      isValidCoordinate(cluster.latitude, cluster.longitude)
+    ) {
+      return isWithinRadiusKm(
+        {
+          latitude: farmer.latitude as number,
+          longitude: farmer.longitude as number,
+        },
+        {
+          latitude: cluster.latitude as number,
+          longitude: cluster.longitude as number,
+        },
+        DEFAULT_CLUSTER_CONTEXT_RADIUS_KM,
+      );
+    }
+    if (farmer.district && cluster.district) {
+      return cluster.district.toLowerCase() === farmer.district.toLowerCase();
+    }
+    return true;
+  });
+
+  const activeClusterProducts = Array.from(
+    new Set(filtered.map((c) => c.product).filter(Boolean)),
+  );
 
   return {
     farmerLanguage: farmer.language,
@@ -149,7 +96,7 @@ async function getAvailableGigContextForFarmer(farmerId: string): Promise<{
       language: farmer.language ?? null,
       cropsGrown: farmer.cropsGrown ?? [],
     },
-    gigs: serviceableGigs,
+    activeClusterProducts,
   };
 }
 
@@ -173,8 +120,6 @@ export type ProcessVoiceOrderForFarmerResult = {
     product: string | null;
     quantity: number | null;
     unit: string | null;
-    matchedGigId: string | null;
-    matchedGigLabel: string | null;
     confidence: number;
     needsClarification: boolean;
     clarificationQuestion: string | null;
@@ -192,7 +137,7 @@ export type ProcessVoiceOrderForFarmerResult = {
     audioBase64: string;
   } | null;
   context: {
-    availableGigCount: number;
+    activeClusterProductCount: number;
     transcribedFromAudio: boolean;
     detectedLanguageCode: string | null;
     clarificationLanguageCode: string | null;
@@ -314,18 +259,18 @@ function toDisplayProductName(input: string) {
     .join(" ");
 }
 
-function collectDistinctProducts(gigs: GigContext[]) {
+function collectDistinctProducts(products: string[]) {
   const grouped = new Map<string, string>();
 
-  for (const gig of gigs) {
-    const rawProduct = gig.product.trim();
-    if (!rawProduct) continue;
+  for (const rawProduct of products) {
+    const trimmed = rawProduct.trim();
+    if (!trimmed) continue;
 
-    const key = normalizeProductClusterKey(rawProduct);
+    const key = normalizeProductClusterKey(trimmed);
     if (!key) continue;
 
     if (!grouped.has(key)) {
-      grouped.set(key, toDisplayProductName(rawProduct));
+      grouped.set(key, toDisplayProductName(trimmed));
     }
   }
 
@@ -335,11 +280,11 @@ function collectDistinctProducts(gigs: GigContext[]) {
 async function buildGeneralQuestionAnswer(params: {
   farmerId: string;
   transcript: string;
-  gigs: GigContext[];
+  activeClusterProducts: string[];
   fallbackMessage?: string | null;
 }) {
   if (isAvailableProductsQuestion(params.transcript)) {
-    const products = collectDistinctProducts(params.gigs).slice(0, 5);
+    const products = collectDistinctProducts(params.activeClusterProducts).slice(0, 5);
 
     if (products.length === 0) {
       return "No products are available in your area right now.";
@@ -380,6 +325,7 @@ async function buildGeneralQuestionAnswer(params: {
         return `Your latest order for ${product} is still in cluster formation, so delivery timing is not fixed yet.`;
       case OrderStatus.REJECTED:
       case OrderStatus.FAILED:
+      case OrderStatus.CANCELLED:
         return `Your latest order for ${product} is not active, so there is no delivery timeline for it.`;
       default:
         return "I can see your order, but delivery timing is not confirmed yet.";
@@ -410,8 +356,6 @@ export function buildUnprocessableVoiceOrderResult(params: {
       product: null,
       quantity: null,
       unit: null,
-      matchedGigId: null,
-      matchedGigLabel: null,
       confidence: 0,
       needsClarification: false,
       clarificationQuestion: null,
@@ -421,7 +365,7 @@ export function buildUnprocessableVoiceOrderResult(params: {
     clarificationSpeech: null,
     assistantSpeech: null,
     context: {
-      availableGigCount: 0,
+      activeClusterProductCount: 0,
       transcribedFromAudio: params.transcribedFromAudio,
       detectedLanguageCode: params.detectedLanguageCode ?? null,
       clarificationLanguageCode:
@@ -441,7 +385,7 @@ export async function processVoiceOrderForFarmer(
     throw new Error("Speech not detected. Please speak clearly and retry.");
   }
 
-  const context = await getAvailableGigContextForFarmer(params.farmerId);
+  const context = await getActiveClusterContextForFarmer(params.farmerId);
   const conversationSessionId = normalizeConversationSessionId(
     params.conversationSessionId,
   );
@@ -474,7 +418,7 @@ export async function processVoiceOrderForFarmer(
 
   const assistantExtraction = await extractVoiceAssistantFromTranscript({
     transcript,
-    gigs: context.gigs,
+    activeClusterProducts: context.activeClusterProducts,
     farmerLanguage: context.farmerLanguage,
     conversationContext: memoryMatches.map((match) => match.text),
     pendingDraft,
@@ -541,7 +485,7 @@ export async function processVoiceOrderForFarmer(
       ? await buildGeneralQuestionAnswer({
           farmerId: params.farmerId,
           transcript,
-          gigs: context.gigs,
+          activeClusterProducts: context.activeClusterProducts,
           fallbackMessage: rawAssistantMessage,
         })
       : (rawAssistantMessage ??
@@ -591,7 +535,7 @@ export async function processVoiceOrderForFarmer(
     clarificationSpeech,
     assistantSpeech,
     context: {
-      availableGigCount: context.gigs.length,
+      activeClusterProductCount: context.activeClusterProducts.length,
       transcribedFromAudio: params.transcribedFromAudio,
       detectedLanguageCode: params.detectedLanguageCode ?? null,
       clarificationLanguageCode:

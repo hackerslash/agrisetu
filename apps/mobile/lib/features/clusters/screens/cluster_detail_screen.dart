@@ -35,6 +35,7 @@ class ClusterDetailScreen extends ConsumerStatefulWidget {
 
 class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
   bool _isVoting = false;
+  bool _isCancelling = false;
   bool _navigatedToFailed = false;
   String? _votedBidId;
   Timer? _clockTimer;
@@ -102,6 +103,45 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
     }
   }
 
+  Future<void> _cancelOrder(String orderId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel Order?'),
+        content: const Text(
+          'Your order will be removed from this cluster. If the cluster becomes empty it will be closed.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep Order'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'Cancel Order',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _isCancelling = true);
+    try {
+      final api = ref.read(apiClientProvider);
+      await api.cancelOrder(orderId);
+      if (mounted) context.go('/clusters');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _isCancelling = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final clusterAsync = ref.watch(clusterDetailProvider(widget.clusterId));
@@ -131,6 +171,7 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
   }
 
   Widget _buildContent(BuildContext context, Cluster cluster, farmer) {
+    final isForming = cluster.status == ClusterStatus.forming;
     final isVoting = cluster.status == ClusterStatus.voting;
     final isPayment = cluster.status == ClusterStatus.payment;
     final myMembers =
@@ -259,6 +300,7 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
                     return _VendorBidCard(
                       bid: bid,
                       rank: i + 1,
+                      myVotedBidId: cluster.myVote?.vendorBidId,
                       onVote: () => _vote(bid.id),
                       isVoting: _isVoting && _votedBidId == bid.id,
                     );
@@ -408,6 +450,50 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
+                ],
+
+                // Cancel order CTA (FORMING or VOTING, before payment)
+                if ((isForming || isVoting) && !isPayment) ...[
+                  Builder(builder: (context) {
+                    final myMember = myMembers.isNotEmpty ? myMembers.first : null;
+                    if (myMember == null) return const SizedBox.shrink();
+                    return Column(
+                      children: [
+                        const SizedBox(height: 4),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: OutlinedButton.icon(
+                            onPressed: _isCancelling
+                                ? null
+                                : () => _cancelOrder(myMember.orderId),
+                            icon: _isCancelling
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppColors.error,
+                                    ),
+                                  )
+                                : const Icon(Icons.cancel_outlined, size: 18),
+                            label: Text(
+                                _isCancelling ? 'Cancelling…' : 'Cancel Order'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.error,
+                              side: const BorderSide(
+                                color: AppColors.error,
+                                width: 1.3,
+                              ),
+                              shape: const StadiumBorder(),
+                              textStyle: AppTextStyles.button,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+                    );
+                  }),
                 ],
 
                 // Not voting yet – locked
@@ -815,12 +901,14 @@ class _DemandStat extends StatelessWidget {
 class _VendorBidCard extends StatelessWidget {
   final VendorBid bid;
   final int rank;
+  final String? myVotedBidId;
   final VoidCallback onVote;
   final bool isVoting;
 
   const _VendorBidCard({
     required this.bid,
     required this.rank,
+    required this.myVotedBidId,
     required this.onVote,
     required this.isVoting,
   });
@@ -828,16 +916,22 @@ class _VendorBidCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isRecommended = rank == 1;
+    final isMyVote = myVotedBidId == bid.id;
+    final hasAnyVote = myVotedBidId != null;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.inputBackground,
+        color: isMyVote
+            ? AppColors.successLight
+            : AppColors.inputBackground,
         borderRadius: BorderRadius.circular(20),
-        border: isRecommended
-            ? Border.all(color: AppColors.primary, width: 1.5)
-            : null,
+        border: isMyVote
+            ? Border.all(color: AppColors.success, width: 1.5)
+            : isRecommended
+                ? Border.all(color: AppColors.primary, width: 1.5)
+                : null,
       ),
       child: Column(
         children: [
@@ -858,7 +952,31 @@ class _VendorBidCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              if (isRecommended)
+              if (isMyVote)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.successLight,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.check_circle,
+                          size: 12, color: AppColors.success),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Your Vote',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.success,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else if (isRecommended)
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -931,28 +1049,57 @@ class _VendorBidCard extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             height: 44,
-            child: ElevatedButton.icon(
-              onPressed: isVoting ? null : onVote,
-              icon: isVoting
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.surface,
-                      ),
-                    )
-                  : const Icon(Icons.how_to_vote, size: 18),
-              label: Text(
-                isVoting ? 'Voting…' : 'Vote for this Vendor',
-                style: AppTextStyles.buttonSmall,
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                shape: const StadiumBorder(),
-                elevation: 0,
-              ),
-            ),
+            child: isMyVote
+                ? OutlinedButton.icon(
+                    onPressed: isVoting ? null : onVote,
+                    icon: isVoting
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.success,
+                            ),
+                          )
+                        : const Icon(Icons.how_to_vote, size: 18),
+                    label: Text(
+                      isVoting ? 'Updating…' : 'Voted — Tap to Change',
+                      style: AppTextStyles.buttonSmall.copyWith(
+                          color: AppColors.success),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.success,
+                      side: const BorderSide(
+                          color: AppColors.success, width: 1.3),
+                      shape: const StadiumBorder(),
+                    ),
+                  )
+                : ElevatedButton.icon(
+                    onPressed: isVoting ? null : onVote,
+                    icon: isVoting
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.surface,
+                            ),
+                          )
+                        : const Icon(Icons.how_to_vote, size: 18),
+                    label: Text(
+                      isVoting
+                          ? 'Voting…'
+                          : hasAnyVote
+                              ? 'Change Vote to This'
+                              : 'Vote for this Vendor',
+                      style: AppTextStyles.buttonSmall,
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      shape: const StadiumBorder(),
+                      elevation: 0,
+                    ),
+                  ),
           ),
         ],
       ),

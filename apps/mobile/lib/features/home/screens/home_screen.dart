@@ -652,6 +652,7 @@ class _ActiveOrderCard extends StatelessWidget {
         return 0.82;
       case OrderStatus.rejected:
       case OrderStatus.failed:
+      case OrderStatus.cancelled:
         return 0.2;
     }
   }
@@ -674,6 +675,8 @@ class _ActiveOrderCard extends StatelessWidget {
       case OrderStatus.rejected:
       case OrderStatus.failed:
         return 'Issue';
+      case OrderStatus.cancelled:
+        return 'Cancelled';
     }
   }
 
@@ -695,6 +698,8 @@ class _ActiveOrderCard extends StatelessWidget {
       case OrderStatus.rejected:
       case OrderStatus.failed:
         return 'Order needs attention';
+      case OrderStatus.cancelled:
+        return 'Order cancelled';
     }
   }
 

@@ -13,8 +13,6 @@ export type PendingOrderDraft = {
   product: string | null;
   quantity: number | null;
   unit: string | null;
-  matchedGigId: string | null;
-  matchedGigLabel: string | null;
   updatedAt: string;
 };
 
@@ -180,9 +178,6 @@ function summarizeExtraction(extraction: VoiceOrderExtraction) {
   const unit = extraction.unit ?? "unknown";
   return [
     `Parsed order details -> product: ${product}, quantity: ${quantity}, unit: ${unit}.`,
-    extraction.matchedGigLabel
-      ? `Matched gig: ${extraction.matchedGigLabel}.`
-      : "Matched gig: unknown.",
     extraction.needsClarification
       ? `Needs clarification: yes. Question: ${extraction.clarificationQuestion ?? "not provided"}.`
       : "Needs clarification: no.",
@@ -267,8 +262,6 @@ export function setFarmerPendingOrderDraft(params: {
     product: params.extraction.product ?? null,
     quantity: params.extraction.quantity ?? null,
     unit: params.extraction.unit ?? null,
-    matchedGigId: params.extraction.matchedGigId ?? null,
-    matchedGigLabel: params.extraction.matchedGigLabel ?? null,
     updatedAt: new Date().toISOString(),
   };
 }

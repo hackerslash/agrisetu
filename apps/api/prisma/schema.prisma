@@ -103,6 +103,8 @@ model Order {
   product     String
   quantity     Float
   unit         String
+  requirement    Json?
+  requirementKey String?
   deliveryDate DateTime?
   status       OrderStatus   @default(PENDING)
   createdAt    DateTime      @default(now())
@@ -122,6 +124,7 @@ enum OrderStatus {
   DELIVERED
   REJECTED
   FAILED
+  CANCELLED
 }
 
 model Cluster {
@@ -139,6 +142,10 @@ model Cluster {
   longitude       Float?
   vendorId        String?
   gigId           String?
+  requirementKey  String?
+  votingRevision  Int             @default(0)
+  staleAt         DateTime?
+  failureReason   String?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
   vendor          Vendor?         @relation(fields: [vendorId], references: [id])
@@ -197,6 +204,7 @@ model VendorVote {
   farmerId    String
   vendorBidId String
   createdAt   DateTime  @default(now())
+  revision    Int       @default(0)
   cluster     Cluster   @relation(fields: [clusterId], references: [id], onDelete: Cascade)
   farmer      Farmer    @relation(fields: [farmerId], references: [id], onDelete: Cascade)
   vendorBid   VendorBid @relation(fields: [vendorBidId], references: [id], onDelete: Cascade)

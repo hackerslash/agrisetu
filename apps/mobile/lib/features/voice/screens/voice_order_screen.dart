@@ -75,6 +75,7 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
 
   bool _isRecording = false;
   bool _isProcessing = false;
+  bool _isConfirming = false;
   int _recordedSeconds = 0;
   int _processingHintIndex = 0;
   List<String> _processingHints = const [];
@@ -87,6 +88,11 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
   bool _hasDetectedSpeechInCurrentRecording = false;
   int _silenceAccumulatedMs = 0;
   bool _autoSubmittingForSilence = false;
+
+  // Inline-editable order fields (overrides extraction values)
+  String? _editedProduct;
+  double? _editedQuantity;
+  String? _editedUnit;
 
   @override
   void initState() {
@@ -762,8 +768,99 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
     );
   }
 
+  void _showEditProductDialog(String current) {
+    final ctrl = TextEditingController(text: current);
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit Product'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(hintText: 'e.g. Paddy Seed'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final v = ctrl.text.trim();
+              if (v.isNotEmpty) setState(() => _editedProduct = v);
+              Navigator.pop(ctx);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditQuantityDialog(double currentQty, String currentUnit) {
+    final qtyCtrl =
+        TextEditingController(text: currentQty.toString());
+    String selectedUnit = currentUnit;
+    const units = ['kg', 'quintal', 'ton', 'bag', 'litre'];
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          title: const Text('Edit Quantity & Unit'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: qtyCtrl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                autofocus: true,
+                decoration:
+                    const InputDecoration(hintText: 'e.g. 100'),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                children: units
+                    .map((u) => ChoiceChip(
+                          label: Text(u),
+                          selected: selectedUnit == u,
+                          onSelected: (_) => setS(() => selectedUnit = u),
+                        ))
+                    .toList(),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                final q = double.tryParse(qtyCtrl.text.trim());
+                if (q != null && q > 0) {
+                  setState(() {
+                    _editedQuantity = q;
+                    _editedUnit = selectedUnit;
+                  });
+                }
+                Navigator.pop(ctx);
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildPlaceOrderPanel(VoiceOrderResult result) {
     final extraction = result.extraction;
+    final displayProduct = _editedProduct ?? extraction.product ?? '';
+    final displayQty = _editedQuantity ?? extraction.quantity;
+    final displayUnit = _editedUnit ?? extraction.unit ?? '';
 
     return Container(
       width: double.infinity,
@@ -783,29 +880,36 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
           Row(
             children: [
               Expanded(
-                child: _ExtractedField(
-                  label: 'Product',
-                  value: extraction.product ?? 'Not detected',
+                child: GestureDetector(
+                  onTap: () =>
+                      _showEditProductDialog(displayProduct),
+                  child: _ExtractedField(
+                    label: 'Product',
+                    value: displayProduct.isNotEmpty
+                        ? displayProduct
+                        : 'Tap to set',
+                    editable: true,
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _ExtractedField(
-                  label: 'Quantity',
-                  value: extraction.quantity != null && extraction.unit != null
-                      ? '${_quantityLabel(extraction.quantity!)} ${extraction.unit}'
-                      : 'Not detected',
+                child: GestureDetector(
+                  onTap: () => _showEditQuantityDialog(
+                    displayQty ?? 0,
+                    displayUnit.isNotEmpty ? displayUnit : 'kg',
+                  ),
+                  child: _ExtractedField(
+                    label: 'Quantity',
+                    value: displayQty != null && displayUnit.isNotEmpty
+                        ? '${_quantityLabel(displayQty)} $displayUnit'
+                        : 'Tap to set',
+                    editable: true,
+                  ),
                 ),
               ),
             ],
           ),
-          if ((extraction.matchedGigLabel ?? '').isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _ExtractedField(
-              label: 'Matched Gig',
-              value: extraction.matchedGigLabel!,
-            ),
-          ],
           const SizedBox(height: 10),
           Text(
             'Confidence ${(extraction.confidence * 100).toStringAsFixed(0)}% · ${extraction.source.toUpperCase()}',
@@ -1018,34 +1122,62 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
     }
   }
 
-  void _confirmPlaceOrder() {
+  Future<void> _confirmPlaceOrder() async {
     final voiceResult = _voiceResult;
-    if (voiceResult == null) return;
+    if (voiceResult == null || _isConfirming) return;
 
     final extraction = voiceResult.extraction;
-    final qty = extraction.quantity;
-    if (qty == null) return;
+    final product = (_editedProduct ?? extraction.product ?? '').trim();
+    final qty = _editedQuantity ?? extraction.quantity;
+    final unit = (_editedUnit ?? extraction.unit ?? '').trim();
 
-    _resetVoiceModuleContextOnExit();
-    context.push(
-      '/orders/new',
-      extra: {
-        'product': extraction.product,
-        'quantity': qty % 1 == 0 ? qty.toInt().toString() : qty.toString(),
-        'unit': extraction.unit,
-        'transcript': voiceResult.transcript,
-        'confidence': extraction.confidence,
-        'matchedGigId': extraction.matchedGigId,
-        'matchedGigLabel': extraction.matchedGigLabel,
-        'extractionSource': extraction.source,
-      },
-    );
+    if (product.isEmpty || qty == null || unit.isEmpty) return;
+
+    setState(() => _isConfirming = true);
+    try {
+      final api = ref.read(apiClientProvider);
+      final result = await api.createOrder({
+        'product': product,
+        'quantity': qty,
+        'unit': unit,
+      });
+
+      // API now returns { ...order, cluster: { id, ... } }
+      final clusterId = (result['cluster'] as Map<String, dynamic>?)?['id']
+          as String?;
+
+      _resetVoiceModuleContextOnExit();
+      if (!mounted) return;
+
+      if (clusterId != null && clusterId.isNotEmpty) {
+        context.go('/clusters/$clusterId');
+      } else {
+        context.go('/clusters');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _isConfirming = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final voiceResult = _voiceResult;
-    final canConfirm = voiceResult?.canPlaceOrder == true;
+    final extraction = voiceResult?.extraction;
+    final effectiveProduct =
+        (_editedProduct ?? extraction?.product ?? '').trim();
+    final effectiveQty = _editedQuantity ?? extraction?.quantity;
+    final effectiveUnit = (_editedUnit ?? extraction?.unit ?? '').trim();
+    final canConfirm =
+        voiceResult?.assistant.intent == VoiceAssistantIntent.placeOrder &&
+            effectiveProduct.isNotEmpty &&
+            effectiveQty != null &&
+            effectiveQty > 0 &&
+            effectiveUnit.isNotEmpty;
     final isPlaceOrderIntent =
         voiceResult?.assistant.intent == VoiceAssistantIntent.placeOrder;
 
@@ -1299,10 +1431,21 @@ class _VoiceOrderScreenState extends ConsumerState<VoiceOrderScreen>
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: ElevatedButton.icon(
-                                    onPressed:
-                                        canConfirm ? _confirmPlaceOrder : null,
-                                    icon: const Icon(Icons.check, size: 18),
-                                    label: const Text('Confirm'),
+                                    onPressed: canConfirm && !_isConfirming
+                                        ? _confirmPlaceOrder
+                                        : null,
+                                    icon: _isConfirming
+                                        ? const SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: AppColors.surface,
+                                            ),
+                                          )
+                                        : const Icon(Icons.check, size: 18),
+                                    label: Text(
+                                        _isConfirming ? 'Placing…' : 'Confirm'),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: AppColors.primary,
                                       shape: const StadiumBorder(),
@@ -1460,8 +1603,13 @@ class _VoiceClusterCard extends StatelessWidget {
 class _ExtractedField extends StatelessWidget {
   final String label;
   final String value;
+  final bool editable;
 
-  const _ExtractedField({required this.label, required this.value});
+  const _ExtractedField({
+    required this.label,
+    required this.value,
+    this.editable = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1471,22 +1619,40 @@ class _ExtractedField extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface.withOpacity(0.15),
         borderRadius: BorderRadius.circular(12),
+        border: editable
+            ? Border.all(
+                color: AppColors.surface.withOpacity(0.35),
+                width: 1,
+              )
+            : null,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(
-            label,
-            style: AppTextStyles.caption.copyWith(
-              color: AppColors.textOnPrimaryMuted,
-              fontSize: 10,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textOnPrimaryMuted,
+                    fontSize: 10,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: AppTextStyles.label.copyWith(color: AppColors.surface),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: AppTextStyles.label.copyWith(color: AppColors.surface),
-          ),
+          if (editable)
+            Icon(
+              Icons.edit,
+              size: 14,
+              color: AppColors.surface.withOpacity(0.6),
+            ),
         ],
       ),
     );

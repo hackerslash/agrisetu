@@ -207,24 +207,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/clusters',
-            pageBuilder: (_, state) {
-              final extra = state.extra;
-              if (extra is Map<String, dynamic>) {
-                return _smoothDissolvePage(
-                  state: state,
-                  child: AvailableClustersScreen(
-                    product: extra['product'] as String?,
-                    orderId: extra['orderId'] as String?,
-                    matchedGigId: extra['matchedGigId'] as String?,
-                  ),
-                );
-              }
-              final product = extra as String?;
-              return _smoothDissolvePage(
-                state: state,
-                child: AvailableClustersScreen(product: product),
-              );
-            },
+            pageBuilder: (_, state) => _smoothDissolvePage(
+              state: state,
+              child: const AvailableClustersScreen(),
+            ),
           ),
           GoRoute(
             path: '/clusters/:id',

@@ -266,46 +266,9 @@ class ApiClient {
     }
   }
 
-  Future<List<dynamic>> getOrderClusterOptions(
-    String orderId, {
-    String? matchedGigId,
-  }) async {
+  Future<Map<String, dynamic>> cancelOrder(String orderId) async {
     try {
-      final res = await _dio.get(
-        '/farmer/orders/$orderId/cluster-options',
-        queryParameters:
-            (matchedGigId != null && matchedGigId.trim().isNotEmpty)
-                ? {'matchedGigId': matchedGigId.trim()}
-                : null,
-      );
-      return _handleResponse(res) as List<dynamic>;
-    } on DioException catch (e) {
-      throw _handleError(e);
-    }
-  }
-
-  Future<Map<String, dynamic>> assignOrderToCluster(
-    String orderId, {
-    String? clusterId,
-    bool createNew = false,
-    String? matchedGigId,
-  }) async {
-    try {
-      final payload = <String, dynamic>{};
-      if (clusterId != null) {
-        payload['clusterId'] = clusterId;
-      }
-      if (createNew) {
-        payload['createNew'] = true;
-      }
-      if (matchedGigId != null && matchedGigId.trim().isNotEmpty) {
-        payload['matchedGigId'] = matchedGigId.trim();
-      }
-
-      final res = await _dio.post(
-        '/farmer/orders/$orderId/assign-cluster',
-        data: payload,
-      );
+      final res = await _dio.post('/farmer/orders/$orderId/cancel');
       return _handleResponse(res) as Map<String, dynamic>;
     } on DioException catch (e) {
       throw _handleError(e);
@@ -347,19 +310,6 @@ class ApiClient {
   Future<Map<String, dynamic>> getCluster(String clusterId) async {
     try {
       final res = await _dio.get('/farmer/clusters/$clusterId');
-      return _handleResponse(res) as Map<String, dynamic>;
-    } on DioException catch (e) {
-      throw _handleError(e);
-    }
-  }
-
-  Future<Map<String, dynamic>> joinCluster(
-      String clusterId, String orderId, double quantity) async {
-    try {
-      final res = await _dio.post('/farmer/clusters/$clusterId/join', data: {
-        'orderId': orderId,
-        'quantity': quantity,
-      });
       return _handleResponse(res) as Map<String, dynamic>;
     } on DioException catch (e) {
       throw _handleError(e);

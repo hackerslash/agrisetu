@@ -553,6 +553,7 @@ class InAppNotificationsNotifier
         case OrderStatus.clustered:
         case OrderStatus.paymentPending:
         case OrderStatus.paid:
+        case OrderStatus.cancelled:
           break;
       }
     }

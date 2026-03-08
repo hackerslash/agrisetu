@@ -17,6 +17,7 @@ import {
   attachVoiceStreamServer,
   handleVoiceStreamUpgrade,
 } from "./ws/voice-stream.js";
+import { sweepStaleClusters } from "./services/cluster.js";
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -114,6 +115,10 @@ server.on("upgrade", (req, socket, head) => {
 
 server.listen(PORT, () => {
   logger.info(`AgriSetu API running on http://localhost:${PORT}`);
+  // Startup sweep: release stale clusters and re-queue their orders
+  sweepStaleClusters().catch((err) => {
+    logger.error("startup sweepStaleClusters error", { err });
+  });
 });
 
 export default app;

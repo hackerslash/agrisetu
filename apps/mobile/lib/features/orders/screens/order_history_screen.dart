@@ -64,8 +64,8 @@ class OrderHistoryScreen extends ConsumerWidget {
               width: double.infinity,
               height: 52,
               child: ElevatedButton.icon(
-                onPressed: () => context.push('/orders/new'),
-                icon: const Icon(Icons.add, size: 20),
+                onPressed: () => context.push('/voice'),
+                icon: const Icon(Icons.mic, size: 20),
                 label: const Text('Place New Order'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,

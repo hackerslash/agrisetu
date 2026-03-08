@@ -496,19 +496,33 @@ router.get("/clusters", async (req, res) => {
       },
       include: {
         members: true,
-        bids: { where: { vendorId: req.user!.id } },
+        bids: {
+          where: { vendorId: req.user!.id },
+          include: { gig: { select: { product: true, variety: true } } },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
-    const serviceableClusters = clusters.filter((cluster) =>
-      isClusterServiceableForVendor({
-        vendorLatitude: vendorProfile!.latitude,
-        vendorLongitude: vendorProfile!.longitude,
-        serviceRadiusKm: vendorProfile!.serviceRadiusKm,
-        clusterLatitude: cluster.latitude,
-        clusterLongitude: cluster.longitude,
-      }),
-    );
+    const serviceableClusters = clusters
+      .filter((cluster) =>
+        isClusterServiceableForVendor({
+          vendorLatitude: vendorProfile!.latitude,
+          vendorLongitude: vendorProfile!.longitude,
+          serviceRadiusKm: vendorProfile!.serviceRadiusKm,
+          clusterLatitude: cluster.latitude,
+          clusterLongitude: cluster.longitude,
+        }),
+      )
+      .map((cluster) => {
+        // Replace cluster.product with the vendor's matched gig name when available
+        const vendorBid = cluster.bids[0];
+        const matchedGigProduct = vendorBid?.gig?.product ?? null;
+        return {
+          ...cluster,
+          product: matchedGigProduct ?? cluster.product,
+          requirementProduct: cluster.product,
+        };
+      });
     success(res, serviceableClusters);
   } catch {
     error(res, "Internal server error", 500);
@@ -652,12 +666,25 @@ router.get("/orders", async (req, res) => {
             order: true,
           },
         },
+        bids: {
+          where: { vendorId: req.user!.id },
+          include: { gig: { select: { product: true, variety: true } } },
+        },
         delivery: true,
         payments: true,
       },
       orderBy: { updatedAt: "desc" },
     });
-    success(res, clusters);
+    const ordersWithGigName = clusters.map((cluster) => {
+      const vendorBid = cluster.bids[0];
+      const matchedGigProduct = vendorBid?.gig?.product ?? null;
+      return {
+        ...cluster,
+        product: matchedGigProduct ?? cluster.product,
+        requirementProduct: cluster.product,
+      };
+    });
+    success(res, ordersWithGigName);
   } catch {
     error(res, "Internal server error", 500);
   }

@@ -7,14 +7,18 @@ import { authenticate, requireFarmer } from "../middleware/auth.js";
 import { success, error } from "../lib/response.js";
 import {
   assignOrderToCluster,
+  autoAssignClusterByRequirement,
   buildClusterPaymentDeadline,
+  cancelOrderFromCluster,
   checkAndTransitionPayment,
   createNewClusterAndAssignOrder,
   ensureClusterPaymentDeadline,
   expireClusterIfPaymentWindowElapsed,
   findJoinableClusters,
   reconcileClusterPaymentTimeouts,
+  sweepStaleClusters,
 } from "../services/cluster.js";
+import { resolveRequirement } from "../services/requirement-resolution.js";
 import {
   ClusterStatus,
   GigStatus,
@@ -63,40 +67,6 @@ async function reconcileCurrentFarmerPaymentClusters(farmerId: string) {
   await reconcileClusterPaymentTimeouts(paymentClusters.map((c) => c.id));
 }
 
-function normalizeVariety(value?: string | null) {
-  return value?.trim().toLowerCase() ?? "";
-}
-
-async function resolvePreferredVarietyFromMatchedGigId(matchedGigId?: string) {
-  const trimmed = matchedGigId?.trim();
-  if (!trimmed) return undefined;
-  const gig = await prisma.gig.findUnique({
-    where: { id: trimmed },
-    select: { variety: true },
-  });
-  const normalized = normalizeVariety(gig?.variety);
-  return normalized || undefined;
-}
-
-function clusterMatchesPreferredVariety(
-  cluster: {
-    gig?: { variety?: string | null } | null;
-    bids?: Array<{ gig?: { variety?: string | null } | null }>;
-  },
-  preferredVariety?: string,
-) {
-  const normalizedPreferred = normalizeVariety(preferredVariety);
-  if (!normalizedPreferred) return true;
-
-  const matchedVarieties = [
-    cluster.gig?.variety,
-    ...(cluster.bids ?? []).map((bid) => bid.gig?.variety),
-  ]
-    .map((value) => normalizeVariety(value))
-    .filter((value) => value.length > 0);
-
-  return matchedVarieties.includes(normalizedPreferred);
-}
 
 type ClusterBidForRanking = {
   id: string;
@@ -433,7 +403,6 @@ const createOrderSchema = z.object({
     .string()
     .min(1)
     .transform((v) => v.toLowerCase().trim()),
-  matchedGigId: z.string().trim().min(1).optional(),
   deliveryDate: z.string().optional(),
 });
 
@@ -449,6 +418,7 @@ router.post("/orders", async (req, res) => {
       select: {
         district: true,
         state: true,
+        locationAddress: true,
         latitude: true,
         longitude: true,
       },
@@ -458,53 +428,29 @@ router.post("/orders", async (req, res) => {
       return;
     }
 
-    let resolvedProduct = parsed.data.product.trim();
-    let resolvedUnit = parsed.data.unit;
-    let preferredVariety: string | undefined;
+    // Resolve requirement via AI
+    const resolved = await resolveRequirement({
+      rawInput: `${parsed.data.product} ${parsed.data.quantity} ${parsed.data.unit}`,
+      farmerId: req.user!.id,
+    });
 
-    if (parsed.data.matchedGigId) {
-      const matchedGig = await prisma.gig.findFirst({
-        where: {
-          id: parsed.data.matchedGigId,
-          status: GigStatus.PUBLISHED,
-          availableQuantity: { gt: 0 },
-        },
-        include: {
-          vendor: {
-            select: {
-              state: true,
-              latitude: true,
-              longitude: true,
-              serviceRadiusKm: true,
-            },
-          },
-        },
-      });
-
-      if (
-        matchedGig &&
-        isGigServiceableForFarmer({
-          farmerLatitude: farmer.latitude,
-          farmerLongitude: farmer.longitude,
-          farmerState: farmer.state,
-          vendorLatitude: matchedGig.vendor.latitude,
-          vendorLongitude: matchedGig.vendor.longitude,
-          vendorState: matchedGig.vendor.state,
-          serviceRadiusKm: matchedGig.vendor.serviceRadiusKm,
-        })
-      ) {
-        resolvedProduct = matchedGig.product;
-        resolvedUnit = matchedGig.unit.toLowerCase().trim();
-        preferredVariety = normalizeVariety(matchedGig.variety) || undefined;
-      }
-    }
+    const requirementProduct = resolved.requirementProduct || parsed.data.product.trim();
+    const requirementKey = resolved.requirementKey || null;
+    const resolvedUnit = parsed.data.unit;
 
     const order = await prisma.order.create({
       data: {
         farmerId: req.user!.id,
-        product: resolvedProduct,
+        product: requirementProduct,
         quantity: parsed.data.quantity,
         unit: resolvedUnit,
+        requirement: JSON.stringify({
+          rawProduct: resolved.rawProduct,
+          product: requirementProduct,
+          quantity: parsed.data.quantity,
+          unit: resolvedUnit,
+        }),
+        requirementKey,
         deliveryDate: parsed.data.deliveryDate
           ? new Date(parsed.data.deliveryDate)
           : null,
@@ -514,16 +460,43 @@ router.post("/orders", async (req, res) => {
     // Once an order is successfully created, the pending voice-order draft is stale.
     clearAllFarmerPendingOrderDrafts(req.user!.id);
 
-    const availableClusters = await findJoinableClusters(
-      resolvedProduct,
-      resolvedUnit,
-      farmer.district ?? undefined,
-      farmer.latitude ?? undefined,
-      farmer.longitude ?? undefined,
-      preferredVariety,
-    );
+    let assignedCluster = null;
+    try {
+      if (requirementKey) {
+        assignedCluster = await autoAssignClusterByRequirement({
+          farmerId: req.user!.id,
+          orderId: order.id,
+          requirementKey,
+          requirementProduct,
+          quantity: parsed.data.quantity,
+          unit: resolvedUnit,
+          district: farmer.district ?? undefined,
+          state: farmer.state ?? undefined,
+          locationAddress: farmer.locationAddress ?? undefined,
+          latitude: farmer.latitude ?? undefined,
+          longitude: farmer.longitude ?? undefined,
+        });
+      } else {
+        // Fallback: use product-based assignment
+        assignedCluster = await autoAssignClusterByRequirement({
+          farmerId: req.user!.id,
+          orderId: order.id,
+          requirementKey: requirementProduct.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+          requirementProduct,
+          quantity: parsed.data.quantity,
+          unit: resolvedUnit,
+          district: farmer.district ?? undefined,
+          state: farmer.state ?? undefined,
+          locationAddress: farmer.locationAddress ?? undefined,
+          latitude: farmer.latitude ?? undefined,
+          longitude: farmer.longitude ?? undefined,
+        });
+      }
+    } catch {
+      // Non-fatal: order is created, cluster assignment failed
+    }
 
-    success(res, { ...order, availableClusters }, 201);
+    success(res, { ...order, cluster: assignedCluster }, 201);
   } catch {
     error(res, "Internal server error", 500);
   }
@@ -543,229 +516,12 @@ router.get("/orders", async (req, res) => {
   }
 });
 
-router.get("/orders/:id/cluster-options", async (req, res) => {
-  try {
-    const matchedGigId =
-      typeof req.query.matchedGigId === "string"
-        ? req.query.matchedGigId.trim()
-        : undefined;
-    const preferredVariety =
-      await resolvePreferredVarietyFromMatchedGigId(matchedGigId);
-
-    const order = await prisma.order.findFirst({
-      where: { id: req.params.id, farmerId: req.user!.id },
-      select: {
-        id: true,
-        product: true,
-        unit: true,
-        status: true,
-      },
-    });
-    if (!order) {
-      error(res, "Order not found", 404);
-      return;
-    }
-    if (order.status !== OrderStatus.PENDING) {
-      error(res, "Cluster selection is only available for pending orders", 400);
-      return;
-    }
-
-    const farmer = await prisma.farmer.findUnique({
-      where: { id: req.user!.id },
-      select: { district: true, latitude: true, longitude: true },
-    });
-
-    const clusters = await findJoinableClusters(
-      order.product,
-      order.unit,
-      farmer?.district ?? undefined,
-      farmer?.latitude ?? undefined,
-      farmer?.longitude ?? undefined,
-      preferredVariety,
-    );
-    success(res, clusters);
-  } catch {
-    error(res, "Internal server error", 500);
-  }
+router.get("/orders/:id/cluster-options", async (_req, res) => {
+  res.status(410).json({ success: false, error: "This endpoint has been removed. Cluster assignment is now automatic." });
 });
 
-const assignClusterSchema = z
-  .object({
-    clusterId: z.string().optional(),
-    createNew: z.boolean().optional(),
-    matchedGigId: z.string().trim().min(1).optional(),
-  })
-  .refine((v) => Boolean(v.clusterId) || Boolean(v.createNew), {
-    message: "Either clusterId or createNew must be provided",
-  })
-  .refine((v) => !(v.clusterId && v.createNew), {
-    message: "Provide either clusterId or createNew, not both",
-  });
-
-router.post("/orders/:id/assign-cluster", async (req, res) => {
-  const parsed = assignClusterSchema.safeParse(req.body);
-  if (!parsed.success) {
-    error(res, "Invalid request", 422, parsed.error.flatten());
-    return;
-  }
-
-  try {
-    const order = await prisma.order.findFirst({
-      where: { id: req.params.id, farmerId: req.user!.id },
-      select: {
-        id: true,
-        product: true,
-        quantity: true,
-        unit: true,
-        status: true,
-      },
-    });
-
-    if (!order) {
-      error(res, "Order not found", 404);
-      return;
-    }
-    if (order.status !== OrderStatus.PENDING) {
-      error(res, "Order is already assigned to a cluster", 400);
-      return;
-    }
-
-    const farmer = await prisma.farmer.findUnique({
-      where: { id: req.user!.id },
-      select: {
-        district: true,
-        state: true,
-        locationAddress: true,
-        latitude: true,
-        longitude: true,
-      },
-    });
-    if (!farmer) {
-      error(res, "Farmer profile not found", 404);
-      return;
-    }
-    const preferredVariety = await resolvePreferredVarietyFromMatchedGigId(
-      parsed.data.matchedGigId,
-    );
-
-    if (parsed.data.clusterId) {
-      const cluster = await prisma.cluster.findUnique({
-        where: { id: parsed.data.clusterId },
-        select: {
-          id: true,
-          product: true,
-          unit: true,
-          district: true,
-          status: true,
-          latitude: true,
-          longitude: true,
-          gig: {
-            select: { variety: true },
-          },
-          bids: {
-            select: { gig: { select: { variety: true } } },
-          },
-        },
-      });
-
-      if (
-        !cluster ||
-        (cluster.status !== ClusterStatus.FORMING &&
-          cluster.status !== ClusterStatus.VOTING)
-      ) {
-        error(res, "Selected cluster is not available", 400);
-        return;
-      }
-
-      const sameProduct =
-        cluster.product.toLowerCase() === order.product.toLowerCase();
-      const sameUnit = cluster.unit.toLowerCase() === order.unit.toLowerCase();
-      const sameDistrict =
-        !farmer.district ||
-        !cluster.district ||
-        farmer.district.toLowerCase() === cluster.district.toLowerCase();
-      const hasGeoContext =
-        isValidCoordinate(farmer.latitude, farmer.longitude) &&
-        isValidCoordinate(cluster.latitude, cluster.longitude);
-      const sameGeo = hasGeoContext
-        ? isWithinRadiusKm(
-            {
-              latitude: farmer.latitude as number,
-              longitude: farmer.longitude as number,
-            },
-            {
-              latitude: cluster.latitude as number,
-              longitude: cluster.longitude as number,
-            },
-            FARMER_CLUSTER_RADIUS_KM,
-          )
-        : null;
-
-      if (
-        !sameProduct ||
-        !sameUnit ||
-        !((sameGeo ?? false) || (!hasGeoContext && sameDistrict)) ||
-        !clusterMatchesPreferredVariety(cluster, preferredVariety)
-      ) {
-        error(res, "Selected cluster does not match this order", 400);
-        return;
-      }
-
-      await assignOrderToCluster({
-        clusterId: cluster.id,
-        farmerId: req.user!.id,
-        orderId: order.id,
-        quantity: order.quantity,
-      });
-    } else {
-      await createNewClusterAndAssignOrder({
-        farmerId: req.user!.id,
-        orderId: order.id,
-        product: order.product,
-        quantity: order.quantity,
-        unit: order.unit,
-        preferredVariety,
-        district: farmer.district ?? undefined,
-        state: farmer.state ?? undefined,
-        locationAddress: farmer.locationAddress ?? undefined,
-        latitude: farmer.latitude ?? undefined,
-        longitude: farmer.longitude ?? undefined,
-      });
-    }
-
-    const updatedOrder = await prisma.order.findUnique({
-      where: { id: order.id },
-      include: {
-        clusterMember: {
-          include: {
-            cluster: {
-              include: {
-                members: { include: { farmer: { select: farmerSafeSelect }, order: true } },
-                bids: { include: { vendor: { select: vendorSafeSelect }, vendorVotes: true } },
-                delivery: true,
-                vendor: { select: vendorSafeSelect },
-                ratings: {
-                  where: { farmerId: req.user!.id },
-                  take: 1,
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-
-    success(res, updatedOrder);
-  } catch (e) {
-    if (
-      e instanceof Error &&
-      e.message === "Cluster not available for joining"
-    ) {
-      error(res, e.message, 400);
-      return;
-    }
-    error(res, "Internal server error", 500);
-  }
+router.post("/orders/:id/assign-cluster", async (_req, res) => {
+  res.status(410).json({ success: false, error: "This endpoint has been removed. Cluster assignment is now automatic." });
 });
 
 router.get("/orders/:id", async (req, res) => {
@@ -807,6 +563,30 @@ router.get("/orders/:id", async (req, res) => {
   }
 });
 
+router.post("/orders/:id/cancel", async (req, res) => {
+  try {
+    const result = await cancelOrderFromCluster({
+      orderId: req.params.id,
+      farmerId: req.user!.id,
+    });
+    success(res, { order: result.order, cluster: result.cluster });
+  } catch (e) {
+    if (e instanceof Error) {
+      const knownErrors = [
+        "Order not found",
+        "Order cannot be cancelled in its current status",
+        "Cluster is too far along to cancel from",
+        "Cluster not found",
+      ];
+      if (knownErrors.includes(e.message)) {
+        error(res, e.message, 400);
+        return;
+      }
+    }
+    error(res, "Internal server error", 500);
+  }
+});
+
 // ─── Clusters ─────────────────────────────────────────────────────────────────
 
 router.get("/clusters", async (req, res) => {
@@ -814,6 +594,9 @@ router.get("/clusters", async (req, res) => {
   const product =
     typeof rawProductQuery === "string" ? rawProductQuery.trim() : "";
   try {
+    // Opportunistic stale cluster sweep
+    sweepStaleClusters().catch(() => null);
+
     const fetchClusters = () =>
       prisma.cluster.findMany({
         where: {
@@ -841,115 +624,36 @@ router.get("/clusters", async (req, res) => {
       clusters = await fetchClusters();
     }
 
-    success(res, clusters);
+    // Attach myVote (current revision) for each cluster
+    const farmerId = req.user!.id;
+    const clustersWithVote = await Promise.all(
+      clusters.map(async (cluster) => {
+        const myVote = await prisma.vendorVote.findFirst({
+          where: {
+            clusterId: cluster.id,
+            farmerId,
+            revision: cluster.votingRevision,
+          },
+          select: { vendorBidId: true, revision: true },
+        });
+        return { ...cluster, myVote: myVote ?? null };
+      }),
+    );
+
+    success(res, clustersWithVote);
   } catch {
     error(res, "Internal server error", 500);
   }
 });
 
-router.post("/clusters/:id/join", async (req, res) => {
-  const joinSchema = z.object({
-    orderId: z.string(),
-    quantity: z.number().positive(),
-  });
-  const parsed = joinSchema.safeParse(req.body);
-  if (!parsed.success) {
-    error(res, "Invalid request", 422, parsed.error.flatten());
-    return;
-  }
-  try {
-    const order = await prisma.order.findFirst({
-      where: { id: parsed.data.orderId, farmerId: req.user!.id },
-      select: {
-        id: true,
-        product: true,
-        quantity: true,
-        unit: true,
-        status: true,
-      },
-    });
-    if (!order) {
-      error(res, "Order not found", 404);
-      return;
-    }
-    if (order.status !== OrderStatus.PENDING) {
-      error(res, "Order is already assigned to a cluster", 400);
-      return;
-    }
-
-    const farmer = await prisma.farmer.findUnique({
-      where: { id: req.user!.id },
-      select: { district: true, latitude: true, longitude: true },
-    });
-
-    const cluster = await prisma.cluster.findUnique({
-      where: { id: req.params.id },
-      select: {
-        id: true,
-        product: true,
-        unit: true,
-        district: true,
-        status: true,
-        latitude: true,
-        longitude: true,
-      },
-    });
-    if (
-      !cluster ||
-      (cluster.status !== ClusterStatus.FORMING &&
-        cluster.status !== ClusterStatus.VOTING)
-    ) {
-      error(res, "Cluster not available for joining", 400);
-      return;
-    }
-
-    const sameProduct =
-      cluster.product.toLowerCase() === order.product.toLowerCase();
-    const sameUnit = cluster.unit.toLowerCase() === order.unit.toLowerCase();
-    const sameDistrict =
-      !farmer?.district ||
-      !cluster.district ||
-      farmer.district.toLowerCase() === cluster.district.toLowerCase();
-    const hasGeoContext =
-      isValidCoordinate(farmer?.latitude, farmer?.longitude) &&
-      isValidCoordinate(cluster.latitude, cluster.longitude);
-    const sameGeo = hasGeoContext
-      ? isWithinRadiusKm(
-          {
-            latitude: farmer?.latitude as number,
-            longitude: farmer?.longitude as number,
-          },
-          {
-            latitude: cluster.latitude as number,
-            longitude: cluster.longitude as number,
-          },
-          FARMER_CLUSTER_RADIUS_KM,
-        )
-      : null;
-    if (
-      !sameProduct ||
-      !sameUnit ||
-      !((sameGeo ?? false) || (!hasGeoContext && sameDistrict))
-    ) {
-      error(res, "Cluster does not match this order", 400);
-      return;
-    }
-
-    const assignedCluster = await assignOrderToCluster({
-      clusterId: req.params.id,
-      farmerId: req.user!.id,
-      orderId: order.id,
-      quantity: order.quantity,
-    });
-
-    success(res, assignedCluster, 201);
-  } catch {
-    error(res, "Internal server error", 500);
-  }
+router.post("/clusters/:id/join", async (_req, res) => {
+  res.status(410).json({ success: false, error: "This endpoint has been removed. Cluster assignment is now automatic." });
 });
 
 router.get("/clusters/:id", async (req, res) => {
   try {
+    // Opportunistic stale cluster sweep
+    sweepStaleClusters().catch(() => null);
     await expireClusterIfPaymentWindowElapsed(req.params.id);
     const cluster = await prisma.cluster.findUnique({
       where: { id: req.params.id },
@@ -967,9 +671,20 @@ router.get("/clusters/:id", async (req, res) => {
     }
     const rankedBids = scoreAndSortClusterBids(cluster.bids, cluster.ratings);
 
+    // Attach farmer's current-revision vote
+    const myVote = await prisma.vendorVote.findFirst({
+      where: {
+        clusterId: cluster.id,
+        farmerId: req.user!.id,
+        revision: cluster.votingRevision,
+      },
+      select: { vendorBidId: true, revision: true },
+    });
+
     success(res, {
       ...cluster,
       bids: rankedBids.map((entry) => entry.bid),
+      myVote: myVote ?? null,
     });
   } catch {
     error(res, "Internal server error", 500);
@@ -995,20 +710,6 @@ router.post("/clusters/:id/vote", async (req, res) => {
       return;
     }
 
-    // Check existing vote
-    const existingVote = await prisma.vendorVote.findUnique({
-      where: {
-        clusterId_farmerId: {
-          clusterId: req.params.id,
-          farmerId: req.user!.id,
-        },
-      },
-    });
-    if (existingVote) {
-      error(res, "You have already voted", 400);
-      return;
-    }
-
     // Verify the bid belongs to this cluster
     const bid = await prisma.vendorBid.findFirst({
       where: { id: parsed.data.vendorBidId, clusterId: req.params.id },
@@ -1018,31 +719,72 @@ router.post("/clusters/:id/vote", async (req, res) => {
       return;
     }
 
-    const vote = await prisma.vendorVote.create({
-      data: {
-        clusterId: req.params.id,
-        farmerId: req.user!.id,
-        vendorBidId: parsed.data.vendorBidId,
+    // Check for existing vote from any revision
+    const existingVote = await prisma.vendorVote.findUnique({
+      where: {
+        clusterId_farmerId: {
+          clusterId: req.params.id,
+          farmerId: req.user!.id,
+        },
       },
     });
 
-    // Increment bid votes
-    await prisma.vendorBid.update({
-      where: { id: parsed.data.vendorBidId },
-      data: { votes: { increment: 1 } },
-    });
+    let vote;
+    if (existingVote) {
+      // Revote: remove old vote and decrement old bid votes
+      if (existingVote.vendorBidId !== parsed.data.vendorBidId || existingVote.revision !== cluster.votingRevision) {
+        await prisma.vendorBid.update({
+          where: { id: existingVote.vendorBidId },
+          data: { votes: { decrement: 1 } },
+        });
+        await prisma.vendorVote.delete({ where: { id: existingVote.id } });
 
-    // Transition cluster to PAYMENT only once ALL members have voted
+        vote = await prisma.vendorVote.create({
+          data: {
+            clusterId: req.params.id,
+            farmerId: req.user!.id,
+            vendorBidId: parsed.data.vendorBidId,
+            revision: cluster.votingRevision,
+          },
+        });
+
+        await prisma.vendorBid.update({
+          where: { id: parsed.data.vendorBidId },
+          data: { votes: { increment: 1 } },
+        });
+      } else {
+        // Same vote, same revision — no-op
+        vote = existingVote;
+      }
+    } else {
+      vote = await prisma.vendorVote.create({
+        data: {
+          clusterId: req.params.id,
+          farmerId: req.user!.id,
+          vendorBidId: parsed.data.vendorBidId,
+          revision: cluster.votingRevision,
+        },
+      });
+
+      // Increment bid votes
+      await prisma.vendorBid.update({
+        where: { id: parsed.data.vendorBidId },
+        data: { votes: { increment: 1 } },
+      });
+    }
+
+    // Transition cluster to PAYMENT only once ALL members have voted for current revision
     const members = await prisma.clusterMember.findMany({
       where: { clusterId: req.params.id },
       select: { farmerId: true, orderId: true },
     });
-    const totalVotes = await prisma.vendorVote.count({
-      where: { clusterId: req.params.id },
+    // Count only current-revision votes
+    const currentRevisionVotes = await prisma.vendorVote.count({
+      where: { clusterId: req.params.id, revision: cluster.votingRevision },
     });
     const uniqueFarmerCount = new Set(members.map((m) => m.farmerId)).size;
 
-    if (totalVotes >= uniqueFarmerCount) {
+    if (currentRevisionVotes >= uniqueFarmerCount && uniqueFarmerCount > 0) {
       // All members voted — find the winning bid (most votes)
       const winningBid = await prisma.vendorBid.findFirst({
         where: { clusterId: req.params.id },
