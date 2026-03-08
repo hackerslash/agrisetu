@@ -17,6 +17,13 @@ import {
 } from "../lib/geo.js";
 import { logger } from "../lib/logger.js";
 import {
+  areUnitsCompatible,
+  convertPricePerUnitValue,
+  convertQuantityValue,
+  getCompatibleUnits,
+  normalizeUnitValue,
+} from "../lib/unit-conversion.js";
+import {
   sendClusterFailedNotification,
   sendClusterJoinedNotification,
   sendVotingStartedNotification,
@@ -44,7 +51,7 @@ const bedrockClient = new BedrockRuntimeClient({
 });
 
 function normalizeUnit(unit: string) {
-  return unit.toLowerCase().trim();
+  return normalizeUnitValue(unit);
 }
 
 function normalizeVariety(value?: string | null) {
@@ -53,6 +60,50 @@ function normalizeVariety(value?: string | null) {
 
 function buildStaleAt() {
   return new Date(Date.now() + CLUSTER_STALE_TTL_MS);
+}
+
+function convertQuantityOrThrow(
+  quantity: number,
+  fromUnit: string,
+  toUnit: string,
+  context: string,
+) {
+  const convertedQuantity = convertQuantityValue(quantity, fromUnit, toUnit);
+  if (convertedQuantity === null) {
+    throw new Error(
+      `Incompatible units for ${context}: ${fromUnit} -> ${toUnit}`,
+    );
+  }
+  return convertedQuantity;
+}
+
+function convertGigMetricsToClusterUnit(
+  gig: {
+    unit: string;
+    minQuantity: number;
+    pricePerUnit: number;
+  },
+  clusterUnit: string,
+) {
+  const convertedMinQuantity = convertQuantityValue(
+    gig.minQuantity,
+    gig.unit,
+    clusterUnit,
+  );
+  const convertedPricePerUnit = convertPricePerUnitValue(
+    gig.pricePerUnit,
+    gig.unit,
+    clusterUnit,
+  );
+
+  if (convertedMinQuantity === null || convertedPricePerUnit === null) {
+    return null;
+  }
+
+  return {
+    convertedMinQuantity,
+    convertedPricePerUnit,
+  };
 }
 
 export function buildClusterPaymentDeadline(start = new Date()) {
@@ -111,12 +162,14 @@ async function findBestMatchingGig(
   clusterLongitude?: number,
   preferredVariety?: string,
 ) {
+  const normalizedUnit = normalizeUnit(unit);
+  const compatibleUnits = getCompatibleUnits(normalizedUnit);
   const normalizedVariety = normalizeVariety(preferredVariety);
   const loadGigs = (withVariety: boolean) =>
     prisma.gig.findMany({
       where: {
         product: { equals: product, mode: "insensitive" },
-        unit: { equals: unit, mode: "insensitive" },
+        unit: { in: compatibleUnits },
         status: GigStatus.PUBLISHED,
         ...(withVariety && normalizedVariety
           ? { variety: { equals: normalizedVariety, mode: "insensitive" } }
@@ -139,12 +192,43 @@ async function findBestMatchingGig(
     gigs = await loadGigs(false);
   }
 
+  const normalizedGigs = gigs
+    .map((gig) => {
+      const convertedMinQuantity = convertQuantityValue(
+        gig.minQuantity,
+        gig.unit,
+        normalizedUnit,
+      );
+      if (convertedMinQuantity === null) {
+        return null;
+      }
+
+      return {
+        gig,
+        convertedMinQuantity,
+      };
+    })
+    .filter(
+      (
+        value,
+      ): value is {
+        gig: (typeof gigs)[number];
+        convertedMinQuantity: number;
+      } => value !== null,
+    )
+    .sort((a, b) => {
+      if (a.convertedMinQuantity !== b.convertedMinQuantity) {
+        return a.convertedMinQuantity - b.convertedMinQuantity;
+      }
+      return a.gig.createdAt.getTime() - b.gig.createdAt.getTime();
+    });
+
   if (!isValidCoordinate(clusterLatitude, clusterLongitude)) {
-    return gigs[0] ?? null;
+    return normalizedGigs[0]?.gig ?? null;
   }
 
   return (
-    gigs.find((gig) =>
+    normalizedGigs.find(({ gig }) =>
       isClusterServiceableForVendor({
         vendorLatitude: gig.vendor.latitude,
         vendorLongitude: gig.vendor.longitude,
@@ -152,7 +236,7 @@ async function findBestMatchingGig(
         clusterLatitude,
         clusterLongitude,
       }),
-    ) ?? null
+    )?.gig ?? null
   );
 }
 
@@ -226,6 +310,8 @@ async function autoCreateBidsForVotingCluster(
     matchingGigs?: any[];
   }
 ) {
+  const normalizedUnit = normalizeUnit(unit);
+  const compatibleUnits = getCompatibleUnits(normalizedUnit);
   const cluster = options?.clusterCoordinates !== undefined
     ? options.clusterCoordinates
     : await prisma.cluster.findUnique({
@@ -238,7 +324,7 @@ async function autoCreateBidsForVotingCluster(
     : await prisma.gig.findMany({
         where: {
           product: { equals: product, mode: "insensitive" },
-          unit: { equals: unit, mode: "insensitive" },
+          unit: { in: compatibleUnits },
           status: GigStatus.PUBLISHED,
         },
         include: {
@@ -252,15 +338,38 @@ async function autoCreateBidsForVotingCluster(
         },
       });
 
-  const serviceableGigs = matchingGigs.filter((gig) =>
-    isClusterServiceableForVendor({
-      vendorLatitude: gig.vendor.latitude,
-      vendorLongitude: gig.vendor.longitude,
-      serviceRadiusKm: gig.vendor.serviceRadiusKm,
-      clusterLatitude: cluster?.latitude,
-      clusterLongitude: cluster?.longitude,
+  const serviceableGigs = matchingGigs
+    .filter((gig) =>
+      isClusterServiceableForVendor({
+        vendorLatitude: gig.vendor.latitude,
+        vendorLongitude: gig.vendor.longitude,
+        serviceRadiusKm: gig.vendor.serviceRadiusKm,
+        clusterLatitude: cluster?.latitude,
+        clusterLongitude: cluster?.longitude,
+      }),
+    )
+    .map((gig) => {
+      const convertedMetrics = convertGigMetricsToClusterUnit(
+        gig,
+        normalizedUnit,
+      );
+      if (!convertedMetrics) {
+        return null;
+      }
+
+      return {
+        ...gig,
+        ...convertedMetrics,
+      };
     })
-  );
+    .filter(
+      (
+        gig,
+      ): gig is (typeof matchingGigs)[number] & {
+        convertedMinQuantity: number;
+        convertedPricePerUnit: number;
+      } => gig !== null,
+    );
 
   if (serviceableGigs.length === 0) return;
 
@@ -283,15 +392,15 @@ async function autoCreateBidsForVotingCluster(
     if (existing) {
       bidsToUpdate.push({
         id: existing.id,
-        totalPrice: existing.pricePerUnit * currentQuantity,
+        totalPrice: gig.convertedPricePerUnit * currentQuantity,
       });
     } else {
       bidsToCreate.push({
         clusterId,
         vendorId: gig.vendorId,
         gigId: gig.id,
-        pricePerUnit: gig.pricePerUnit,
-        totalPrice: gig.pricePerUnit * currentQuantity,
+        pricePerUnit: gig.convertedPricePerUnit,
+        totalPrice: gig.convertedPricePerUnit * currentQuantity,
       });
     }
   }
@@ -349,12 +458,13 @@ export async function refreshClusterAutobids(clusterId: string): Promise<void> {
   });
 
   if (!cluster) return;
+  const compatibleUnits = getCompatibleUnits(cluster.unit);
 
   // Fetch ALL published gigs matching unit (no MOQ filter) so AI can match semantically
   // and we can set targetQuantity from the lowest matched MOQ regardless of current fill.
   const allCandidateGigs = await prisma.gig.findMany({
     where: {
-      unit: { equals: cluster.unit, mode: "insensitive" },
+      unit: { in: compatibleUnits },
       status: GigStatus.PUBLISHED,
     },
     include: {
@@ -368,15 +478,35 @@ export async function refreshClusterAutobids(clusterId: string): Promise<void> {
     },
   });
 
-  const serviceableGigs = allCandidateGigs.filter((gig) =>
-    isClusterServiceableForVendor({
-      vendorLatitude: gig.vendor.latitude,
-      vendorLongitude: gig.vendor.longitude,
-      serviceRadiusKm: gig.vendor.serviceRadiusKm,
-      clusterLatitude: cluster.latitude,
-      clusterLongitude: cluster.longitude,
-    }),
-  );
+  const serviceableGigs = allCandidateGigs
+    .filter((gig) =>
+      isClusterServiceableForVendor({
+        vendorLatitude: gig.vendor.latitude,
+        vendorLongitude: gig.vendor.longitude,
+        serviceRadiusKm: gig.vendor.serviceRadiusKm,
+        clusterLatitude: cluster.latitude,
+        clusterLongitude: cluster.longitude,
+      }),
+    )
+    .map((gig) => {
+      const convertedMetrics = convertGigMetricsToClusterUnit(gig, cluster.unit);
+      if (!convertedMetrics) {
+        return null;
+      }
+
+      return {
+        ...gig,
+        ...convertedMetrics,
+      };
+    })
+    .filter(
+      (
+        gig,
+      ): gig is (typeof allCandidateGigs)[number] & {
+        convertedMinQuantity: number;
+        convertedPricePerUnit: number;
+      } => gig !== null,
+    );
 
   if (serviceableGigs.length === 0) {
     // Remove all existing bids since no vendors can service this cluster
@@ -457,7 +587,9 @@ export async function refreshClusterAutobids(clusterId: string): Promise<void> {
   // Update targetQuantity to the lowest MOQ among ALL AI-matched gigs (regardless of current fill).
   // This lets the cluster "know" what quantity is needed to attract vendor bids.
   if (matchingGigs.length > 0) {
-    const lowestMoq = Math.min(...matchingGigs.map((g) => g.minQuantity));
+    const lowestMoq = Math.min(
+      ...matchingGigs.map((g) => g.convertedMinQuantity),
+    );
     const currentCluster = await prisma.cluster.findUnique({
       where: { id: clusterId },
       select: { targetQuantity: true, currentQuantity: true },
@@ -473,14 +605,17 @@ export async function refreshClusterAutobids(clusterId: string): Promise<void> {
   // Only create/update bids for vendors whose MOQ is met by the cluster's current quantity.
   // Vendors with MOQ > currentQuantity will NOT appear in the bid list (including during VOTING).
   const bidEligibleGigs = matchingGigs.filter(
-    (g) => g.minQuantity <= cluster.currentQuantity,
+    (g) => g.convertedMinQuantity <= cluster.currentQuantity,
   );
 
   // Keep one bid per vendor (best matching gig = lowest price per unit for that vendor)
   const bestGigByVendor = new Map<string, typeof matchingGigs[0]>();
   for (const gig of bidEligibleGigs) {
     const existing = bestGigByVendor.get(gig.vendorId);
-    if (!existing || gig.pricePerUnit < existing.pricePerUnit) {
+    if (
+      !existing ||
+      gig.convertedPricePerUnit < existing.convertedPricePerUnit
+    ) {
       bestGigByVendor.set(gig.vendorId, gig);
     }
   }
@@ -519,17 +654,17 @@ export async function refreshClusterAutobids(clusterId: string): Promise<void> {
     if (existing) {
       bidsToUpdate.push({
         id: existing.id,
-        pricePerUnit: gig.pricePerUnit,
+        pricePerUnit: gig.convertedPricePerUnit,
         gigId: gig.id,
-        totalPrice: gig.pricePerUnit * cluster.currentQuantity,
+        totalPrice: gig.convertedPricePerUnit * cluster.currentQuantity,
       });
     } else {
       bidsToCreate.push({
         clusterId,
         vendorId,
         gigId: gig.id,
-        pricePerUnit: gig.pricePerUnit,
-        totalPrice: gig.pricePerUnit * cluster.currentQuantity,
+        pricePerUnit: gig.convertedPricePerUnit,
+        totalPrice: gig.convertedPricePerUnit * cluster.currentQuantity,
       });
     }
   }
@@ -561,11 +696,12 @@ export async function findJoinableClusters(
   preferredVariety?: string,
 ) {
   const normalizedUnit = normalizeUnit(unit);
+  const compatibleUnits = getCompatibleUnits(normalizedUnit);
   const normalizedVariety = normalizeVariety(preferredVariety);
   const allCandidateClusters = await prisma.cluster.findMany({
     where: {
       product: { equals: product, mode: "insensitive" },
-      unit: { equals: normalizedUnit, mode: "insensitive" },
+      unit: { in: compatibleUnits },
       status: { in: [ClusterStatus.FORMING, ClusterStatus.VOTING] },
     },
     include: {
@@ -635,11 +771,12 @@ export async function findJoinableClustersByRequirementKey(
   longitude?: number,
 ) {
   const normalizedUnit = normalizeUnit(unit);
+  const compatibleUnits = getCompatibleUnits(normalizedUnit);
 
   const allCandidateClusters = await prisma.cluster.findMany({
     where: {
       requirementKey,
-      unit: { equals: normalizedUnit, mode: "insensitive" },
+      unit: { in: compatibleUnits },
       status: { in: [ClusterStatus.FORMING, ClusterStatus.VOTING] },
     },
     include: {
@@ -726,8 +863,9 @@ export async function assignOrderToCluster(params: {
   farmerId: string;
   orderId: string;
   quantity: number;
+  orderUnit: string;
 }) {
-  const { clusterId, farmerId, orderId, quantity } = params;
+  const { clusterId, farmerId, orderId, quantity, orderUnit } = params;
 
   const cluster = await prisma.cluster.findUnique({
     where: { id: clusterId },
@@ -741,12 +879,23 @@ export async function assignOrderToCluster(params: {
     throw new Error("Cluster not available for joining");
   }
 
+  if (!areUnitsCompatible(orderUnit, cluster.unit)) {
+    throw new Error("Cluster unit is not compatible with order unit");
+  }
+
+  const normalizedQuantity = convertQuantityOrThrow(
+    quantity,
+    orderUnit,
+    cluster.unit,
+    "cluster assignment",
+  );
+
   await prisma.clusterMember.create({
     data: {
       clusterId,
       farmerId,
       orderId,
-      quantity,
+      quantity: normalizedQuantity,
     },
   });
 
@@ -762,7 +911,7 @@ export async function assignOrderToCluster(params: {
   const updated = await prisma.cluster.update({
     where: { id: clusterId },
     data: {
-      currentQuantity: { increment: quantity },
+      currentQuantity: { increment: normalizedQuantity },
       staleAt: buildStaleAt(),
       ...locationPatch,
     },
@@ -835,10 +984,11 @@ async function getServiceableGigMoqs(
   clusterLatitude: number | null,
   clusterLongitude: number | null,
 ): Promise<number[]> {
+  const compatibleUnits = getCompatibleUnits(unit);
   const gigs = await prisma.gig.findMany({
     where: {
       product: { equals: product, mode: "insensitive" },
-      unit: { equals: unit, mode: "insensitive" },
+      unit: { in: compatibleUnits },
       status: GigStatus.PUBLISHED,
     },
     include: {
@@ -862,7 +1012,8 @@ async function getServiceableGigMoqs(
         clusterLongitude,
       }),
     )
-    .map((gig) => gig.minQuantity);
+    .map((gig) => convertQuantityValue(gig.minQuantity, gig.unit, unit))
+    .filter((value): value is number => value !== null);
 }
 
 export async function createNewClusterAndAssignOrder(params: {
@@ -896,6 +1047,7 @@ export async function createNewClusterAndAssignOrder(params: {
     farmerId: params.farmerId,
     orderId: params.orderId,
     quantity: params.quantity,
+    orderUnit: params.unit,
   });
 }
 
@@ -943,6 +1095,7 @@ export async function autoAssignClusterByRequirement(params: {
       farmerId: params.farmerId,
       orderId: params.orderId,
       quantity: params.quantity,
+      orderUnit: params.unit,
     });
   }
 
@@ -995,6 +1148,7 @@ export async function autoAssignCluster(
       farmerId,
       orderId,
       quantity,
+      orderUnit: unit,
     });
   }
 
@@ -1295,12 +1449,13 @@ export async function syncClustersForPublishedGig(
   _minQuantity: number,
 ) {
   unit = normalizeUnit(unit);
+  const compatibleUnits = getCompatibleUnits(unit);
 
   // Pre-fetch matching gigs to prevent N+1 queries during batch operations
   const matchingGigs = await prisma.gig.findMany({
     where: {
       product: { equals: product, mode: "insensitive" },
-      unit: { equals: unit, mode: "insensitive" },
+      unit: { in: compatibleUnits },
       status: GigStatus.PUBLISHED,
     },
     include: {
@@ -1318,7 +1473,7 @@ export async function syncClustersForPublishedGig(
   const formingClusters = await prisma.cluster.findMany({
     where: {
       product: { equals: product, mode: "insensitive" },
-      unit: { equals: unit, mode: "insensitive" },
+      unit: { in: compatibleUnits },
       status: ClusterStatus.FORMING,
     },
     select: {
@@ -1334,20 +1489,43 @@ export async function syncClustersForPublishedGig(
 
   const formingAdjustments = formingClusters
     .map((cluster) => {
-      const serviceableGigs = matchingGigs.filter((gig) =>
-        isClusterServiceableForVendor({
-          vendorLatitude: gig.vendor.latitude,
-          vendorLongitude: gig.vendor.longitude,
-          serviceRadiusKm: gig.vendor.serviceRadiusKm,
-          clusterLatitude: cluster.latitude,
-          clusterLongitude: cluster.longitude,
-        }),
-      );
+      const serviceableGigs = matchingGigs
+        .filter((gig) =>
+          isClusterServiceableForVendor({
+            vendorLatitude: gig.vendor.latitude,
+            vendorLongitude: gig.vendor.longitude,
+            serviceRadiusKm: gig.vendor.serviceRadiusKm,
+            clusterLatitude: cluster.latitude,
+            clusterLongitude: cluster.longitude,
+          }),
+        )
+        .map((gig) => {
+          const convertedMinQuantity = convertQuantityValue(
+            gig.minQuantity,
+            gig.unit,
+            cluster.unit,
+          );
+          if (convertedMinQuantity === null) {
+            return null;
+          }
+
+          return {
+            ...gig,
+            convertedMinQuantity,
+          };
+        })
+        .filter(
+          (
+            gig,
+          ): gig is (typeof matchingGigs)[number] & {
+            convertedMinQuantity: number;
+          } => gig !== null,
+        );
 
       if (serviceableGigs.length === 0) return null;
 
       const bestTargetQuantity = Math.min(
-        ...serviceableGigs.map((gig) => gig.minQuantity),
+        ...serviceableGigs.map((gig) => gig.convertedMinQuantity),
       );
       const nextTargetQuantity = Math.min(
         cluster.targetQuantity,
@@ -1437,7 +1615,7 @@ export async function syncClustersForPublishedGig(
   const votingClusters = await prisma.cluster.findMany({
     where: {
       product: { equals: product, mode: "insensitive" },
-      unit: { equals: unit, mode: "insensitive" },
+      unit: { in: compatibleUnits },
       status: ClusterStatus.VOTING,
     },
     select: {

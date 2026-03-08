@@ -3,6 +3,7 @@ import { Router } from "express";
 import multer from "multer";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
+import { getCompatibleUnits } from "../lib/unit-conversion.js";
 import { authenticate, requireVendor } from "../middleware/auth.js";
 import { success, error } from "../lib/response.js";
 import {
@@ -483,10 +484,7 @@ router.get("/clusters", async (req, res) => {
     // Build case-insensitive product+unit filter
     const gigFilters = vendorGigs.map((g) => ({
       product: { equals: g.product, mode: "insensitive" as const },
-      unit: {
-        equals: g.unit.toLowerCase().trim(),
-        mode: "insensitive" as const,
-      },
+      unit: { in: getCompatibleUnits(g.unit) },
     }));
 
     const clusters = await prisma.cluster.findMany({

@@ -224,7 +224,6 @@ class HomeScreen extends ConsumerWidget {
                               value: '$co2Saved kg',
                               sub: 'vs solo ordering',
                               valueColor: const Color(0xFF4CAF50),
-                              valueFontSize: 18,
                             ),
                           ],
                         );
@@ -359,16 +358,16 @@ class _StatCard extends StatelessWidget {
     required this.value,
     required this.sub,
     this.valueColor = AppColors.surface,
-    this.valueFontSize = 22,
+    this.valueFontSize = 20,
   });
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
       child: SizedBox(
-        height: 102,
+        height: 86,
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(11),
           decoration: BoxDecoration(
             color: AppColors.surface.withOpacity(0.15),
             borderRadius: BorderRadius.circular(16),
@@ -382,12 +381,12 @@ class _StatCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.caption.copyWith(
                   color: AppColors.textOnPrimaryMuted,
-                  fontSize: 10,
+                  fontSize: 9,
                   fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5,
+                  letterSpacing: 0.4,
                 ),
               ),
-              const SizedBox(height: 3),
+              const SizedBox(height: 2),
               Text(
                 value,
                 maxLines: 1,
@@ -395,6 +394,7 @@ class _StatCard extends StatelessWidget {
                 style: AppTextStyles.h2.copyWith(
                   color: valueColor,
                   fontSize: valueFontSize,
+                  height: 1.05,
                 ),
               ),
               Text(
@@ -403,7 +403,7 @@ class _StatCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.caption.copyWith(
                   color: AppColors.textOnPrimaryMuted,
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: FontWeight.w500,
                 ),
               ),
