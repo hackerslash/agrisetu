@@ -1,10 +1,22 @@
 class AppConstants {
   // API
   // Override via --dart-define=API_BASE_URL=<url>
-  static const String apiBaseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://localhost:3001/api/v1',
-  );
+  static final String apiBaseUrl = _resolveApiBaseUrl();
+
+  static String _resolveApiBaseUrl() {
+    const configuredUrl = String.fromEnvironment('API_BASE_URL');
+    const isReleaseBuild = bool.fromEnvironment('dart.vm.product');
+
+    if (configuredUrl.isNotEmpty) {
+      return configuredUrl;
+    }
+
+    if (isReleaseBuild) {
+      throw StateError('API_BASE_URL is required in release builds.');
+    }
+
+    return 'http://localhost:3001/api/v1';
+  }
 
   // Storage keys
   static const String tokenKey = 'agrisetu_token';
@@ -18,7 +30,7 @@ class AppConstants {
   // OTP
   static const int otpLength = 6;
   static const int otpExpirySeconds = 600; // 10 minutes
-  static const int otpResendSeconds = 30;
+  static const int otpResendSeconds = 60;
 
   // Cluster
   static const double defaultTargetQuantity = 1000;

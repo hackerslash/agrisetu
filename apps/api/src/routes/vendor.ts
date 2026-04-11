@@ -4,7 +4,11 @@ import multer from "multer";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { getCompatibleUnits } from "../lib/unit-conversion.js";
-import { authenticate, requireVendor } from "../middleware/auth.js";
+import {
+  authenticate,
+  requireTrustedOriginForSessionAuth,
+  requireVendor,
+} from "../middleware/auth.js";
 import { success, error } from "../lib/response.js";
 import {
   buildClusterPaymentDeadline,
@@ -32,7 +36,7 @@ import {
 } from "../services/farmer-notification-events.js";
 
 const router = Router();
-router.use(authenticate, requireVendor);
+router.use(authenticate, requireTrustedOriginForSessionAuth, requireVendor);
 const vendorDocUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 12 * 1024 * 1024 },
@@ -1500,4 +1504,3 @@ router.get("/analytics", async (req, res) => {
 });
 
 export default router;
-

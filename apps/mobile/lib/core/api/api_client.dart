@@ -84,9 +84,16 @@ class ApiClient {
           'No internet connection. Please check your network.');
     }
     final data = e.response?.data;
-    final message = data is Map
+    var message = data is Map
         ? (data['error'] as String? ?? 'Server error')
         : 'Server error';
+    if (e.response?.statusCode == 429 && data is Map) {
+      final details = data['details'];
+      final retryAfter = details is Map ? details['retryAfterSeconds'] : null;
+      if (retryAfter is num) {
+        message = '$message Try again in ${retryAfter.ceil()}s.';
+      }
+    }
     return ApiException(message, statusCode: e.response?.statusCode);
   }
 
@@ -451,4 +458,3 @@ class ApiClient {
 
 // Riverpod provider
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient.instance);
-

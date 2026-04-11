@@ -13,9 +13,17 @@ import type {
 
 export async function farmerSendOtp(
   phone: string,
-): Promise<{ message: string }> {
+): Promise<{
+  message: string;
+  expiresInSeconds: number;
+  resendAvailableInSeconds: number;
+}> {
   const res = await getApiClient().post("/auth/farmer/request-otp", { phone });
-  return res.data.data as { message: string };
+  return res.data.data as {
+    message: string;
+    expiresInSeconds: number;
+    resendAvailableInSeconds: number;
+  };
 }
 
 export async function farmerVerifyOtp(

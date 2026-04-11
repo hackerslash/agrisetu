@@ -33,6 +33,26 @@ model Farmer {
   deviceTokens   FarmerDeviceToken[]
 }
 
+model FarmerOtpChallenge {
+  id                 String   @id @default(cuid())
+  phone              String   @unique
+  otpHash            String
+  providerName       String
+  providerRequestId  String
+  expiresAt          DateTime
+  resendAvailableAt  DateTime
+  consumedAt         DateTime?
+  sendCount          Int      @default(1)
+  verifyAttempts     Int      @default(0)
+  lastSentAt         DateTime
+  providerAcceptedAt DateTime
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([expiresAt])
+  @@index([consumedAt])
+}
+
 model Vendor {
   id           String           @id @default(cuid())
   email        String           @unique
@@ -273,4 +293,3 @@ model Rating {
   vendor    Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
   cluster   Cluster  @relation(fields: [clusterId], references: [id], onDelete: Cascade)
 }
-

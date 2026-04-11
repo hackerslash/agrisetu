@@ -1,12 +1,15 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyToken, JwtPayload } from "../lib/jwt.js";
+import { isAllowedCorsOrigin, resolveRequestOrigin } from "../lib/env.js";
 
 export const AUTH_SESSION_COOKIE = "agrisetu_session";
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 declare global {
   namespace Express {
     interface Request {
       user?: JwtPayload;
+      authSource?: "bearer" | "cookie";
     }
   }
 }
@@ -37,6 +40,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
     : null;
   const cookieToken = parseCookieToken(req.headers.cookie);
   const token = bearerToken ?? cookieToken;
+  const authSource = bearerToken ? "bearer" : cookieToken ? "cookie" : undefined;
 
   if (!token) {
     res.status(401).json({ success: false, error: "Unauthorized" });
@@ -46,10 +50,36 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
   try {
     const payload = verifyToken(token);
     req.user = payload;
+    req.authSource = authSource;
     next();
   } catch {
     res.status(401).json({ success: false, error: "Invalid or expired token" });
   }
+}
+
+export function requireTrustedOriginForSessionAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  if (req.authSource !== "cookie" || SAFE_METHODS.has(req.method)) {
+    next();
+    return;
+  }
+
+  const requestOrigin =
+    resolveRequestOrigin(req.headers.origin) ??
+    resolveRequestOrigin(req.headers.referer);
+
+  if (!requestOrigin || !isAllowedCorsOrigin(requestOrigin)) {
+    res.status(403).json({
+      success: false,
+      error: "Cross-site session requests are not allowed.",
+    });
+    return;
+  }
+
+  next();
 }
 
 export function requireFarmer(req: Request, res: Response, next: NextFunction) {

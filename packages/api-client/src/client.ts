@@ -42,19 +42,33 @@ export function configureApiClient(options: {
 
 let _baseURL = "http://localhost:3001/api/v1";
 
+function resolveBaseUrl(): string {
+  const envBaseUrl =
+    typeof process !== "undefined" && process.env?.NEXT_PUBLIC_API_URL
+      ? process.env.NEXT_PUBLIC_API_URL
+      : undefined;
+  const baseURL = envBaseUrl || _baseURL;
+  const isProduction =
+    typeof process !== "undefined" && process.env?.NODE_ENV === "production";
+  const isLocalhostFallback = baseURL === "http://localhost:3001/api/v1";
+
+  if (isProduction && !envBaseUrl && isLocalhostFallback) {
+    throw new Error(
+      "NEXT_PUBLIC_API_URL must be configured in production builds.",
+    );
+  }
+
+  return baseURL;
+}
+
 export function resetApiClient() {
   apiClient = null;
 }
 
 export function getApiClient(): AxiosInstance {
   if (!apiClient) {
-    const baseURL =
-      typeof process !== "undefined" && process.env?.NEXT_PUBLIC_API_URL
-        ? process.env.NEXT_PUBLIC_API_URL
-        : _baseURL;
-
     apiClient = axios.create({
-      baseURL,
+      baseURL: resolveBaseUrl(),
       headers: { "Content-Type": "application/json" },
       withCredentials: true,
     });

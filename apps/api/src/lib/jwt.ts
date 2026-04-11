@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
+import { requireEnv } from "./env.js";
 
-const JWT_SECRET = process.env.JWT_SECRET ?? "agrisetu_secret_dev";
+const JWT_SECRET = requireEnv("JWT_SECRET", { minLength: 32 });
 
 export type JwtPayload = {
   id: string;

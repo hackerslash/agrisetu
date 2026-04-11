@@ -1,18 +1,26 @@
 import { Router, type CookieOptions, type Response } from "express";
+import { randomInt } from "crypto";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
+import { normalizeIndianPhoneNumber } from "../lib/phone.js";
 import { signToken } from "../lib/jwt.js";
 import { prisma } from "../lib/prisma.js";
 import { error, success } from "../lib/response.js";
 import {
   AUTH_SESSION_COOKIE,
   authenticate,
+  requireTrustedOriginForSessionAuth,
   requireFarmer,
   requireVendor,
 } from "../middleware/auth.js";
-import { authLimiter } from "../middleware/rate-limit.js";
+import {
+  authLimiter,
+  otpRequestLimiter,
+  otpVerifyLimiter,
+} from "../middleware/rate-limit.js";
 import { withFarmerAvatarForClient } from "../services/farmer-avatar.js";
+import { sendFarmerOtpSms } from "../services/fast2sms.js";
 import {
   normalizeNotificationPreferences,
   registerFarmerDeviceToken,
@@ -22,22 +30,19 @@ import { withVendorDocumentsForClient } from "../services/vendor-documents.js";
 
 const router = Router();
 const AUTH_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const OTP_EXPIRY_SECONDS = 10 * 60;
+const OTP_RESEND_SECONDS = 60;
+const OTP_MAX_VERIFY_ATTEMPTS = 5;
+const OTP_ERROR_MESSAGE = "Invalid or expired OTP";
 
 function getAuthCookieOptions(): CookieOptions {
   const configuredSameSite = process.env.AUTH_COOKIE_SAMESITE?.toLowerCase();
-  const sameSite: "lax" | "strict" | "none" =
-    configuredSameSite === "lax" ||
-    configuredSameSite === "strict" ||
-    configuredSameSite === "none"
-      ? configuredSameSite
-      : process.env.NODE_ENV === "production"
-        ? "none"
-        : "lax";
+  const sameSite: "lax" | "strict" =
+    configuredSameSite === "strict" ? "strict" : "lax";
 
   const secure =
     process.env.AUTH_COOKIE_SECURE === "true" ||
-    process.env.NODE_ENV === "production" ||
-    sameSite === "none";
+    process.env.NODE_ENV === "production";
 
   const domain = process.env.AUTH_COOKIE_DOMAIN?.trim();
 
@@ -49,6 +54,21 @@ function getAuthCookieOptions(): CookieOptions {
     maxAge: AUTH_COOKIE_MAX_AGE_MS,
     ...(domain ? { domain } : {}),
   };
+}
+
+function createOtpCode() {
+  return randomInt(100000, 1000000).toString();
+}
+
+function validateFarmerPhone(phone: string) {
+  return normalizeIndianPhoneNumber(phone);
+}
+
+function getRetryAfterSeconds(availableAt: Date) {
+  return Math.max(
+    1,
+    Math.ceil((availableAt.getTime() - Date.now()) / 1000),
+  );
 }
 
 function setAuthSessionCookie(res: Response, token: string) {
@@ -67,46 +87,152 @@ function clearAuthSessionCookie(res: Response) {
 }
 
 const requestOtpSchema = z.object({
-  phone: z.string().min(10),
+  phone: z.string().min(1),
 });
 
-router.post("/farmer/request-otp", authLimiter, async (req, res) => {
+router.post("/farmer/request-otp", otpRequestLimiter, async (req, res) => {
   const parsed = requestOtpSchema.safeParse(req.body);
   if (!parsed.success) {
     error(res, "Invalid request", 422, parsed.error.flatten());
     return;
   }
 
-  success(res, { message: "OTP sent successfully" });
+  const normalizedPhone = validateFarmerPhone(parsed.data.phone);
+  if (!normalizedPhone) {
+    error(res, "Invalid phone number", 422, {
+      fieldErrors: { phone: ["Enter a valid 10-digit Indian mobile number."] },
+    });
+    return;
+  }
+
+  try {
+    const existingChallenge = await prisma.farmerOtpChallenge.findUnique({
+      where: { phone: normalizedPhone },
+    });
+    const now = new Date();
+
+    if (
+      existingChallenge &&
+      !existingChallenge.consumedAt &&
+      existingChallenge.resendAvailableAt > now
+    ) {
+      const retryAfterSeconds = getRetryAfterSeconds(
+        existingChallenge.resendAvailableAt,
+      );
+      res.setHeader("Retry-After", retryAfterSeconds.toString());
+      error(res, "OTP resend is on cooldown.", 429, { retryAfterSeconds });
+      return;
+    }
+
+    const otp = createOtpCode();
+    const sent = await sendFarmerOtpSms(normalizedPhone, otp);
+    const otpHash = await bcrypt.hash(otp, 10);
+    const expiresAt = new Date(now.getTime() + OTP_EXPIRY_SECONDS * 1000);
+    const resendAvailableAt = new Date(now.getTime() + OTP_RESEND_SECONDS * 1000);
+
+    await prisma.farmerOtpChallenge.upsert({
+      where: { phone: normalizedPhone },
+      create: {
+        phone: normalizedPhone,
+        otpHash,
+        providerName: sent.providerName,
+        providerRequestId: sent.requestId,
+        expiresAt,
+        resendAvailableAt,
+        consumedAt: null,
+        sendCount: 1,
+        verifyAttempts: 0,
+        lastSentAt: now,
+        providerAcceptedAt: sent.acceptedAt,
+      },
+      update: {
+        otpHash,
+        providerName: sent.providerName,
+        providerRequestId: sent.requestId,
+        expiresAt,
+        resendAvailableAt,
+        consumedAt: null,
+        sendCount: (existingChallenge?.sendCount ?? 0) + 1,
+        verifyAttempts: 0,
+        lastSentAt: now,
+        providerAcceptedAt: sent.acceptedAt,
+      },
+    });
+
+    success(res, {
+      message: "OTP sent successfully",
+      expiresInSeconds: OTP_EXPIRY_SECONDS,
+      resendAvailableInSeconds: OTP_RESEND_SECONDS,
+    });
+  } catch (err) {
+    const message =
+      err instanceof Error && err.message.includes("SMS provider")
+        ? "Unable to send OTP right now. Please try again shortly."
+        : "SMS service unavailable. Please try again shortly.";
+    error(res, message, 503);
+  }
 });
 
 const verifyOtpSchema = z.object({
-  phone: z.string().min(10),
-  otp: z.string(),
+  phone: z.string().min(1),
+  otp: z.string().regex(/^\d{6}$/),
 });
 
-router.post("/farmer/verify-otp", authLimiter, async (req, res) => {
+router.post("/farmer/verify-otp", otpVerifyLimiter, async (req, res) => {
   const parsed = verifyOtpSchema.safeParse(req.body);
   if (!parsed.success) {
     error(res, "Invalid request", 422, parsed.error.flatten());
     return;
   }
 
-  const { phone, otp } = parsed.data;
-  if (otp !== "123456") {
-    error(res, "Invalid OTP", 400);
+  const normalizedPhone = validateFarmerPhone(parsed.data.phone);
+  if (!normalizedPhone) {
+    error(res, "Invalid request", 422, {
+      fieldErrors: { phone: ["Enter a valid 10-digit Indian mobile number."] },
+    });
     return;
   }
 
   try {
-    let farmer = await prisma.farmer.findUnique({ where: { phone } });
+    const challenge = await prisma.farmerOtpChallenge.findUnique({
+      where: { phone: normalizedPhone },
+    });
+    const now = new Date();
+
+    if (!challenge || challenge.consumedAt || challenge.expiresAt <= now) {
+      error(res, OTP_ERROR_MESSAGE, 400);
+      return;
+    }
+
+    const isValidOtp = await bcrypt.compare(parsed.data.otp, challenge.otpHash);
+    if (!isValidOtp) {
+      const nextAttemptCount = challenge.verifyAttempts + 1;
+      await prisma.farmerOtpChallenge.update({
+        where: { phone: normalizedPhone },
+        data: {
+          verifyAttempts: nextAttemptCount,
+          consumedAt:
+            nextAttemptCount >= OTP_MAX_VERIFY_ATTEMPTS ? now : challenge.consumedAt,
+        },
+      });
+      error(res, OTP_ERROR_MESSAGE, 400);
+      return;
+    }
+
+    await prisma.farmerOtpChallenge.update({
+      where: { phone: normalizedPhone },
+      data: {
+        consumedAt: now,
+        verifyAttempts: challenge.verifyAttempts + 1,
+      },
+    });
+
+    let farmer = await prisma.farmer.findUnique({ where: { phone: normalizedPhone } });
     if (!farmer) {
-      farmer = await prisma.farmer.create({ data: { phone } });
+      farmer = await prisma.farmer.create({ data: { phone: normalizedPhone } });
     }
 
     const token = signToken({ id: farmer.id, role: "farmer" });
-    setAuthSessionCookie(res, token);
-
     const farmerForClient = await withFarmerAvatarForClient(farmer);
     success(res, { token, farmer: farmerForClient, isNewUser: !farmer.name });
   } catch {
@@ -296,7 +422,12 @@ const vendorStep2Schema = z.object({
   pan: z.string().optional(),
 });
 
-router.post("/vendor/register/step2", authenticate, async (req, res) => {
+router.post(
+  "/vendor/register/step2",
+  authenticate,
+  requireTrustedOriginForSessionAuth,
+  requireVendor,
+  async (req, res) => {
   const parsed = vendorStep2Schema.safeParse(req.body);
   if (!parsed.success) {
     error(res, "Invalid request", 422, parsed.error.flatten());
@@ -320,7 +451,8 @@ router.post("/vendor/register/step2", authenticate, async (req, res) => {
   } catch {
     error(res, "Internal server error", 500);
   }
-});
+  },
+);
 
 const vendorStep3Schema = z.object({
   documents: z.array(
@@ -331,7 +463,12 @@ const vendorStep3Schema = z.object({
   ),
 });
 
-router.post("/vendor/register/step3", authenticate, async (req, res) => {
+router.post(
+  "/vendor/register/step3",
+  authenticate,
+  requireTrustedOriginForSessionAuth,
+  requireVendor,
+  async (req, res) => {
   const parsed = vendorStep3Schema.safeParse(req.body);
   if (!parsed.success) {
     error(res, "Invalid request", 422, parsed.error.flatten());
@@ -372,7 +509,8 @@ router.post("/vendor/register/step3", authenticate, async (req, res) => {
   } catch {
     error(res, "Internal server error", 500);
   }
-});
+  },
+);
 
 const vendorLoginSchema = z.object({
   email: z.string().email(),
