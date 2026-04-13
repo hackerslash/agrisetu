@@ -1,4 +1,8 @@
-import axios, { AxiosInstance, AxiosError } from "axios";
+import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from "axios";
+
+type ApiRequestConfig = AxiosRequestConfig & {
+  skipUnauthorizedRedirect?: boolean;
+};
 
 let apiClient: AxiosInstance | null = null;
 let _memoryToken: string | null = null;
@@ -90,7 +94,13 @@ export function getApiClient(): AxiosInstance {
     apiClient.interceptors.response.use(
       (response) => response,
       (err: AxiosError) => {
-        if (err.response?.status === 401 && _onUnauthorized) {
+        const requestConfig = err.config as (typeof err.config & ApiRequestConfig) | undefined;
+
+        if (
+          err.response?.status === 401 &&
+          _onUnauthorized &&
+          !requestConfig?.skipUnauthorizedRedirect
+        ) {
           _clearToken();
           _onUnauthorized();
         }
@@ -113,3 +123,5 @@ export function clearAuthToken() {
 export function getAuthToken(): string | null {
   return _getToken();
 }
+
+export type { ApiRequestConfig };

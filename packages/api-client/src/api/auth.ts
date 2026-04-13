@@ -1,4 +1,5 @@
 import {
+  type ApiRequestConfig,
   clearAuthToken,
   getApiBaseUrl,
   getApiClient,
@@ -60,7 +61,9 @@ export async function login(data: {
   email: string;
   password: string;
 }): Promise<{ token: string; vendor: Vendor }> {
-  const res = await getApiClient().post("/auth/vendor/login", data);
+  const res = await getApiClient().post("/auth/vendor/login", data, {
+    skipUnauthorizedRedirect: true,
+  } as ApiRequestConfig);
   return res.data.data as { token: string; vendor: Vendor };
 }
 
