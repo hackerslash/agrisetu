@@ -10,7 +10,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:push": "prisma db push",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "bootstrap:superadmin": "tsx src/scripts/bootstrap-superadmin.ts"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-agent-runtime": "^3.1000.0",

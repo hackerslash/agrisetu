@@ -5,7 +5,7 @@ const JWT_SECRET = requireEnv("JWT_SECRET", { minLength: 32 });
 
 export type JwtPayload = {
   id: string;
-  role: "farmer" | "vendor";
+  role: "farmer" | "vendor" | "superadmin";
 };
 
 export function signToken(payload: JwtPayload): string {

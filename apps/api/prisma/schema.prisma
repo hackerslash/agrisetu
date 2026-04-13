@@ -68,7 +68,13 @@ model Vendor {
   latitude     Float?
   longitude    Float?
   serviceRadiusKm Float         @default(25)
+  role         VendorRole       @default(VENDOR)
+  status       VendorStatus     @default(ONBOARDING)
   isVerified   Boolean          @default(false)
+  submittedAt  DateTime?
+  reviewedAt   DateTime?
+  reviewedById String?
+  reviewNote   String?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
   documents    VendorDocument[]
@@ -76,6 +82,22 @@ model Vendor {
   clusters     Cluster[]
   bids         VendorBid[]
   ratingsGiven Rating[]
+
+  @@index([role])
+  @@index([status])
+}
+
+enum VendorRole {
+  VENDOR
+  SUPERADMIN
+}
+
+enum VendorStatus {
+  ONBOARDING
+  PENDING_REVIEW
+  ACTIVE
+  REJECTED
+  SUSPENDED
 }
 
 model VendorDocument {

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyToken, JwtPayload } from "../lib/jwt.js";
 import { isAllowedCorsOrigin, resolveRequestOrigin } from "../lib/env.js";
+import { prisma } from "../lib/prisma.js";
 
 export const AUTH_SESSION_COOKIE = "agrisetu_session";
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -96,4 +97,45 @@ export function requireVendor(req: Request, res: Response, next: NextFunction) {
     return;
   }
   next();
+}
+
+export function requireSuperadmin(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  if (req.user?.role !== "superadmin") {
+    res.status(403).json({ success: false, error: "Superadmin access required" });
+    return;
+  }
+  next();
+}
+
+export async function requireActiveVendorAccount(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  if (req.user?.role !== "vendor") {
+    res.status(403).json({ success: false, error: "Vendor access required" });
+    return;
+  }
+
+  try {
+    const vendor = await prisma.vendor.findUnique({
+      where: { id: req.user.id },
+      select: { status: true },
+    });
+
+    if (!vendor || vendor.status !== "ACTIVE") {
+      res
+        .status(403)
+        .json({ success: false, error: "Active vendor account required" });
+      return;
+    }
+
+    next();
+  } catch {
+    res.status(500).json({ success: false, error: "Internal server error" });
+  }
 }

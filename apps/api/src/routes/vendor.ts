@@ -6,6 +6,7 @@ import { prisma } from "../lib/prisma.js";
 import { getCompatibleUnits } from "../lib/unit-conversion.js";
 import {
   authenticate,
+  requireActiveVendorAccount,
   requireTrustedOriginForSessionAuth,
   requireVendor,
 } from "../middleware/auth.js";
@@ -28,6 +29,7 @@ import {
   withVendorDocumentForClient,
   withVendorDocumentsForClient,
 } from "../services/vendor-documents.js";
+import { vendorAccountSelect } from "../services/vendor-accounts.js";
 import {
   sendDeliveredNotification,
   sendDispatchedNotification,
@@ -36,7 +38,12 @@ import {
 } from "../services/farmer-notification-events.js";
 
 const router = Router();
-router.use(authenticate, requireTrustedOriginForSessionAuth, requireVendor);
+router.use(
+  authenticate,
+  requireTrustedOriginForSessionAuth,
+  requireVendor,
+  requireActiveVendorAccount,
+);
 const vendorDocUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 12 * 1024 * 1024 },
@@ -48,24 +55,7 @@ router.get("/profile", async (req, res) => {
   try {
     const vendor = await prisma.vendor.findUnique({
       where: { id: req.user!.id },
-      select: {
-        id: true,
-        email: true,
-        businessName: true,
-        contactName: true,
-        phone: true,
-        gstin: true,
-        pan: true,
-        state: true,
-        businessType: true,
-        locationAddress: true,
-        latitude: true,
-        longitude: true,
-        serviceRadiusKm: true,
-        isVerified: true,
-        createdAt: true,
-        documents: true,
-      },
+      select: vendorAccountSelect,
     });
     if (!vendor) {
       error(res, "Vendor not found", 404);
@@ -99,20 +89,7 @@ router.patch("/profile", async (req, res) => {
     const vendor = await prisma.vendor.update({
       where: { id: req.user!.id },
       data: parsed.data,
-      select: {
-        id: true,
-        email: true,
-        businessName: true,
-        contactName: true,
-        phone: true,
-        state: true,
-        businessType: true,
-        locationAddress: true,
-        latitude: true,
-        longitude: true,
-        serviceRadiusKm: true,
-        isVerified: true,
-      },
+      select: vendorAccountSelect,
     });
     success(res, vendor);
   } catch {

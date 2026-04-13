@@ -8,6 +8,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { authApi } from "@repo/api-client";
 import { Building2, CreditCard, ArrowRight } from "lucide-react";
+import { getPortalHomePath } from "../../lib/portal";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -29,8 +30,8 @@ export function LoginForm() {
   async function onSubmit(data: LoginFormData) {
     setApiError("");
     try {
-      await authApi.login(data);
-      router.push("/dashboard");
+      const response = await authApi.login(data);
+      router.push(getPortalHomePath(response.vendor));
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: string } } };
       setApiError(e.response?.data?.error ?? "Login failed. Please try again.");
@@ -52,7 +53,7 @@ export function LoginForm() {
           Vendor Portal
         </h2>
         <p style={{ fontSize: 14, color: "#A0A0A0", lineHeight: 1.4 }}>
-          Sign in to manage your bids, orders, and payments.
+          Sign in to manage vendor operations or review onboarding requests.
         </p>
       </div>
 

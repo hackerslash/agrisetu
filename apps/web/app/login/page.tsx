@@ -6,7 +6,6 @@ import { VendorSessionGate } from "../../components/auth/VendorSessionGate";
 export default function LoginPage() {
   return (
     <VendorSessionGate
-      authenticatedRedirect="/dashboard"
       loadingMessage="Checking your vendor session..."
     >
       <div className="flex" style={{ minHeight: "100vh" }}>

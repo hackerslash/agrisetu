@@ -33,9 +33,27 @@ export async function registerStep2(data: {
 
 export async function registerStep3(data: {
   documents: { docType: "PAN" | "GST" | "QUALITY_CERT"; fileUrl: string }[];
-}): Promise<{ documents: unknown[] }> {
+}): Promise<{ documents: unknown[]; message: string }> {
   const res = await getApiClient().post("/auth/vendor/register/step3", data);
-  return res.data.data as { documents: unknown[] };
+  return res.data.data as { documents: unknown[]; message: string };
+}
+
+export async function uploadRegistrationDocument(
+  docType: "PAN" | "GST" | "QUALITY_CERT",
+  file: File,
+) {
+  const formData = new FormData();
+  formData.append("docType", docType);
+  formData.append("file", file);
+
+  const res = await getApiClient().post(
+    "/auth/vendor/register/document-upload",
+    formData,
+    {
+      headers: { "Content-Type": "multipart/form-data" },
+    },
+  );
+  return res.data.data as unknown;
 }
 
 export async function login(data: {
@@ -51,7 +69,7 @@ export async function getMe(): Promise<Vendor> {
   return res.data.data as Vendor;
 }
 
-export async function hasVendorSession(): Promise<boolean> {
+export async function getSession(): Promise<Vendor | null> {
   const headers = new Headers({ "Content-Type": "application/json" });
   const token = getAuthToken();
 
@@ -68,14 +86,15 @@ export async function hasVendorSession(): Promise<boolean> {
 
   if (res.status === 401 || res.status === 403) {
     clearAuthToken();
-    return false;
+    return null;
   }
 
   if (!res.ok) {
     throw new Error(`Unable to verify vendor session (${res.status})`);
   }
 
-  return true;
+  const payload = (await res.json()) as { data: Vendor };
+  return payload.data;
 }
 
 export async function logout(): Promise<void> {

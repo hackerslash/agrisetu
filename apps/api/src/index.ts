@@ -7,6 +7,7 @@ import http from "http";
 import { WebSocketServer } from "ws";
 import { logger } from "./lib/logger.js";
 import authRouter from "./routes/auth.js";
+import adminRouter from "./routes/admin.js";
 import farmerRouter from "./routes/farmer.js";
 import vendorRouter from "./routes/vendor.js";
 import {
@@ -63,6 +64,7 @@ export function createApp() {
 
   app.use("/api/v1", apiLimiter);
   app.use("/api/v1/auth", authRouter);
+  app.use("/api/v1/admin", adminRouter);
   app.use("/api/v1/farmer", farmerRouter);
   app.use("/api/v1/vendor", vendorRouter);
 

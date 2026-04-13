@@ -4,9 +4,9 @@ import { authApi } from "@repo/api-client";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { getPortalHomePath } from "../../lib/portal";
 
 interface VendorSessionGateProps {
-  authenticatedRedirect: string;
   unauthenticatedRedirect?: string;
   loadingMessage?: string;
   children?: React.ReactNode;
@@ -36,25 +36,24 @@ function LoadingState({ message }: { message: string }) {
 }
 
 export function VendorSessionGate({
-  authenticatedRedirect,
   unauthenticatedRedirect,
   loadingMessage = "Checking your vendor session...",
   children,
 }: VendorSessionGateProps) {
   const router = useRouter();
-  const { data: hasSession, error, isPending } = useQuery({
+  const { data: session, error, isPending } = useQuery({
     queryKey: ["vendor-session"],
-    queryFn: () => authApi.hasVendorSession(),
+    queryFn: () => authApi.getSession(),
     retry: false,
   });
 
   useEffect(() => {
-    if (hasSession === true) {
-      router.replace(authenticatedRedirect);
+    if (session) {
+      router.replace(getPortalHomePath(session));
       return;
     }
 
-    if (hasSession === false && unauthenticatedRedirect) {
+    if (session === null && unauthenticatedRedirect) {
       router.replace(unauthenticatedRedirect);
       return;
     }
@@ -63,17 +62,16 @@ export function VendorSessionGate({
       router.replace(unauthenticatedRedirect);
     }
   }, [
-    authenticatedRedirect,
     error,
-    hasSession,
     router,
+    session,
     unauthenticatedRedirect,
   ]);
 
   if (
     isPending ||
-    hasSession === true ||
-    (hasSession === false && Boolean(unauthenticatedRedirect)) ||
+    Boolean(session) ||
+    (session === null && Boolean(unauthenticatedRedirect)) ||
     (Boolean(error) && Boolean(unauthenticatedRedirect))
   ) {
     return <LoadingState message={loadingMessage} />;

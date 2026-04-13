@@ -1,6 +1,13 @@
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
 export type DocType = "PAN" | "GST" | "QUALITY_CERT";
+export type VendorRole = "VENDOR" | "SUPERADMIN";
+export type VendorStatus =
+  | "ONBOARDING"
+  | "PENDING_REVIEW"
+  | "ACTIVE"
+  | "REJECTED"
+  | "SUSPENDED";
 export type GigStatus = "DRAFT" | "PUBLISHED" | "CLOSED";
 export type OrderStatus =
   | "PENDING"
@@ -40,9 +47,45 @@ export interface Vendor {
   latitude?: number | null;
   longitude?: number | null;
   serviceRadiusKm?: number | null;
+  role: VendorRole;
+  status: VendorStatus;
   isVerified: boolean;
+  submittedAt?: string | null;
+  reviewedAt?: string | null;
+  reviewedById?: string | null;
+  reviewNote?: string | null;
   createdAt: string;
   documents?: VendorDocument[];
+}
+
+export interface AdminVendorSummary {
+  pending: number;
+  active: number;
+  rejected: number;
+  suspended: number;
+}
+
+export interface AdminVendorListItem {
+  id: string;
+  email: string;
+  businessName: string;
+  contactName: string;
+  phone: string;
+  gstin?: string | null;
+  pan?: string | null;
+  state?: string | null;
+  businessType?: string | null;
+  status: VendorStatus;
+  isVerified: boolean;
+  submittedAt?: string | null;
+  reviewedAt?: string | null;
+  reviewNote?: string | null;
+  createdAt: string;
+}
+
+export interface AdminVendorListResponse {
+  summary: AdminVendorSummary;
+  vendors: AdminVendorListItem[];
 }
 
 export interface VendorDocument {

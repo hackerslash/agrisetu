@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { authApi, vendorApi } from "@repo/api-client";
+import { authApi } from "@repo/api-client";
 import { LocateFixed, Upload } from "lucide-react";
 import { INDIAN_STATES_AND_UTS } from "../../lib/indiaStates";
 
@@ -194,6 +194,7 @@ export function RegisterWizard() {
   const [step, setStep] = useState(1);
   const [apiError, setApiError] = useState("");
   const [locating, setLocating] = useState(false);
+  const [submittedMessage, setSubmittedMessage] = useState("");
 
   // Step 1 form
   const form1 = useForm<Step1FormInput, unknown, Step1Data>({
@@ -299,14 +300,18 @@ export function RegisterWizard() {
     if (hasErrors) return;
 
     try {
-      await vendorApi.uploadDocument("PAN", data.panFile![0]!);
-      await vendorApi.uploadDocument("GST", data.gstFile![0]!);
+      await authApi.uploadRegistrationDocument("PAN", data.panFile![0]!);
+      await authApi.uploadRegistrationDocument("GST", data.gstFile![0]!);
 
       if (data.qualityFile && data.qualityFile.length > 0) {
-        await vendorApi.uploadDocument("QUALITY_CERT", data.qualityFile[0]!);
+        await authApi.uploadRegistrationDocument(
+          "QUALITY_CERT",
+          data.qualityFile[0]!,
+        );
       }
 
-      router.push("/dashboard");
+      const result = await authApi.registerStep3({ documents: [] });
+      setSubmittedMessage(result.message);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: string } } };
       setApiError(e.response?.data?.error ?? "Upload failed");
@@ -319,6 +324,49 @@ export function RegisterWizard() {
     { title: "Upload Documents", sub: "Certifications & identity proof" },
   ];
   const header = HEADERS[step - 1]!;
+
+  if (submittedMessage) {
+    return (
+      <div
+        className="flex flex-col gap-6 rounded-2xl bg-white"
+        style={{ padding: 40 }}
+      >
+        <div className="flex flex-col gap-3">
+          <h2
+            className="font-bold"
+            style={{
+              fontFamily: "Plus Jakarta Sans",
+              fontSize: 24,
+              color: "#1A1A1A",
+            }}
+          >
+            Registration submitted
+          </h2>
+          <p style={{ fontSize: 15, color: "#5A5A5A", lineHeight: 1.6 }}>
+            {submittedMessage}
+          </p>
+          <p style={{ fontSize: 13, color: "#A0A0A0", lineHeight: 1.6 }}>
+            You can return to the login page after approval.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => router.push("/login")}
+          className="flex items-center justify-center font-semibold rounded-xl"
+          style={{
+            backgroundColor: "#2C5F2D",
+            color: "white",
+            height: 52,
+            fontSize: 15,
+            fontFamily: "Plus Jakarta Sans",
+          }}
+        >
+          Back to login
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div

@@ -1,6 +1,7 @@
 import { Router, type CookieOptions, type Response } from "express";
 import { randomInt } from "crypto";
 import bcrypt from "bcryptjs";
+import multer from "multer";
 import { z } from "zod";
 
 import { normalizeIndianPhoneNumber } from "../lib/phone.js";
@@ -26,7 +27,18 @@ import {
   registerFarmerDeviceToken,
   unregisterFarmerDeviceToken,
 } from "../services/push-notifications.js";
-import { withVendorDocumentsForClient } from "../services/vendor-documents.js";
+import {
+  deleteVendorDocumentIfManaged,
+  uploadVendorDocumentBuffer,
+  withVendorDocumentForClient,
+  withVendorDocumentsForClient,
+} from "../services/vendor-documents.js";
+import {
+  canAccessVendorPortal,
+  getVendorBlockedMessage,
+  normalizeVendorVerificationStatus,
+  vendorAccountSelect,
+} from "../services/vendor-accounts.js";
 
 const router = Router();
 const AUTH_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -34,6 +46,10 @@ const OTP_EXPIRY_SECONDS = 10 * 60;
 const OTP_RESEND_SECONDS = 60;
 const OTP_MAX_VERIFY_ATTEMPTS = 5;
 const OTP_ERROR_MESSAGE = "Invalid or expired OTP";
+const vendorDocUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 12 * 1024 * 1024 },
+});
 
 function getAuthCookieOptions(): CookieOptions {
   const configuredSameSite = process.env.AUTH_COOKIE_SAMESITE?.toLowerCase();
@@ -386,22 +402,15 @@ router.post("/vendor/register/step1", authLimiter, async (req, res) => {
 
     const hashed = await bcrypt.hash(password, 10);
     const vendor = await prisma.vendor.create({
-      data: { email, password: hashed, ...rest },
-      select: {
-        id: true,
-        email: true,
-        businessName: true,
-        contactName: true,
-        phone: true,
-        state: true,
-        businessType: true,
-        locationAddress: true,
-        latitude: true,
-        longitude: true,
-        serviceRadiusKm: true,
-        isVerified: true,
-        createdAt: true,
+      data: {
+        email,
+        password: hashed,
+        role: "VENDOR",
+        status: "ONBOARDING",
+        isVerified: false,
+        ...rest,
       },
+      select: vendorAccountSelect,
     });
 
     const token = signToken({ id: vendor.id, role: "vendor" });
@@ -435,19 +444,21 @@ router.post(
   }
 
   try {
+    const currentVendor = await prisma.vendor.findUnique({
+      where: { id: req.user!.id },
+      select: { status: true },
+    });
+    if (!currentVendor || currentVendor.status !== "ONBOARDING") {
+      error(res, "Vendor registration is no longer editable", 403);
+      return;
+    }
+
     const vendor = await prisma.vendor.update({
       where: { id: req.user!.id },
-      data: { ...parsed.data, isVerified: true },
-      select: {
-        id: true,
-        email: true,
-        businessName: true,
-        gstin: true,
-        pan: true,
-        isVerified: true,
-      },
+      data: { ...parsed.data },
+      select: vendorAccountSelect,
     });
-    success(res, { vendor, verified: true });
+    success(res, { vendor, verified: false });
   } catch {
     error(res, "Internal server error", 500);
   }
@@ -463,6 +474,94 @@ const vendorStep3Schema = z.object({
   ),
 });
 
+const uploadRegistrationDocumentSchema = z.object({
+  docType: z.enum(["PAN", "GST", "QUALITY_CERT"]),
+});
+
+router.post(
+  "/vendor/register/document-upload",
+  authenticate,
+  requireTrustedOriginForSessionAuth,
+  requireVendor,
+  vendorDocUpload.single("file"),
+  async (req, res) => {
+    const file = req.file;
+    if (!file) {
+      error(res, "Document file is required", 422);
+      return;
+    }
+
+    const parsed = uploadRegistrationDocumentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      error(res, "Invalid request", 422, parsed.error.flatten());
+      return;
+    }
+
+    const vendor = await prisma.vendor.findUnique({
+      where: { id: req.user!.id },
+      select: { status: true },
+    });
+    if (!vendor || vendor.status !== "ONBOARDING") {
+      error(res, "Vendor registration is no longer editable", 403);
+      return;
+    }
+
+    const mimeType = file.mimetype?.toLowerCase();
+    if (
+      mimeType !== "application/pdf" &&
+      mimeType !== "image/jpeg" &&
+      mimeType !== "image/jpg" &&
+      mimeType !== "image/png" &&
+      mimeType !== "image/webp"
+    ) {
+      error(res, "Only PDF, JPG, PNG, and WEBP files are supported", 422);
+      return;
+    }
+
+    try {
+      const uploaded = await uploadVendorDocumentBuffer({
+        vendorId: req.user!.id,
+        docType: parsed.data.docType,
+        fileBuffer: file.buffer,
+        fileName: file.originalname,
+        mimeType: file.mimetype,
+      });
+
+      const existingDocs = await prisma.vendorDocument.findMany({
+        where: { vendorId: req.user!.id, docType: parsed.data.docType },
+      });
+
+      const document = await prisma.$transaction(async (tx) => {
+        await tx.vendorDocument.deleteMany({
+          where: { vendorId: req.user!.id, docType: parsed.data.docType },
+        });
+
+        return tx.vendorDocument.create({
+          data: {
+            vendorId: req.user!.id,
+            docType: parsed.data.docType,
+            fileUrl: uploaded.fileUrl,
+          },
+        });
+      });
+
+      if (existingDocs.length > 0) {
+        await Promise.all(
+          existingDocs.map((doc) =>
+            deleteVendorDocumentIfManaged(doc.fileUrl).catch(() => null),
+          ),
+        );
+      }
+
+      success(res, await withVendorDocumentForClient(document), 201);
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Unable to upload vendor document";
+      error(res, message, 500);
+    }
+  },
+);
+
 router.post(
   "/vendor/register/step3",
   authenticate,
@@ -476,6 +575,15 @@ router.post(
   }
 
   try {
+    const currentVendor = await prisma.vendor.findUnique({
+      where: { id: req.user!.id },
+      select: { status: true },
+    });
+    if (!currentVendor || currentVendor.status !== "ONBOARDING") {
+      error(res, "Vendor registration is no longer editable", 403);
+      return;
+    }
+
     const docs = await prisma.$transaction(async (tx) => {
       const upserted: Array<{
         id: string;
@@ -498,6 +606,30 @@ router.post(
       return upserted;
     });
 
+    const storedDocs =
+      docs.length > 0
+        ? docs
+        : await prisma.vendorDocument.findMany({
+            where: { vendorId: req.user!.id },
+          });
+    const requiredDocTypes = new Set(storedDocs.map((doc) => doc.docType));
+    if (!requiredDocTypes.has("PAN") || !requiredDocTypes.has("GST")) {
+      error(res, "PAN and GST documents are required", 422);
+      return;
+    }
+
+    await prisma.vendor.update({
+      where: { id: req.user!.id },
+      data: {
+        status: "PENDING_REVIEW",
+        isVerified: false,
+        submittedAt: new Date(),
+        reviewedAt: null,
+        reviewedById: null,
+        reviewNote: null,
+      },
+    });
+
     const docsForClient = await Promise.all(
       docs.map((doc) => withVendorDocumentsForClient({ documents: [doc] })),
     );
@@ -505,7 +637,16 @@ router.post(
     const normalizedDocs = docsForClient
       .map((vendor) => vendor.documents?.[0])
       .filter(Boolean);
-    success(res, { documents: normalizedDocs }, 201);
+    clearAuthSessionCookie(res);
+    success(
+      res,
+      {
+        documents: normalizedDocs,
+        message:
+          "Your registration is in progress. You will be notified after review.",
+      },
+      201,
+    );
   } catch {
     error(res, "Internal server error", 500);
   }
@@ -539,7 +680,19 @@ router.post("/vendor/login", authLimiter, async (req, res) => {
       return;
     }
 
-    const token = signToken({ id: vendor.id, role: "vendor" });
+    const blockedMessage = getVendorBlockedMessage({
+      status: vendor.status,
+      reviewNote: vendor.reviewNote,
+    });
+    if (!canAccessVendorPortal({ role: vendor.role, status: vendor.status })) {
+      error(res, blockedMessage ?? "Account access is restricted.", 403);
+      return;
+    }
+
+    const token = signToken({
+      id: vendor.id,
+      role: vendor.role === "SUPERADMIN" ? "superadmin" : "vendor",
+    });
     setAuthSessionCookie(res, token);
     const { password: _password, ...vendorData } = vendor;
     success(res, { token, vendor: vendorData });
@@ -548,31 +701,32 @@ router.post("/vendor/login", authLimiter, async (req, res) => {
   }
 });
 
-router.get("/vendor/me", authenticate, requireVendor, async (req, res) => {
+router.get("/vendor/me", authenticate, async (req, res) => {
+  if (req.user?.role !== "vendor" && req.user?.role !== "superadmin") {
+    error(res, "Vendor access required", 403);
+    return;
+  }
+
   try {
     const vendor = await prisma.vendor.findUnique({
       where: { id: req.user!.id },
-      select: {
-        id: true,
-        email: true,
-        businessName: true,
-        contactName: true,
-        phone: true,
-        gstin: true,
-        pan: true,
-        state: true,
-        businessType: true,
-        locationAddress: true,
-        latitude: true,
-        longitude: true,
-        serviceRadiusKm: true,
-        isVerified: true,
-        createdAt: true,
-        documents: true,
-      },
+      select: vendorAccountSelect,
     });
     if (!vendor) {
       error(res, "Vendor not found", 404);
+      return;
+    }
+
+    if (!canAccessVendorPortal({ role: vendor.role, status: vendor.status })) {
+      clearAuthSessionCookie(res);
+      error(
+        res,
+        getVendorBlockedMessage({
+          status: vendor.status,
+          reviewNote: vendor.reviewNote,
+        }) ?? "Account access is restricted.",
+        403,
+      );
       return;
     }
 

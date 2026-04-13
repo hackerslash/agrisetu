@@ -8,6 +8,7 @@ import { authApi } from "@repo/api-client";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { VendorOrderNotificationMonitor } from "../notifications/VendorOrderNotificationMonitor";
+import { getPortalHomePath } from "../../lib/portal";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -34,6 +35,11 @@ export function AppLayout({
 
   // If the API rejects the token (401/403), clear it and redirect
   useEffect(() => {
+    if (vendor?.role === "SUPERADMIN") {
+      router.replace(getPortalHomePath(vendor));
+      return;
+    }
+
     if (meError) {
       const err = meError as { response?: { status?: number } };
       if (err.response?.status === 401 || err.response?.status === 403) {
@@ -41,7 +47,7 @@ export function AppLayout({
         router.push("/login");
       }
     }
-  }, [meError, router]);
+  }, [meError, router, vendor]);
 
   return (
     <div className="flex" style={{ minHeight: "100vh" }}>

@@ -44,7 +44,18 @@ type VendorRecord = {
   latitude: number | null;
   longitude: number | null;
   serviceRadiusKm: number;
+  role: "VENDOR" | "SUPERADMIN";
+  status:
+    | "ONBOARDING"
+    | "PENDING_REVIEW"
+    | "ACTIVE"
+    | "REJECTED"
+    | "SUSPENDED";
   isVerified: boolean;
+  submittedAt: Date | null;
+  reviewedAt: Date | null;
+  reviewedById: string | null;
+  reviewNote: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -80,7 +91,13 @@ function resetStores() {
         latitude: null,
         longitude: null,
         serviceRadiusKm: 25,
+        role: "VENDOR",
+        status: "ONBOARDING",
         isVerified: false,
+        submittedAt: null,
+        reviewedAt: null,
+        reviewedById: null,
+        reviewNote: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       },
