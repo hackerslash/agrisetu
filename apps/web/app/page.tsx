@@ -1,5 +1,11 @@
-import { redirect } from "next/navigation";
+import { VendorSessionGate } from "../components/auth/VendorSessionGate";
 
 export default function Home() {
-  redirect("/login");
+  return (
+    <VendorSessionGate
+      authenticatedRedirect="/dashboard"
+      unauthenticatedRedirect="/login"
+      loadingMessage="Opening vendor portal..."
+    />
+  );
 }

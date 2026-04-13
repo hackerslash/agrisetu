@@ -1,6 +1,7 @@
 export * from "./types";
 export {
   getApiClient,
+  getApiBaseUrl,
   configureApiClient,
   resetApiClient,
   setAuthToken,

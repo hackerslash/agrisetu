@@ -61,6 +61,10 @@ function resolveBaseUrl(): string {
   return baseURL;
 }
 
+export function getApiBaseUrl(): string {
+  return resolveBaseUrl();
+}
+
 export function resetApiClient() {
   apiClient = null;
 }

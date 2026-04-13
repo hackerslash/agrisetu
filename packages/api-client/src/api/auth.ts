@@ -1,4 +1,9 @@
-import { clearAuthToken, getApiClient } from "../client";
+import {
+  clearAuthToken,
+  getApiBaseUrl,
+  getApiClient,
+  getAuthToken,
+} from "../client";
 import type { Vendor } from "../types";
 
 export async function registerStep1(data: {
@@ -44,6 +49,33 @@ export async function login(data: {
 export async function getMe(): Promise<Vendor> {
   const res = await getApiClient().get("/auth/vendor/me");
   return res.data.data as Vendor;
+}
+
+export async function hasVendorSession(): Promise<boolean> {
+  const headers = new Headers({ "Content-Type": "application/json" });
+  const token = getAuthToken();
+
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const res = await fetch(`${getApiBaseUrl()}/auth/vendor/me`, {
+    method: "GET",
+    headers,
+    credentials: "include",
+    cache: "no-store",
+  });
+
+  if (res.status === 401 || res.status === 403) {
+    clearAuthToken();
+    return false;
+  }
+
+  if (!res.ok) {
+    throw new Error(`Unable to verify vendor session (${res.status})`);
+  }
+
+  return true;
 }
 
 export async function logout(): Promise<void> {
