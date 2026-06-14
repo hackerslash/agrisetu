@@ -1,7 +1,5 @@
-import {
-  BedrockAgentRuntimeClient,
-  RetrieveCommand,
-} from "@aws-sdk/client-bedrock-agent-runtime";
+import { readFileSync } from "fs";
+import { join } from "path";
 import {
   BedrockRuntimeClient,
   ConverseCommand,
@@ -61,9 +59,15 @@ const bedrockClient = new BedrockRuntimeClient({
   region: process.env.AWS_REGION || "us-east-1",
 });
 
-const bedrockAgentClient = new BedrockAgentRuntimeClient({
-  region: process.env.AWS_REGION || "us-east-1",
-});
+let staticKbContext = "";
+try {
+  staticKbContext = readFileSync(
+    join(__dirname, "../../knowledgebase", "farmer_voice_assistant_guide.md"),
+    "utf-8",
+  );
+} catch {
+  console.warn("[ai-order-parser] Could not load local knowledge base guide.");
+}
 
 function normalizeTextForMatch(input: string) {
   return input
@@ -327,55 +331,6 @@ function buildFallbackAssistantResult(
   };
 }
 
-async function fetchKnowledgeBaseContext(transcript: string): Promise<string> {
-  const kbId = process.env.KNOWLEDGE_BASE_ID?.trim();
-  if (!kbId) {
-    console.log(
-      "[ai-order-parser] KNOWLEDGE_BASE_ID not set, skipping KB retrieval.",
-    );
-    return "";
-  }
-
-  try {
-    console.log(
-      `[ai-order-parser] Fetching KB context for transcript: "${transcript}" using KB ID: ${kbId}`,
-    );
-    const response = await bedrockAgentClient.send(
-      new RetrieveCommand({
-        knowledgeBaseId: kbId,
-        retrievalQuery: { text: transcript },
-        retrievalConfiguration: {
-          vectorSearchConfiguration: {
-            numberOfResults: 5,
-          },
-        },
-      }),
-    );
-
-    const chunks =
-      response.retrievalResults
-        ?.map((result) => result.content?.text)
-        .filter((chunk): chunk is string => Boolean(chunk)) ?? [];
-
-    console.log(
-      `[ai-order-parser] Retrieved ${chunks.length} chunks from Knowledge Base.`,
-    );
-    if (chunks.length > 0) {
-      console.log(
-        `[ai-order-parser] KB Chunk 1 Preview: ${chunks[0]?.substring(0, 150)}...`,
-      );
-    }
-
-    return chunks.join("\n\n");
-  } catch (error) {
-    logger.error(
-      "[ai-order-parser] Error fetching Knowledge Base context:",
-      error,
-    );
-    return "";
-  }
-}
-
 async function callModelForAssistantExtraction(params: {
   transcript: string;
   activeClusterProducts: string[];
@@ -388,7 +343,7 @@ async function callModelForAssistantExtraction(params: {
     "anthropic.claude-3-sonnet-20240229-v1:0";
 
   const normalizedTranscript = normalizeTextForMatch(params.transcript);
-  const kbContext = await fetchKnowledgeBaseContext(normalizedTranscript);
+  const kbContext = staticKbContext;
 
   const promptPayload = {
     transcript: params.transcript,
