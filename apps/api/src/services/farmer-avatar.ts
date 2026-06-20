@@ -87,7 +87,7 @@ function toPublicUrl(params: { region: string; bucket: string; objectKey: string
     .split("/")
     .map((segment) => encodeURIComponent(segment))
     .join("/");
-  return `https://s3.${params.region}.amazonaws.com/${params.bucket}/${encodedObjectKey}`;
+  return `https://${params.bucket}.s3.${params.region}.amazonaws.com/${encodedObjectKey}`;
 }
 
 function trimQueryAndHash(value: string) {
@@ -231,13 +231,11 @@ async function buildSignedGetUrl(params: {
 
   const unsigned = new HttpRequest({
     protocol: "https:",
-    hostname: `s3.${params.region}.amazonaws.com`,
+    hostname: `${params.bucket}.s3.${params.region}.amazonaws.com`,
     method: "GET",
-    path: `/${encodeURIComponent(params.bucket)}${encodeObjectKeyPath(
-      params.objectKey,
-    )}`,
+    path: encodeObjectKeyPath(params.objectKey),
     headers: {
-      host: `s3.${params.region}.amazonaws.com`,
+      host: `${params.bucket}.s3.${params.region}.amazonaws.com`,
       "x-amz-content-sha256": "UNSIGNED-PAYLOAD",
     },
   });

@@ -5,6 +5,7 @@ import multer from "multer";
 import { z } from "zod";
 
 import { normalizeIndianPhoneNumber } from "../lib/phone.js";
+import { IS_PRODUCTION } from "../lib/env.js";
 import { signToken } from "../lib/jwt.js";
 import { prisma } from "../lib/prisma.js";
 import { error, success } from "../lib/response.js";
@@ -46,6 +47,10 @@ const OTP_EXPIRY_SECONDS = 10 * 60;
 const OTP_RESEND_SECONDS = 60;
 const OTP_MAX_VERIFY_ATTEMPTS = 5;
 const OTP_ERROR_MESSAGE = "Invalid or expired OTP";
+// In non-production (e.g. `npm run dev`), skip the SMS provider and accept a
+// fixed OTP so the login flow can be exercised without sending real messages.
+const OTP_DEV_BYPASS = !IS_PRODUCTION;
+const OTP_DEV_BYPASS_CODE = "123456";
 const vendorDocUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 12 * 1024 * 1024 },
@@ -140,8 +145,14 @@ router.post("/farmer/request-otp", otpRequestLimiter, async (req, res) => {
       return;
     }
 
-    const otp = createOtpCode();
-    const sent = await sendFarmerOtpSms(normalizedPhone, otp);
+    const otp = OTP_DEV_BYPASS ? OTP_DEV_BYPASS_CODE : createOtpCode();
+    const sent = OTP_DEV_BYPASS
+      ? {
+          providerName: "dev-bypass",
+          requestId: `dev-${now.getTime()}`,
+          acceptedAt: now,
+        }
+      : await sendFarmerOtpSms(normalizedPhone, otp);
     const otpHash = await bcrypt.hash(otp, 10);
     const expiresAt = new Date(now.getTime() + OTP_EXPIRY_SECONDS * 1000);
     const resendAvailableAt = new Date(now.getTime() + OTP_RESEND_SECONDS * 1000);
