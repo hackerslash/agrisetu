@@ -64,9 +64,9 @@ export default function ServiceAreaLeafletMap({
           width: 22px;
           height: 22px;
           border-radius: 999px;
-          background: #2C5F2D;
-          border: 4px solid #FFFFFF;
-          box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+          background: #2f7d4f;
+          border: 4px solid #ffffff;
+          box-shadow: 0 3px 10px rgba(40,70,40,0.35);
         "></div>`,
         iconSize: [22, 22],
         iconAnchor: [11, 11],
@@ -91,9 +91,9 @@ export default function ServiceAreaLeafletMap({
         center={[latitude, longitude]}
         radius={Math.max(1, radiusKm) * 1000}
         pathOptions={{
-          color: "#2C5F2D",
+          color: "#2f7d4f",
           weight: 2,
-          fillColor: "#2C5F2D",
+          fillColor: "#2f7d4f",
           fillOpacity: 0.12,
         }}
       />

@@ -1,4 +1,4 @@
-import { Leaf } from "lucide-react";
+import { Sprout } from "lucide-react";
 
 type BrandTheme = "light" | "dark";
 
@@ -12,9 +12,9 @@ interface BrandLogoProps {
 
 export function BrandLogo({
   theme = "light",
-  titleSize = 16,
-  badgeSize = 36,
-  iconSize = 18,
+  titleSize = 17,
+  badgeSize = 38,
+  iconSize = 20,
   subtitle = "Vendor Portal",
 }: BrandLogoProps) {
   const isDark = theme === "dark";
@@ -22,35 +22,46 @@ export function BrandLogo({
   return (
     <div className="flex items-center gap-2.5">
       <div
-        className="flex items-center justify-center rounded-full"
+        className="flex items-center justify-center"
         style={{
           width: badgeSize,
           height: badgeSize,
-          backgroundColor: isDark ? "rgba(255,255,255,0.15)" : "#2C5F2D",
+          borderRadius: badgeSize * 0.32,
+          backgroundColor: isDark
+            ? "color-mix(in oklch, white 16%, transparent)"
+            : "var(--color-leaf-600)",
+          boxShadow: isDark ? "none" : "0 4px 12px oklch(0.47 0.115 150 / 0.28)",
         }}
       >
-        <Leaf size={iconSize} color={isDark ? "#FCF6F5" : "#FCF6F5"} />
+        <Sprout size={iconSize} color={isDark ? "#fff" : "var(--color-gold-300)"} />
       </div>
       <div>
         <p
-          className="font-bold leading-none"
+          className="font-display leading-none"
           style={{
-            fontFamily: "Plus Jakarta Sans",
             fontSize: titleSize,
-            color: isDark ? "#FCF6F5" : "#1A1A1A",
+            fontWeight: 800,
+            letterSpacing: "-0.02em",
+            color: isDark ? "#fff" : "var(--color-ink)",
           }}
         >
           AgriSetu
         </p>
-        <p
-          className="leading-none mt-0.5"
-          style={{
-            fontSize: 12,
-            color: isDark ? "rgba(252,246,245,0.7)" : "#A0A0A0",
-          }}
-        >
-          {subtitle}
-        </p>
+        {subtitle && (
+          <p
+            className="leading-none"
+            style={{
+              fontSize: 11.5,
+              marginTop: 4,
+              fontWeight: 500,
+              color: isDark
+                ? "color-mix(in oklch, white 72%, transparent)"
+                : "var(--color-ink-faint)",
+            }}
+          >
+            {subtitle}
+          </p>
+        )}
       </div>
     </div>
   );

@@ -7,8 +7,10 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Link from "next/link";
 import { authApi } from "@repo/api-client";
-import { Building2, CreditCard, ArrowRight } from "lucide-react";
+import { Building2, CreditCard, ArrowRight, AlertCircle } from "lucide-react";
 import { getPortalHomePath } from "../../lib/portal";
+import { Button } from "../../components/ui/Button";
+import { BrandLogo } from "../../components/ui/BrandLogo";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -39,209 +41,149 @@ export function LoginForm() {
   }
 
   return (
-    <>
+    <div className="flex flex-col gap-7 rise">
+      {/* Logo — only shown on small screens where the brand panel is hidden */}
+      <div className="lg:hidden">
+        <BrandLogo theme="light" titleSize={18} badgeSize={40} iconSize={20} />
+      </div>
+
       {/* Header */}
       <div className="flex flex-col gap-1.5">
-        <h2
-          className="font-bold"
-          style={{
-            fontFamily: "Plus Jakarta Sans",
-            fontSize: 26,
-            color: "#2C5F2D",
-          }}
+        <p className="eyebrow">Vendor Portal</p>
+        <h1
+          className="font-display text-ink"
+          style={{ fontSize: 28, fontWeight: 800 }}
         >
-          Vendor Portal
-        </h2>
-        <p style={{ fontSize: 14, color: "#A0A0A0", lineHeight: 1.4 }}>
-          Sign in to manage vendor operations or review onboarding requests.
+          Welcome back
+        </h1>
+        <p className="text-ink-soft" style={{ fontSize: 14.5, lineHeight: 1.5 }}>
+          Sign in to manage your gigs, orders and payouts.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
         {/* Email */}
-        <div className="flex flex-col gap-1.5">
-          <label style={{ fontSize: 13, fontWeight: 600, color: "#2C5F2D" }}>
-            Business Email
+        <div>
+          <label htmlFor="login-email" className="field-label">
+            Business email
           </label>
           <input
+            id="login-email"
             {...register("email")}
             type="email"
             placeholder="vendor@agrimart.in"
-            className="w-full outline-none"
-            style={{
-              backgroundColor: "#F7F5F0",
-              borderRadius: 12,
-              height: 52,
-              padding: "0 16px",
-              fontSize: 15,
-              color: "#2C5F2D",
-              border: errors.email
-                ? "1.5px solid #EF4444"
-                : "1px solid #EDE8DF",
-            }}
+            className="field"
+            aria-invalid={errors.email ? "true" : "false"}
+            style={errors.email ? { borderColor: "var(--color-danger)" } : undefined}
           />
           {errors.email && (
-            <p style={{ fontSize: 12, color: "#EF4444" }}>
+            <p className="text-danger" style={{ fontSize: 12.5, marginTop: 6 }}>
               {errors.email.message}
             </p>
           )}
         </div>
 
         {/* Password */}
-        <div className="flex flex-col gap-1.5">
-          <label style={{ fontSize: 13, fontWeight: 600, color: "#2C5F2D" }}>
-            Password
-          </label>
+        <div>
+          <div className="flex items-center justify-between" style={{ marginBottom: 2 }}>
+            <label htmlFor="login-password" className="field-label" style={{ marginBottom: 0 }}>
+              Password
+            </label>
+            <a
+              href="#"
+              className="text-leaf-700"
+              style={{ fontSize: 12.5, fontWeight: 600 }}
+            >
+              Forgot password?
+            </a>
+          </div>
           <input
+            id="login-password"
             {...register("password")}
             type="password"
             placeholder="••••••••"
-            className="w-full outline-none"
+            className="field"
             style={{
-              backgroundColor: "#F7F5F0",
-              borderRadius: 12,
-              height: 52,
-              padding: "0 16px",
-              fontSize: 14,
-              color: "#1A1A1A",
-              border: errors.password
-                ? "1.5px solid #EF4444"
-                : "1px solid #EDE8DF",
+              marginTop: 6,
+              ...(errors.password ? { borderColor: "var(--color-danger)" } : {}),
             }}
+            aria-invalid={errors.password ? "true" : "false"}
           />
           {errors.password && (
-            <p style={{ fontSize: 12, color: "#EF4444" }}>
+            <p className="text-danger" style={{ fontSize: 12.5, marginTop: 6 }}>
               {errors.password.message}
             </p>
           )}
         </div>
 
-        {/* Remember me + Forgot password */}
-        <div className="flex items-center justify-between">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <div
-              className="flex items-center justify-center rounded"
-              style={{
-                width: 18,
-                height: 18,
-                border: "1px solid #D8D8D8",
-                backgroundColor: "#FFFFFF",
-                flexShrink: 0,
-              }}
-            />
-            <span style={{ fontSize: 13, color: "#A0A0A0" }}>Remember me</span>
-          </label>
-          <a
-            href="#"
-            style={{ fontSize: 14, color: "#2C5F2D", fontWeight: 600 }}
-          >
-            Forgot password?
-          </a>
-        </div>
+        {/* Remember me */}
+        <label className="flex cursor-pointer items-center gap-2.5">
+          <input
+            type="checkbox"
+            className="rounded"
+            style={{ width: 16, height: 16, accentColor: "var(--color-leaf-600)" }}
+          />
+          <span className="text-ink-soft" style={{ fontSize: 13.5 }}>
+            Keep me signed in
+          </span>
+        </label>
 
         {apiError && (
           <div
-            className="rounded-xl p-3"
+            className="flex items-start gap-2.5 rounded-xl"
             style={{
-              backgroundColor: "#FEF2F2",
-              color: "#B03A2E",
+              backgroundColor: "var(--color-danger-bg)",
+              color: "var(--color-danger)",
               fontSize: 13,
+              padding: "12px 14px",
             }}
           >
-            {apiError}
+            <AlertCircle size={16} className="mt-0.5 shrink-0" />
+            <span>{apiError}</span>
           </div>
         )}
 
         {/* Submit */}
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="flex items-center justify-center gap-2 font-bold rounded-xl transition-opacity"
-          style={{
-            backgroundColor: "#2C5F2D",
-            color: "white",
-            height: 52,
-            fontSize: 15,
-            fontFamily: "Plus Jakarta Sans",
-            opacity: isSubmitting ? 0.7 : 1,
-            cursor: isSubmitting ? "not-allowed" : "pointer",
-          }}
-        >
+        <Button type="submit" size="lg" block disabled={isSubmitting}>
           {isSubmitting ? (
             "Signing in…"
           ) : (
             <>
-              Sign In
-              <ArrowRight size={20} />
+              Sign in
+              <ArrowRight size={18} />
             </>
           )}
-        </button>
+        </Button>
 
         {/* Divider */}
         <div className="flex items-center gap-3">
-          <div
-            className="flex-1"
-            style={{ height: 1, backgroundColor: "#EDE8DF" }}
-          />
-          <span style={{ fontSize: 13, color: "#A0A0A0" }}>
+          <div className="h-px flex-1" style={{ backgroundColor: "var(--color-line)" }} />
+          <span className="text-ink-faint" style={{ fontSize: 12.5 }}>
             or continue with
           </span>
-          <div
-            className="flex-1"
-            style={{ height: 1, backgroundColor: "#EDE8DF" }}
-          />
+          <div className="h-px flex-1" style={{ backgroundColor: "var(--color-line)" }} />
         </div>
 
         {/* GSTIN Login + DigiLocker */}
         <div className="flex gap-3">
-          <button
-            type="button"
-            className="flex-1 flex items-center justify-center gap-2 rounded-xl font-semibold"
-            style={{
-              backgroundColor: "#F7F5F0",
-              color: "#2C5F2D",
-              height: 48,
-              fontSize: 14,
-              border: "none",
-              cursor: "pointer",
-            }}
-          >
-            <Building2 size={18} color="#2C5F2D" />
+          <Button type="button" variant="ghost" block>
+            <Building2 size={17} />
             GSTIN Login
-          </button>
-          <button
-            type="button"
-            className="flex-1 flex items-center justify-center gap-2 rounded-xl font-semibold"
-            style={{
-              backgroundColor: "#F7F5F0",
-              color: "#2C5F2D",
-              height: 48,
-              fontSize: 14,
-              border: "none",
-              cursor: "pointer",
-            }}
-          >
-            <CreditCard size={18} color="#2C5F2D" />
+          </Button>
+          <Button type="button" variant="ghost" block>
+            <CreditCard size={17} />
             DigiLocker
-          </button>
+          </Button>
         </div>
 
         {/* Register link */}
-        <div className="flex items-center justify-center gap-1.5">
-          <span style={{ fontSize: 14, color: "#A0A0A0" }}>New Vendor?</span>
-          <Link
-            href="/register"
-            className="font-bold"
-            style={{
-              fontSize: 14,
-              color: "#2C5F2D",
-              fontFamily: "Plus Jakarta Sans",
-            }}
-          >
-            Register as Vendor
+        <p className="text-center text-ink-soft" style={{ fontSize: 14 }}>
+          New vendor?{" "}
+          <Link href="/register" className="font-semibold text-leaf-700">
+            Register as a vendor
           </Link>
-        </div>
+        </p>
       </form>
-    </>
+    </div>
   );
 }

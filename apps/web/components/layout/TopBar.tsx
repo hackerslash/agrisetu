@@ -51,7 +51,6 @@ export function TopBar({
     setShowNotifPanel(false);
   }
 
-  // Close panels on outside click
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
@@ -72,43 +71,38 @@ export function TopBar({
 
   return (
     <header
-      className="flex items-center justify-between"
+      className="flex items-center justify-between bg-paper"
       style={{
-        height: 72,
-        backgroundColor: "#ffffff",
-        borderBottom: "1px solid #f0ede8",
-        padding: "0 32px",
+        height: 76,
+        borderBottom: "1px solid var(--color-line)",
+        padding: "0 36px",
         position: "sticky",
         top: 0,
-        zIndex: 10,
+        zIndex: 20,
+        backdropFilter: "saturate(1.1)",
       }}
     >
       <div className="flex flex-col gap-0.5">
-        <h1
-          className="font-bold"
-          style={{
-            fontFamily: "Plus Jakarta Sans",
-            fontSize: 20,
-            color: "#2C5F2D",
-          }}
-        >
+        <h1 className="font-display text-ink" style={{ fontSize: 23, fontWeight: 800 }}>
           {title}
         </h1>
         {subtitle && (
-          <p style={{ fontSize: 13, color: "#A0A0A0" }}>{subtitle}</p>
+          <p className="text-ink-faint" style={{ fontSize: 13 }}>
+            {subtitle}
+          </p>
         )}
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
         {actions}
 
         {showDatePill && (
           <div
-            className="flex items-center gap-2 rounded-xl"
-            style={{ padding: "8px 14px", backgroundColor: "#F7F5F0" }}
+            className="flex items-center gap-2 rounded-xl bg-surface"
+            style={{ padding: "9px 14px", border: "1px solid var(--color-line)" }}
           >
-            <Calendar size={15} color="#A0A0A0" />
-            <span style={{ fontSize: 13, fontWeight: 500, color: "#2C5F2D" }}>
+            <Calendar size={15} className="text-ink-faint" />
+            <span className="text-ink-soft tnum" style={{ fontSize: 13, fontWeight: 600 }}>
               {dateLabel}
             </span>
           </div>
@@ -118,22 +112,28 @@ export function TopBar({
         <div ref={notifPanelRef} style={{ position: "relative" }}>
           <button
             onClick={handleBellClick}
-            className="flex items-center justify-center rounded-xl transition-colors hover:bg-[#F7F5F0]"
-            style={{ width: 38, height: 38, position: "relative" }}
+            aria-label="Notifications"
+            className="flex items-center justify-center rounded-xl bg-surface transition-colors hover:bg-sunk"
+            style={{
+              width: 42,
+              height: 42,
+              position: "relative",
+              border: "1px solid var(--color-line)",
+            }}
           >
-            <Bell size={18} color={showNotifPanel ? "#2C5F2D" : "#5A5A5A"} />
+            <Bell size={18} className={showNotifPanel ? "text-leaf-600" : "text-ink-soft"} />
             {unreadCount > 0 && (
               <span
-                className="absolute flex items-center justify-center rounded-full"
+                className="absolute flex items-center justify-center rounded-full bg-clay-500 text-white"
                 style={{
-                  top: 4,
-                  right: 4,
-                  width: 16,
+                  top: 5,
+                  right: 5,
+                  minWidth: 16,
                   height: 16,
-                  backgroundColor: "#EF4444",
-                  color: "white",
+                  padding: "0 4px",
                   fontSize: 9,
                   fontWeight: 700,
+                  border: "2px solid var(--color-paper)",
                 }}
               >
                 {unreadCount > 9 ? "9+" : unreadCount}
@@ -143,35 +143,28 @@ export function TopBar({
 
           {showNotifPanel && (
             <div
-              className="absolute right-0 bg-white rounded-2xl shadow-xl flex flex-col overflow-hidden"
+              className="absolute right-0 bg-surface flex flex-col overflow-hidden rise"
               style={{
-                top: 46,
-                width: 340,
-                maxHeight: 420,
-                border: "1px solid #F0EDE8",
+                top: 50,
+                width: 360,
+                maxHeight: 440,
+                borderRadius: 18,
+                border: "1px solid var(--color-line)",
+                boxShadow: "var(--shadow-pop)",
               }}
             >
               <div
                 className="flex items-center justify-between"
-                style={{
-                  padding: "14px 16px",
-                  borderBottom: "1px solid #F0EDE8",
-                }}
+                style={{ padding: "14px 16px", borderBottom: "1px solid var(--color-line)" }}
               >
-                <p style={{ fontSize: 14, fontWeight: 700, color: "#1A1A1A" }}>
+                <p className="font-display text-ink" style={{ fontSize: 15, fontWeight: 700 }}>
                   Notifications
                 </p>
                 {notifications.length > 0 && (
                   <button
                     onClick={markAllRead}
-                    style={{
-                      fontSize: 12,
-                      color: "#2C5F2D",
-                      fontWeight: 600,
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                    }}
+                    className="text-leaf-600"
+                    style={{ fontSize: 12, fontWeight: 600, cursor: "pointer" }}
                   >
                     Mark all read
                   </button>
@@ -180,23 +173,31 @@ export function TopBar({
               <div style={{ overflowY: "auto", flex: 1 }}>
                 {notifications.length === 0 ? (
                   <div
-                    className="flex flex-col items-center justify-center gap-2"
-                    style={{ padding: 32 }}
+                    className="flex flex-col items-center justify-center gap-2.5"
+                    style={{ padding: 36 }}
                   >
-                    <Bell size={28} color="#D1D5DB" />
-                    <p style={{ fontSize: 13, color: "#A0A0A0" }}>
-                      No notifications yet
+                    <div
+                      className="flex items-center justify-center rounded-2xl bg-sunk"
+                      style={{ width: 48, height: 48 }}
+                    >
+                      <Bell size={22} className="text-ink-faint" />
+                    </div>
+                    <p className="text-ink-soft" style={{ fontSize: 13, fontWeight: 600 }}>
+                      You&apos;re all caught up
+                    </p>
+                    <p className="text-ink-faint" style={{ fontSize: 12, textAlign: "center" }}>
+                      New order activity will show up here.
                     </p>
                   </div>
                 ) : (
                   notifications.map((n) => (
                     <div
                       key={n.id}
-                      className="flex items-start gap-3"
+                      className="flex items-start gap-3 transition-colors hover:bg-sunk"
                       style={{
-                        padding: "12px 16px",
-                        borderBottom: "1px solid #F7F5F0",
-                        backgroundColor: n.read ? "white" : "#F0FDF4",
+                        padding: "13px 16px",
+                        borderBottom: "1px solid var(--color-line)",
+                        backgroundColor: n.read ? "transparent" : "var(--color-leaf-50)",
                         cursor: n.orderId ? "pointer" : "default",
                       }}
                       onClick={() => {
@@ -215,37 +216,25 @@ export function TopBar({
                       }}
                     >
                       <div
-                        className="flex items-center justify-center rounded-xl shrink-0"
-                        style={{
-                          width: 32,
-                          height: 32,
-                          backgroundColor: "#D1FAE5",
-                        }}
+                        className="flex items-center justify-center rounded-xl shrink-0 bg-leaf-100"
+                        style={{ width: 34, height: 34 }}
                       >
-                        <ShoppingBag size={14} color="#065F46" />
+                        <ShoppingBag size={15} className="text-leaf-700" />
                       </div>
                       <div className="flex flex-col gap-0.5">
                         <p
-                          style={{
-                            fontSize: 12,
-                            fontWeight: 700,
-                            color: "#2C5F2D",
-                            lineHeight: 1.3,
-                          }}
+                          className="text-leaf-700"
+                          style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.3 }}
                         >
                           {n.title}
                         </p>
                         <p
-                          style={{
-                            fontSize: 13,
-                            fontWeight: n.read ? 400 : 500,
-                            color: "#1A1A1A",
-                            lineHeight: 1.4,
-                          }}
+                          className="text-ink"
+                          style={{ fontSize: 13, fontWeight: n.read ? 400 : 500, lineHeight: 1.4 }}
                         >
                           {n.message}
                         </p>
-                        <p style={{ fontSize: 11, color: "#A0A0A0" }}>
+                        <p className="text-ink-faint tnum" style={{ fontSize: 11 }}>
                           {n.createdAt.toLocaleTimeString("en-IN", {
                             hour: "2-digit",
                             minute: "2-digit",
@@ -264,33 +253,23 @@ export function TopBar({
         <div ref={userMenuRef} style={{ position: "relative" }}>
           <button
             onClick={handleUserMenuClick}
-            className="flex items-center gap-1.5 rounded-full transition-colors"
-            style={{
-              backgroundColor: "#2C5F2D",
-              color: "white",
-              height: 38,
-              paddingLeft: 4,
-              paddingRight: 8,
-              border: "none",
-              cursor: "pointer",
-            }}
+            className="flex items-center gap-1.5 rounded-full bg-leaf-600 text-white transition-colors hover:bg-leaf-700"
+            style={{ height: 42, paddingLeft: 5, paddingRight: 9, cursor: "pointer" }}
           >
             <span
-              className="flex items-center justify-center rounded-full"
+              className="flex items-center justify-center rounded-full font-display"
               style={{
-                width: 30,
-                height: 30,
-                backgroundColor: "rgba(255,255,255,0.2)",
+                width: 32,
+                height: 32,
+                backgroundColor: "color-mix(in oklch, white 22%, transparent)",
                 fontSize: 13,
                 fontWeight: 700,
-                fontFamily: "Plus Jakarta Sans",
               }}
             >
               {vendorName?.[0]?.toUpperCase() ?? "V"}
             </span>
             <ChevronDown
-              size={13}
-              color="white"
+              size={14}
               style={{
                 transform: showUserMenu ? "rotate(180deg)" : "rotate(0deg)",
                 transition: "transform 0.2s",
@@ -300,25 +279,20 @@ export function TopBar({
 
           {showUserMenu && (
             <div
-              className="absolute right-0 bg-white rounded-xl shadow-xl flex flex-col overflow-hidden"
+              className="absolute right-0 bg-surface flex flex-col overflow-hidden rise"
               style={{
-                top: 46,
-                width: 200,
-                border: "1px solid #F0EDE8",
+                top: 50,
+                width: 216,
+                borderRadius: 16,
+                border: "1px solid var(--color-line)",
+                boxShadow: "var(--shadow-pop)",
               }}
             >
-              <div
-                style={{
-                  padding: "12px 16px",
-                  borderBottom: "1px solid #F0EDE8",
-                }}
-              >
-                <p
-                  style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}
-                >
+              <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--color-line)" }}>
+                <p className="text-ink" style={{ fontSize: 13, fontWeight: 700 }}>
                   {vendorName ?? "Vendor"}
                 </p>
-                <p style={{ fontSize: 11, color: "#A0A0A0", marginTop: 2 }}>
+                <p className="text-ink-faint" style={{ fontSize: 11, marginTop: 2 }}>
                   Vendor account
                 </p>
               </div>
@@ -327,37 +301,33 @@ export function TopBar({
                   setShowUserMenu(false);
                   router.push("/settings");
                 }}
-                className="flex items-center gap-2 hover:bg-[#F7F5F0] transition-colors"
+                className="flex items-center gap-2.5 text-ink transition-colors hover:bg-sunk"
                 style={{
-                  padding: "10px 16px",
+                  padding: "11px 16px",
                   fontSize: 13,
-                  color: "#1A1A1A",
-                  background: "none",
-                  border: "none",
+                  fontWeight: 500,
                   cursor: "pointer",
                   width: "100%",
                   textAlign: "left",
                 }}
               >
-                <User size={14} color="#5A5A5A" />
-                Profile & Settings
+                <User size={15} className="text-ink-faint" />
+                Profile &amp; Settings
               </button>
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-2 hover:bg-[#FEF2F2] transition-colors"
+                className="flex items-center gap-2.5 text-danger transition-colors hover:bg-danger-bg"
                 style={{
-                  padding: "10px 16px",
+                  padding: "11px 16px",
                   fontSize: 13,
-                  color: "#DC2626",
-                  background: "none",
-                  border: "none",
+                  fontWeight: 600,
                   cursor: "pointer",
                   width: "100%",
                   textAlign: "left",
-                  borderTop: "1px solid #F0EDE8",
+                  borderTop: "1px solid var(--color-line)",
                 }}
               >
-                <LogOut size={14} color="#DC2626" />
+                <LogOut size={15} />
                 Logout
               </button>
             </div>

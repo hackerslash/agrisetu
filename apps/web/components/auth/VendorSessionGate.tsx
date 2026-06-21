@@ -15,22 +15,26 @@ interface VendorSessionGateProps {
 function LoadingState({ message }: { message: string }) {
   return (
     <div
-      className="flex items-center justify-center"
-      style={{ minHeight: "100vh", backgroundColor: "#F7F5F0", padding: 24 }}
+      className="flex items-center justify-center bg-paper"
+      style={{ minHeight: "100vh", padding: 24 }}
     >
-      <div
-        className="rounded-2xl bg-white"
-        style={{
-          padding: "18px 22px",
-          border: "1px solid #F0EDE8",
-          color: "#2C5F2D",
-          fontSize: 14,
-          fontWeight: 600,
-          fontFamily: "Plus Jakarta Sans",
-        }}
-      >
-        {message}
+      <div className="flex flex-col items-center gap-4">
+        <span
+          aria-hidden
+          className="rounded-full"
+          style={{
+            width: 34,
+            height: 34,
+            border: "3px solid var(--color-leaf-100)",
+            borderTopColor: "var(--color-leaf-600)",
+            animation: "spin 0.8s linear infinite",
+          }}
+        />
+        <p className="text-ink-soft" style={{ fontSize: 14, fontWeight: 600 }}>
+          {message}
+        </p>
       </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

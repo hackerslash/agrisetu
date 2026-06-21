@@ -88,89 +88,50 @@ export function DesktopOnlyOverlay() {
       className="fixed inset-0 z-9999 flex items-center justify-center p-5"
       style={{
         background:
-          "linear-gradient(180deg, rgba(18, 36, 22, 0.94) 0%, rgba(24, 50, 30, 0.88) 100%)",
-        backdropFilter: "blur(12px)",
+          "linear-gradient(180deg, oklch(0.33 0.08 152 / 0.96) 0%, oklch(0.27 0.06 153 / 0.92) 100%)",
+        backdropFilter: "blur(10px)",
       }}
     >
       <div
-        className="w-full max-w-md rounded-[28px]"
-        style={{
-          backgroundColor: "#FCFAF5",
-          padding: 28,
-          boxShadow: "0 24px 80px rgba(0, 0, 0, 0.22)",
-        }}
+        className="w-full max-w-md panel"
+        style={{ padding: 30, boxShadow: "var(--shadow-pop)" }}
       >
-        <div className="flex items-center gap-3" style={{ marginBottom: 20 }}>
+        <div className="flex items-center justify-between gap-3" style={{ marginBottom: 22 }}>
           <div
-            className="flex items-center justify-center rounded-2xl"
-            style={{
-              width: 56,
-              height: 56,
-              backgroundColor: "rgba(44, 95, 45, 0.1)",
-              color: "#2C5F2D",
-            }}
+            className="flex items-center justify-center rounded-2xl bg-leaf-100 text-leaf-700"
+            style={{ width: 56, height: 56 }}
           >
             <LaptopMinimal size={28} />
           </div>
-          <div
-            className="flex items-center gap-2 rounded-full"
-            style={{
-              backgroundColor: "#EAF2E5",
-              color: "#2C5F2D",
-              padding: "8px 12px",
-              fontSize: 13,
-              fontWeight: 600,
-            }}
-          >
-            <Smartphone size={14} />
-            Mobile device detected
+          <div className="pill bg-gold-100 text-gold-700">
+            <Smartphone size={13} />
+            On a phone
           </div>
         </div>
 
         <div className="flex flex-col gap-3">
           <h1
             id="desktop-only-overlay-title"
-            className="font-extrabold"
-            style={{
-              fontFamily: "Plus Jakarta Sans",
-              fontSize: 28,
-              lineHeight: 1.15,
-              color: "#17311B",
-            }}
+            className="font-display text-ink"
+            style={{ fontSize: 27, lineHeight: 1.15, fontWeight: 800 }}
           >
-            Please open the vendor portal on a desktop
+            Best opened on a computer
           </h1>
           <p
             id="desktop-only-overlay-description"
-            style={{
-              fontSize: 15,
-              lineHeight: 1.65,
-              color: "#4F5D52",
-            }}
+            className="text-ink-soft"
+            style={{ fontSize: 15, lineHeight: 1.6 }}
           >
-            AgriSetu&apos;s vendor portal is currently optimized for desktop and
-            laptop browsers. To continue, reopen this same link on a desktop
-            device.
+            The AgriSetu vendor portal is built for desktop and laptop screens.
+            Open this same link on a computer to manage your gigs, orders, and
+            payments comfortably.
           </p>
         </div>
 
-        <div
-          className="rounded-3xl"
-          style={{
-            marginTop: 24,
-            padding: "18px 20px",
-            backgroundColor: "#F2EEE4",
-          }}
-        >
-          <p
-            style={{
-              fontSize: 13,
-              lineHeight: 1.6,
-              color: "#59685C",
-            }}
-          >
-            For the best experience, use a larger screen with a keyboard and
-            mouse or trackpad.
+        <div className="inset" style={{ marginTop: 24, padding: "16px 18px" }}>
+          <p className="text-ink-faint" style={{ fontSize: 13, lineHeight: 1.55 }}>
+            A larger screen with a keyboard and mouse gives you the full
+            experience — including charts, tables, and bidding tools.
           </p>
         </div>
       </div>

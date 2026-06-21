@@ -7,57 +7,74 @@ import type {
 
 type Status = OrderStatus | ClusterStatus | GigStatus | PaymentStatus | string;
 
-const STATUS_STYLES: Record<
-  string,
-  { bg: string; text: string; label: string }
-> = {
-  PENDING: { bg: "#FFF3CD", text: "#D97706", label: "Pending" },
-  CLUSTERED: { bg: "#E0F2FE", text: "#0369A1", label: "Clustered" },
-  PAYMENT_PENDING: { bg: "#FEF9C3", text: "#A16207", label: "Payment Pending" },
-  PAID: { bg: "#DBEAFE", text: "#1D4ED8", label: "Order Received" },
-  PROCESSING: { bg: "#FEF3C7", text: "#92400E", label: "Processing" },
-  OUT_FOR_DELIVERY: {
-    bg: "#F3E8FF",
-    text: "#7E22CE",
-    label: "Dispatched",
-  },
-  DISPATCHED: { bg: "#F3E8FF", text: "#7E22CE", label: "Dispatched" },
-  DELIVERED: { bg: "#D1FAE5", text: "#065F46", label: "Delivered" },
-  REJECTED: { bg: "#FEF2F2", text: "#B03A2E", label: "Rejected" },
-  FAILED: { bg: "#FEF2F2", text: "#B03A2E", label: "Failed" },
-  FORMING: { bg: "#FFF3CD", text: "#D97706", label: "Forming" },
-  VOTING: { bg: "#E0F2FE", text: "#0369A1", label: "Voting" },
-  PAYMENT: { bg: "#DBEAFE", text: "#1D4ED8", label: "Order Received" },
-  COMPLETED: { bg: "#D1FAE5", text: "#065F46", label: "Completed" },
-  DRAFT: { bg: "#F3F4F6", text: "#6B7280", label: "Draft" },
-  PUBLISHED: { bg: "#D1FAE5", text: "#065F46", label: "Published" },
-  CLOSED: { bg: "#FEF2F2", text: "#B03A2E", label: "Closed" },
-  SUCCESS: { bg: "#D1FAE5", text: "#065F46", label: "Success" },
-  REFUNDED: { bg: "#F3E8FF", text: "#7E22CE", label: "Refunded" },
-  refunded: { bg: "#F3E8FF", text: "#7E22CE", label: "Refunded" },
-  released: { bg: "#D1FAE5", text: "#065F46", label: "Released" },
-  escrow: { bg: "#FFF3CD", text: "#D97706", label: "In Escrow" },
+type Tone = "positive" | "progress" | "info" | "negative" | "neutral" | "earth";
+
+/* Tones group statuses by meaning — a calm, limited set of hues with a
+   leading dot, never a rainbow of solid pills. */
+const TONE_CLASS: Record<Tone, string> = {
+  positive: "bg-leaf-50 text-leaf-700",
+  progress: "bg-gold-100 text-gold-700",
+  info: "bg-info-bg text-info",
+  negative: "bg-danger-bg text-danger",
+  neutral: "bg-sunk text-ink-soft",
+  earth: "bg-clay-50 text-clay-700",
+};
+
+const DOT_CLASS: Record<Tone, string> = {
+  positive: "bg-leaf-500",
+  progress: "bg-gold-500",
+  info: "bg-info",
+  negative: "bg-danger",
+  neutral: "bg-ink-faint",
+  earth: "bg-clay-500",
+};
+
+const STATUS_MAP: Record<string, { tone: Tone; label: string }> = {
+  PENDING: { tone: "progress", label: "Pending" },
+  CLUSTERED: { tone: "info", label: "Clustered" },
+  PAYMENT_PENDING: { tone: "progress", label: "Payment Pending" },
+  PAID: { tone: "info", label: "Order Received" },
+  PROCESSING: { tone: "progress", label: "Processing" },
+  OUT_FOR_DELIVERY: { tone: "earth", label: "Out for Delivery" },
+  DISPATCHED: { tone: "earth", label: "Dispatched" },
+  DELIVERED: { tone: "positive", label: "Delivered" },
+  REJECTED: { tone: "negative", label: "Rejected" },
+  FAILED: { tone: "negative", label: "Failed" },
+  FORMING: { tone: "progress", label: "Forming" },
+  VOTING: { tone: "info", label: "Voting" },
+  PAYMENT: { tone: "info", label: "Order Received" },
+  COMPLETED: { tone: "positive", label: "Completed" },
+  DRAFT: { tone: "neutral", label: "Draft" },
+  PUBLISHED: { tone: "positive", label: "Published" },
+  CLOSED: { tone: "negative", label: "Closed" },
+  SUCCESS: { tone: "positive", label: "Success" },
+  REFUNDED: { tone: "earth", label: "Refunded" },
+  refunded: { tone: "earth", label: "Refunded" },
+  released: { tone: "positive", label: "Released" },
+  escrow: { tone: "progress", label: "In Escrow" },
+  // Vendor account statuses (admin)
+  PENDING_REVIEW: { tone: "progress", label: "Pending Review" },
+  ACTIVE: { tone: "positive", label: "Active" },
+  SUSPENDED: { tone: "earth", label: "Suspended" },
 };
 
 export function StatusBadge({ status }: { status: Status }) {
-  const style = STATUS_STYLES[status] ?? {
-    bg: "#F3F4F6",
-    text: "#6B7280",
-    label: status,
+  const entry = STATUS_MAP[status] ?? {
+    tone: "neutral" as Tone,
+    label: String(status).replaceAll("_", " "),
   };
 
   return (
     <span
-      className="inline-flex items-center rounded-full font-medium"
-      style={{
-        backgroundColor: style.bg,
-        color: style.text,
-        fontSize: 12,
-        padding: "3px 10px",
-        whiteSpace: "nowrap",
-      }}
+      className={`pill ${TONE_CLASS[entry.tone]}`}
+      style={{ whiteSpace: "nowrap" }}
     >
-      {style.label}
+      <span
+        aria-hidden
+        className={`rounded-full ${DOT_CLASS[entry.tone]}`}
+        style={{ width: 6, height: 6 }}
+      />
+      {entry.label}
     </span>
   );
 }

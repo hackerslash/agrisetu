@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { vendorApi } from "@repo/api-client";
 import type { Cluster } from "@repo/api-client";
+import { Button } from "../../../../components/ui/Button";
 import { formatCurrency } from "../../../../lib/utils";
 import { useNotifications } from "../../../../lib/NotificationContext";
 
@@ -221,8 +222,9 @@ export function RejectOrderContent({ id }: { id: string }) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center" style={{ height: 300 }}>
-        <p style={{ fontSize: 14, color: "#A0A0A0" }}>Loading order…</p>
+      <div className="flex flex-col gap-4" style={{ maxWidth: 640 }}>
+        <div className="skeleton" style={{ height: 40, maxWidth: 360 }} />
+        <div className="skeleton" style={{ height: 300 }} />
       </div>
     );
   }
@@ -230,24 +232,21 @@ export function RejectOrderContent({ id }: { id: string }) {
   if (!order) {
     return (
       <div
-        className="flex flex-col items-center justify-center gap-3"
+        className="flex flex-col items-center justify-center gap-4"
         style={{ height: 300 }}
       >
-        <p style={{ fontSize: 14, color: "#A0A0A0" }}>Order not found.</p>
-        <button
-          onClick={() => router.push("/orders")}
-          style={{
-            backgroundColor: "#2C5F2D",
-            color: "white",
-            fontSize: 13,
-            padding: "8px 20px",
-            borderRadius: 12,
-            border: "none",
-            cursor: "pointer",
-          }}
+        <div
+          className="flex items-center justify-center rounded-2xl bg-sunk text-ink-faint"
+          style={{ width: 56, height: 56 }}
         >
-          Back to Orders
-        </button>
+          <XCircle size={26} />
+        </div>
+        <p className="font-display text-ink" style={{ fontSize: 16, fontWeight: 700 }}>
+          Order not found
+        </p>
+        <Button onClick={() => router.push("/orders")} variant="primary">
+          Back to orders
+        </Button>
       </div>
     );
   }
@@ -276,13 +275,18 @@ export function RejectOrderContent({ id }: { id: string }) {
     return (
       <div className="flex flex-col gap-4">
         <div
-          className="bg-white rounded-2xl flex items-center gap-3"
-          style={{ padding: 20 }}
+          className="card flex items-center gap-3"
+          style={{ padding: 22 }}
         >
-          <XCircle size={18} color="#B03A2E" />
-          <p style={{ fontSize: 14, color: "#5A5A5A" }}>
-            Rejection is only available when order status is Payment or
-            Processing.
+          <span
+            className="flex items-center justify-center rounded-xl bg-danger-bg text-danger shrink-0"
+            style={{ width: 38, height: 38 }}
+          >
+            <XCircle size={18} />
+          </span>
+          <p className="text-ink-soft" style={{ fontSize: 14 }}>
+            Rejection is only available when the order status is Order Received
+            or Processing.
           </p>
         </div>
       </div>
@@ -291,134 +295,77 @@ export function RejectOrderContent({ id }: { id: string }) {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-center gap-3">
-        {step === 1 ? (
-          <>
-            <div
-              className="flex items-center rounded-full"
-              style={{ padding: "6px 14px", gap: 8, backgroundColor: "#2C5F2D" }}
-            >
-              <span
-                style={{
-                  color: "#FFFFFF",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  fontFamily: "Plus Jakarta Sans",
-                }}
-              >
-                1
-              </span>
-              <span style={{ color: "#FFFFFF", fontSize: 13, fontWeight: 600 }}>
-                Provide Reason & Proof
-              </span>
-            </div>
-            <div style={{ width: 40, height: 2, backgroundColor: "#D1D5DB" }} />
-            <div
-              className="flex items-center rounded-full"
-              style={{ padding: "6px 14px", gap: 8, backgroundColor: "#E5E7EB" }}
-            >
-              <span
-                style={{
-                  color: "#9CA3AF",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  fontFamily: "Plus Jakarta Sans",
-                }}
-              >
-                2
-              </span>
-              <span style={{ color: "#9CA3AF", fontSize: 13, fontWeight: 600 }}>
-                Confirm Rejection
-              </span>
-            </div>
-          </>
-        ) : (
-          <>
-            <div
-              className="flex items-center rounded-full"
-              style={{ padding: "6px 14px", gap: 8, backgroundColor: "#D1FAE5" }}
-            >
-              <span
-                style={{
-                  color: "#059669",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  fontFamily: "Plus Jakarta Sans",
-                }}
-              >
-                1
-              </span>
-              <span style={{ color: "#059669", fontSize: 13, fontWeight: 600 }}>
-                Reason & Proof
-              </span>
-              <CheckCircle2 size={15} color="#059669" />
-            </div>
-            <div style={{ width: 40, height: 2, backgroundColor: "#2C5F2D" }} />
-            <div
-              className="flex items-center rounded-full"
-              style={{ padding: "6px 14px", gap: 8, backgroundColor: "#2C5F2D" }}
-            >
-              <span
-                style={{
-                  color: "#FFFFFF",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  fontFamily: "Plus Jakarta Sans",
-                }}
-              >
-                2
-              </span>
-              <span style={{ color: "#FFFFFF", fontSize: 13, fontWeight: 600 }}>
-                Confirm Rejection
-              </span>
-            </div>
-          </>
-        )}
+      {/* Header */}
+      <div className="rise">
+        <h2 className="font-display text-ink" style={{ fontSize: 22, fontWeight: 800 }}>
+          Reject order
+        </h2>
+        <p className="text-ink-soft" style={{ fontSize: 14, marginTop: 3 }}>
+          Give farmers a clear reason and proof. This action is permanent and
+          triggers a full refund.
+        </p>
       </div>
 
-      <div className="flex gap-5">
+      {/* Step indicator */}
+      <div className="flex items-center gap-3 rise" style={{ animationDelay: "60ms" }}>
+        <div
+          className={
+            step === 1
+              ? "pill bg-leaf-600 text-white"
+              : "pill bg-leaf-50 text-leaf-700"
+          }
+          style={{ padding: "6px 14px", fontSize: 13 }}
+        >
+          {step === 2 && <CheckCircle2 size={15} />}
+          <span style={{ fontWeight: 700 }}>1</span>
+          <span style={{ fontWeight: 600 }}>Reason &amp; proof</span>
+        </div>
+        <div
+          className={step === 2 ? "bg-leaf-600" : "bg-line-strong"}
+          style={{ width: 40, height: 2, borderRadius: 999 }}
+        />
+        <div
+          className={
+            step === 2
+              ? "pill bg-leaf-600 text-white"
+              : "pill bg-sunk text-ink-faint"
+          }
+          style={{ padding: "6px 14px", fontSize: 13 }}
+        >
+          <span style={{ fontWeight: 700 }}>2</span>
+          <span style={{ fontWeight: 600 }}>Confirm rejection</span>
+        </div>
+      </div>
+
+      <div className="flex gap-5 rise" style={{ animationDelay: "120ms" }}>
         <div style={{ flex: 1 }}>
           {step === 1 ? (
-            <div className="bg-white rounded-2xl flex flex-col" style={{ padding: 28, gap: 20 }}>
+            <section className="card flex flex-col" style={{ padding: 28, gap: 22 }}>
               <p
-                style={{
-                  fontFamily: "Plus Jakarta Sans",
-                  fontSize: 16,
-                  fontWeight: 700,
-                  color: "#1A1A1A",
-                }}
+                className="font-display text-ink"
+                style={{ fontSize: 17, fontWeight: 700 }}
               >
-                Rejection Details
+                Rejection details
               </p>
 
-              <div className="flex flex-col gap-2">
-                <label style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}>
-                  Reason for Rejection *
-                </label>
-                <div
-                  className="flex items-center justify-between"
-                  style={{
-                    border: "1px solid #D1D5DB",
-                    borderRadius: 10,
-                    padding: "12px 16px",
-                    backgroundColor: "#FFFFFF",
-                  }}
-                >
+              <div className="flex flex-col">
+                <label className="field-label">Reason for rejection</label>
+                <div style={{ position: "relative" }}>
                   <select
                     value={selectedReason}
                     onChange={(e) => {
                       setSelectedReason(e.target.value);
                       setErrors((prev) => ({ ...prev, reason: undefined }));
                     }}
+                    className="field"
                     style={{
                       width: "100%",
-                      border: "none",
-                      outline: "none",
-                      backgroundColor: "transparent",
-                      color: selectedReason ? "#1A1A1A" : "#6B7280",
-                      fontSize: 13,
                       appearance: "none",
                       cursor: "pointer",
+                      paddingRight: "2.5rem",
+                      color: selectedReason
+                        ? "var(--color-ink)"
+                        : "var(--color-ink-faint)",
                     }}
                   >
                     <option value="">Select reason</option>
@@ -428,17 +375,27 @@ export function RejectOrderContent({ id }: { id: string }) {
                       </option>
                     ))}
                   </select>
-                  <ChevronDown size={16} color="#A0A0A0" />
+                  <ChevronDown
+                    size={16}
+                    className="text-ink-faint"
+                    style={{
+                      position: "absolute",
+                      right: 14,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      pointerEvents: "none",
+                    }}
+                  />
                 </div>
                 {errors.reason && (
-                  <p style={{ fontSize: 12, color: "#B91C1C" }}>{errors.reason}</p>
+                  <p className="text-danger" style={{ fontSize: 12.5, marginTop: 6 }}>
+                    {errors.reason}
+                  </p>
                 )}
               </div>
 
-              <div className="flex flex-col gap-2">
-                <label style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}>
-                  Description *
-                </label>
+              <div className="flex flex-col">
+                <label className="field-label">Description</label>
                 <textarea
                   value={description}
                   onChange={(e) => {
@@ -447,34 +404,31 @@ export function RejectOrderContent({ id }: { id: string }) {
                   }}
                   rows={5}
                   placeholder="Describe why this order is being rejected."
-                  className="w-full resize-none outline-none"
-                  style={{
-                    border: "1px solid #D1D5DB",
-                    borderRadius: 10,
-                    backgroundColor: "#FFFFFF",
-                    fontSize: 13,
-                    color: "#1A1A1A",
-                    padding: "14px 16px",
-                    minHeight: 110,
-                  }}
+                  className="field"
+                  style={{ minHeight: 110 }}
                 />
-                <div className="flex items-center justify-between">
+                <div
+                  className="flex items-center justify-between"
+                  style={{ marginTop: 6 }}
+                >
                   {errors.description ? (
-                    <p style={{ fontSize: 12, color: "#B91C1C" }}>{errors.description}</p>
+                    <p className="text-danger" style={{ fontSize: 12.5 }}>
+                      {errors.description}
+                    </p>
                   ) : (
                     <span />
                   )}
-                  <p style={{ fontSize: 11, color: "#A0A0A0" }}>
+                  <p className="text-ink-faint tnum" style={{ fontSize: 11.5 }}>
                     {description.length} / 500 characters
                   </p>
                 </div>
               </div>
 
               <div className="flex flex-col gap-2.5">
-                <label style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}>
-                  Upload Proof Photos *
+                <label className="field-label" style={{ marginBottom: 0 }}>
+                  Upload proof photos
                 </label>
-                <p style={{ fontSize: 12, color: "#6B7280" }}>
+                <p className="text-ink-faint" style={{ fontSize: 12.5 }}>
                   Attach at least 1 photo as evidence (e.g. empty stock, damage,
                   or other reason).
                 </p>
@@ -498,35 +452,38 @@ export function RejectOrderContent({ id }: { id: string }) {
                         width={100}
                         height={90}
                         unoptimized
-                        style={{ borderRadius: 10, objectFit: "cover", display: "block" }}
+                        style={{
+                          borderRadius: 12,
+                          objectFit: "cover",
+                          display: "block",
+                          border: "1px solid var(--color-line)",
+                        }}
                       />
                       <button
                         onClick={() => removeProofAt(index)}
+                        className="flex items-center justify-center"
                         style={{
                           position: "absolute",
                           top: 6,
                           right: 6,
                           border: "none",
-                          borderRadius: 14,
+                          borderRadius: 999,
                           width: 22,
                           height: 22,
                           cursor: "pointer",
-                          backgroundColor: "rgba(0,0,0,0.6)",
+                          backgroundColor: "oklch(0.27 0.014 60 / 0.7)",
                           color: "#FFFFFF",
-                          fontSize: 12,
-                          lineHeight: "22px",
-                          textAlign: "center",
                         }}
                         aria-label={`Remove proof ${index + 1}`}
                       >
-                        ✕
+                        <XCircle size={14} />
                       </button>
                       {proof.uploading && (
                         <div
                           className="absolute inset-0 flex items-center justify-center"
                           style={{
-                            borderRadius: 10,
-                            backgroundColor: "rgba(0,0,0,0.45)",
+                            borderRadius: 12,
+                            backgroundColor: "oklch(0.27 0.014 60 / 0.5)",
                           }}
                         >
                           <Loader2 size={18} color="#FFFFFF" className="animate-spin" />
@@ -537,7 +494,7 @@ export function RejectOrderContent({ id }: { id: string }) {
                           className="absolute left-1 right-1 bottom-1 rounded-md"
                           style={{
                             padding: "2px 4px",
-                            backgroundColor: "rgba(127, 29, 29, 0.85)",
+                            backgroundColor: "var(--color-danger)",
                             color: "#FFFFFF",
                             fontSize: 9,
                           }}
@@ -549,115 +506,110 @@ export function RejectOrderContent({ id }: { id: string }) {
                   ))}
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex flex-col items-center justify-center"
+                    className="flex flex-col items-center justify-center gap-1.5 text-leaf-700 transition-colors hover:bg-leaf-50"
                     style={{
                       width: 100,
                       height: 90,
-                      borderRadius: 10,
-                      border: "1px solid #D1D5DB",
-                      backgroundColor: "#FFFFFF",
+                      borderRadius: 12,
+                      border: "1px dashed var(--color-line-strong)",
+                      background: "var(--color-surface)",
                       cursor: "pointer",
-                      gap: 6,
                     }}
                   >
-                    <PlusCircle size={22} color="#2C5F2D" />
-                    <span style={{ fontSize: 11, color: "#2C5F2D", fontWeight: 600 }}>
-                      Add Photo
+                    <PlusCircle size={22} />
+                    <span style={{ fontSize: 11, fontWeight: 600 }}>
+                      Add photo
                     </span>
                   </button>
                 </div>
                 {errors.proofs && (
-                  <p style={{ fontSize: 12, color: "#B91C1C" }}>{errors.proofs}</p>
+                  <p className="text-danger" style={{ fontSize: 12.5 }}>
+                    {errors.proofs}
+                  </p>
                 )}
               </div>
 
               <div className="flex items-center gap-3">
-                <button
+                <Button
                   onClick={() => router.push(`/orders/${id}`)}
-                  style={{
-                    border: "none",
-                    borderRadius: 10,
-                    backgroundColor: "#F3F4F6",
-                    color: "#6B7280",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    padding: "12px 24px",
-                    cursor: "pointer",
-                  }}
+                  variant="ghost"
                 >
                   Cancel
-                </button>
-                <button
-                  onClick={goToConfirmStep}
-                  style={{
-                    border: "none",
-                    borderRadius: 10,
-                    backgroundColor: "#DC2626",
-                    color: "#FFFFFF",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    padding: "12px 24px",
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
-                  Continue to Confirmation
-                  <ArrowRight size={16} color="#FFFFFF" />
-                </button>
+                </Button>
+                <Button onClick={goToConfirmStep} variant="danger">
+                  Continue to confirmation
+                  <ArrowRight size={16} />
+                </Button>
               </div>
-            </div>
+            </section>
           ) : (
-            <div className="bg-white rounded-2xl flex flex-col" style={{ padding: 32, gap: 24 }}>
-              <div className="flex flex-col items-center gap-2">
+            <section className="card flex flex-col" style={{ padding: 32, gap: 24 }}>
+              <div className="flex flex-col items-center gap-2.5">
                 <div
-                  className="flex items-center justify-center rounded-full"
-                  style={{ width: 64, height: 64, backgroundColor: "#FEF2F2" }}
+                  className="flex items-center justify-center rounded-full bg-danger-bg text-danger"
+                  style={{ width: 64, height: 64 }}
                 >
-                  <CircleX size={32} color="#DC2626" />
+                  <CircleX size={32} />
                 </div>
                 <p
-                  style={{
-                    fontFamily: "Plus Jakarta Sans",
-                    fontSize: 18,
-                    fontWeight: 700,
-                    color: "#1A1A1A",
-                  }}
+                  className="font-display text-ink"
+                  style={{ fontSize: 19, fontWeight: 700, textAlign: "center" }}
                 >
-                  Are you sure you want to reject this order?
+                  Reject this order?
                 </p>
-                <p style={{ fontSize: 14, color: "#6B7280", textAlign: "center" }}>
+                <p
+                  className="text-ink-soft"
+                  style={{ fontSize: 14, textAlign: "center", maxWidth: 420 }}
+                >
                   This action cannot be undone. Please review the summary below
                   before confirming.
                 </p>
               </div>
 
-              <div className="flex flex-col" style={{ borderRadius: 12, backgroundColor: "#F9FAFB" }}>
+              <div className="inset flex flex-col">
                 {[
-                  ["Order ID", orderCode, "#1A1A1A", 600],
-                  ["Product", productName, "#1A1A1A", 600],
-                  ["Reason", selectedReasonLabel, "#1A1A1A", 600],
-                  ["Refund Amount", `${amountDisplay} (Full)`, "#DC2626", 700],
-                ].map(([label, value, color, weight], idx) => (
+                  ["Order ID", orderCode, false],
+                  ["Product", productName, false],
+                  ["Reason", selectedReasonLabel, false],
+                  ["Refund amount", `${amountDisplay} (Full)`, true],
+                ].map(([label, value, isDanger], idx) => (
                   <div key={label as string}>
-                    <div className="flex items-center justify-between" style={{ padding: "14px 20px" }}>
-                      <span style={{ color: "#6B7280", fontSize: 13 }}>{label}</span>
-                      <span style={{ color: color as string, fontSize: 13, fontWeight: weight as number }}>
+                    <div
+                      className="flex items-center justify-between"
+                      style={{ padding: "14px 18px" }}
+                    >
+                      <span className="text-ink-soft" style={{ fontSize: 13 }}>
+                        {label}
+                      </span>
+                      <span
+                        className={isDanger ? "text-danger tnum" : "text-ink"}
+                        style={{
+                          fontSize: 13,
+                          fontWeight: isDanger ? 700 : 600,
+                        }}
+                      >
                         {value}
                       </span>
                     </div>
-                    {idx < 3 && <div style={{ width: "100%", height: 1, background: "#E5E7EB" }} />}
+                    {idx < 3 && (
+                      <div
+                        style={{
+                          width: "100%",
+                          height: 1,
+                          background: "var(--color-line)",
+                        }}
+                      />
+                    )}
                   </div>
                 ))}
               </div>
 
               <div
-                className="flex items-start gap-3"
-                style={{ borderRadius: 10, backgroundColor: "#FEF2F2", padding: "14px 16px" }}
+                className="flex items-start gap-3 rounded-xl"
+                style={{ background: "var(--color-danger-bg)", padding: "14px 16px" }}
               >
-                <TriangleAlert size={18} color="#DC2626" />
-                <p style={{ fontSize: 13, color: "#991B1B", fontWeight: 500 }}>
+                <TriangleAlert size={18} className="text-danger shrink-0" style={{ marginTop: 1 }} />
+                <p className="text-danger" style={{ fontSize: 13, lineHeight: 1.5 }}>
                   Confirming will immediately affect your rating and trigger a
                   full refund of {amountDisplay} to the buyer. This cannot be
                   reversed.
@@ -665,10 +617,9 @@ export function RejectOrderContent({ id }: { id: string }) {
               </div>
 
               <label
-                className="flex items-start gap-3"
+                className="flex items-start gap-3 rounded-xl"
                 style={{
-                  borderRadius: 10,
-                  backgroundColor: "#FFFBEB",
+                  background: "var(--color-warning-bg)",
                   padding: "14px 16px",
                   cursor: "pointer",
                 }}
@@ -684,22 +635,21 @@ export function RejectOrderContent({ id }: { id: string }) {
                     width: 18,
                     height: 18,
                     marginTop: 1,
-                    accentColor: "#F59E0B",
+                    accentColor: "var(--color-warning)",
                     flexShrink: 0,
                     cursor: "pointer",
                   }}
                 />
-                <p style={{ fontSize: 13, color: "#92400E", fontWeight: 500 }}>
+                <p className="text-warning" style={{ fontSize: 13, fontWeight: 500 }}>
                   I understand that rejecting this order will negatively impact my
                   vendor rating.
                 </p>
               </label>
 
               <label
-                className="flex items-start gap-3"
+                className="flex items-start gap-3 rounded-xl"
                 style={{
-                  borderRadius: 10,
-                  backgroundColor: "#FFFBEB",
+                  background: "var(--color-warning-bg)",
                   padding: "14px 16px",
                   cursor: "pointer",
                 }}
@@ -715,19 +665,19 @@ export function RejectOrderContent({ id }: { id: string }) {
                     width: 18,
                     height: 18,
                     marginTop: 1,
-                    accentColor: "#F59E0B",
+                    accentColor: "var(--color-warning)",
                     flexShrink: 0,
                     cursor: "pointer",
                   }}
                 />
-                <p style={{ fontSize: 13, color: "#92400E", fontWeight: 500 }}>
+                <p className="text-warning" style={{ fontSize: 13, fontWeight: 500 }}>
                   I confirm that all accumulated payments for this order will be
                   fully refunded to the buyer.
                 </p>
               </label>
 
               {(confirmError || rejectMutation.isError) && (
-                <p style={{ fontSize: 13, color: "#B91C1C" }}>
+                <p className="text-danger" style={{ fontSize: 13 }}>
                   {confirmError ??
                     (rejectMutation.error instanceof Error
                       ? rejectMutation.error.message
@@ -736,67 +686,30 @@ export function RejectOrderContent({ id }: { id: string }) {
               )}
 
               <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setStep(1)}
-                  style={{
-                    border: "none",
-                    borderRadius: 10,
-                    backgroundColor: "#F3F4F6",
-                    color: "#6B7280",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    padding: "12px 24px",
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
-                  <ArrowLeft size={16} color="#6B7280" />
-                  Go Back
-                </button>
-                <button
+                <Button onClick={() => setStep(1)} variant="ghost">
+                  <ArrowLeft size={16} />
+                  Go back
+                </Button>
+                <Button
                   onClick={() => router.push(`/orders/${id}`)}
-                  style={{
-                    border: "none",
-                    borderRadius: 10,
-                    backgroundColor: "#F3F4F6",
-                    color: "#6B7280",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    padding: "12px 24px",
-                    cursor: "pointer",
-                  }}
+                  variant="ghost"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={handleRejectConfirm}
                   disabled={!canSubmit}
-                  style={{
-                    border: "none",
-                    borderRadius: 10,
-                    backgroundColor: canSubmit ? "#DC2626" : "#FCA5A5",
-                    color: "#FFFFFF",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    padding: "12px 28px",
-                    cursor: canSubmit ? "pointer" : "not-allowed",
-                    opacity: rejectMutation.isPending ? 0.8 : 1,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
+                  variant="danger"
                 >
                   {rejectMutation.isPending ? (
-                    <Loader2 size={16} color="#FFFFFF" className="animate-spin" />
+                    <Loader2 size={16} className="animate-spin" />
                   ) : (
-                    <TriangleAlert size={16} color="#FFFFFF" />
+                    <TriangleAlert size={16} />
                   )}
-                  {rejectMutation.isPending ? "Rejecting..." : "Yes, Reject This Order"}
-                </button>
+                  {rejectMutation.isPending ? "Rejecting…" : "Yes, reject this order"}
+                </Button>
               </div>
-            </div>
+            </section>
           )}
         </div>
 
@@ -805,159 +718,92 @@ export function RejectOrderContent({ id }: { id: string }) {
             <>
               <div
                 className="rounded-2xl flex flex-col"
-                style={{ backgroundColor: "#FEF2F2", padding: 20, gap: 16 }}
+                style={{
+                  background: "var(--color-danger-bg)",
+                  border: "1px solid var(--color-danger)",
+                  padding: 20,
+                  gap: 16,
+                }}
               >
                 <div className="flex items-center gap-2.5">
-                  <TriangleAlert size={22} color="#DC2626" />
+                  <TriangleAlert size={20} className="text-danger" />
                   <p
-                    style={{
-                      color: "#DC2626",
-                      fontSize: 15,
-                      fontWeight: 700,
-                      fontFamily: "Plus Jakarta Sans",
-                    }}
+                    className="font-display text-danger"
+                    style={{ fontSize: 15, fontWeight: 700 }}
                   >
-                    Warning
+                    Before you reject
                   </p>
                 </div>
-                <div style={{ width: "100%", height: 1, background: "#FECACA" }} />
+                <div style={{ width: "100%", height: 1, background: "var(--color-danger)", opacity: 0.25 }} />
                 <div className="flex flex-col gap-1.5">
-                  <p style={{ color: "#991B1B", fontSize: 13, fontWeight: 700 }}>
-                    Rating Impact
+                  <p className="text-danger" style={{ fontSize: 13, fontWeight: 700 }}>
+                    Rating impact
                   </p>
-                  <p style={{ color: "#B91C1C", fontSize: 12, lineHeight: 1.5 }}>
+                  <p className="text-danger" style={{ fontSize: 12.5, lineHeight: 1.5, opacity: 0.9 }}>
                     Rejecting an order will negatively affect your vendor rating
                     score. Repeated rejections may lead to account review.
                   </p>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <p style={{ color: "#991B1B", fontSize: 13, fontWeight: 700 }}>
-                    Full Refund Issued
+                  <p className="text-danger" style={{ fontSize: 13, fontWeight: 700 }}>
+                    Full refund issued
                   </p>
-                  <p style={{ color: "#B91C1C", fontSize: 12, lineHeight: 1.5 }}>
+                  <p className="text-danger" style={{ fontSize: 12.5, lineHeight: 1.5, opacity: 0.9 }}>
                     All payments received for this order, including any advance
                     amounts, will be fully refunded to the buyer. This cannot be
                     undone.
                   </p>
                 </div>
-                <div style={{ width: "100%", height: 1, background: "#FECACA" }} />
+                <div style={{ width: "100%", height: 1, background: "var(--color-danger)", opacity: 0.25 }} />
                 <div className="flex items-center gap-2">
-                  <Info size={14} color="#DC2626" />
-                  <p style={{ color: "#DC2626", fontSize: 11, fontWeight: 600 }}>
+                  <Info size={14} className="text-danger" />
+                  <p className="text-danger" style={{ fontSize: 11.5, fontWeight: 600 }}>
                     This action is permanent and irreversible.
                   </p>
                 </div>
               </div>
 
-              <div className="bg-white rounded-2xl flex flex-col" style={{ padding: 20, gap: 14 }}>
-                <p
-                  style={{
-                    fontFamily: "Plus Jakarta Sans",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    color: "#1A1A1A",
-                  }}
-                >
-                  Order Summary
-                </p>
-                <div style={{ width: "100%", height: 1, background: "#F3F4F6" }} />
-                {[
+              <OrderSummaryCard
+                rows={[
                   ["Order ID", orderCode],
                   ["Product", productName],
                   ["Qty", quantityLabel],
                   ["Cluster", clusterCode],
-                ].map(([label, value]) => (
-                  <div key={label as string} className="flex items-center justify-between">
-                    <span style={{ color: "#A0A0A0", fontSize: 12 }}>{label}</span>
-                    <span style={{ color: "#1A1A1A", fontSize: 12, fontWeight: 600 }}>
-                      {value}
+                ]}
+                amountDisplay={amountDisplay}
+                footer={
+                  <div
+                    className="flex items-center gap-1.5 rounded-lg"
+                    style={{ padding: "8px 12px", background: "var(--color-danger-bg)" }}
+                  >
+                    <RotateCcw size={13} className="text-danger" />
+                    <span className="text-danger" style={{ fontSize: 11.5, fontWeight: 600 }}>
+                      {amountDisplay} will be refunded on rejection
                     </span>
                   </div>
-                ))}
-                <div style={{ width: "100%", height: 1, background: "#F3F4F6" }} />
-                <div className="flex items-center justify-between">
-                  <span style={{ color: "#1A1A1A", fontSize: 13, fontWeight: 600 }}>
-                    Order Value
-                  </span>
-                  <span
-                    style={{
-                      color: "#DC2626",
-                      fontSize: 14,
-                      fontWeight: 700,
-                      fontFamily: "Plus Jakarta Sans",
-                    }}
-                  >
-                    {amountDisplay}
-                  </span>
-                </div>
-                <div
-                  className="flex items-center gap-1.5 rounded-lg"
-                  style={{ padding: "8px 12px", backgroundColor: "#FEF2F2" }}
-                >
-                  <RotateCcw size={13} color="#DC2626" />
-                  <span style={{ fontSize: 11, fontWeight: 600, color: "#DC2626" }}>
-                    {amountDisplay} will be refunded on rejection
-                  </span>
-                </div>
-              </div>
+                }
+              />
             </>
           ) : (
             <>
-              <div className="bg-white rounded-2xl flex flex-col" style={{ padding: 20, gap: 14 }}>
-                <p
-                  style={{
-                    fontFamily: "Plus Jakarta Sans",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    color: "#1A1A1A",
-                  }}
-                >
-                  Order Summary
-                </p>
-                <div style={{ width: "100%", height: 1, background: "#F3F4F6" }} />
-                {[
+              <OrderSummaryCard
+                rows={[
                   ["Order ID", orderCode],
                   ["Product", productName],
                   ["Qty", quantityLabel],
                   ["Cluster", clusterCode],
-                ].map(([label, value]) => (
-                  <div key={label as string} className="flex items-center justify-between">
-                    <span style={{ color: "#A0A0A0", fontSize: 12 }}>{label}</span>
-                    <span style={{ color: "#1A1A1A", fontSize: 12, fontWeight: 600 }}>
-                      {value}
-                    </span>
-                  </div>
-                ))}
-                <div style={{ width: "100%", height: 1, background: "#F3F4F6" }} />
-                <div className="flex items-center justify-between">
-                  <span style={{ color: "#1A1A1A", fontSize: 13, fontWeight: 600 }}>
-                    Order Value
-                  </span>
-                  <span
-                    style={{
-                      color: "#DC2626",
-                      fontSize: 14,
-                      fontWeight: 700,
-                      fontFamily: "Plus Jakarta Sans",
-                    }}
-                  >
-                    {amountDisplay}
-                  </span>
-                </div>
-              </div>
+                ]}
+                amountDisplay={amountDisplay}
+              />
 
-              <div className="bg-white rounded-2xl flex flex-col" style={{ padding: 20, gap: 12 }}>
+              <section className="card flex flex-col" style={{ padding: 20, gap: 12 }}>
                 <p
-                  style={{
-                    fontFamily: "Plus Jakarta Sans",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    color: "#1A1A1A",
-                  }}
+                  className="font-display text-ink"
+                  style={{ fontSize: 15, fontWeight: 700 }}
                 >
-                  Submitted Proof
+                  Submitted proof
                 </p>
-                <div style={{ width: "100%", height: 1, background: "#F3F4F6" }} />
+                <div style={{ width: "100%", height: 1, background: "var(--color-line)" }} />
                 <div className="flex items-center gap-2.5 flex-wrap">
                   {proofImages.map((proof, index) => (
                     <Image
@@ -967,19 +813,65 @@ export function RejectOrderContent({ id }: { id: string }) {
                       width={80}
                       height={70}
                       unoptimized
-                      style={{ borderRadius: 8, objectFit: "cover" }}
+                      style={{
+                        borderRadius: 10,
+                        objectFit: "cover",
+                        border: "1px solid var(--color-line)",
+                      }}
                     />
                   ))}
                 </div>
-                <p style={{ color: "#6B7280", fontSize: 12 }}>
+                <p className="text-ink-faint" style={{ fontSize: 12.5 }}>
                   {proofImages.length} photo{proofImages.length === 1 ? "" : "s"} attached as
                   evidence
                 </p>
-              </div>
+              </section>
             </>
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+function OrderSummaryCard({
+  rows,
+  amountDisplay,
+  footer,
+}: {
+  rows: Array<[string, string]>;
+  amountDisplay: string;
+  footer?: React.ReactNode;
+}) {
+  return (
+    <section className="card flex flex-col" style={{ padding: 20, gap: 14 }}>
+      <p className="font-display text-ink" style={{ fontSize: 15, fontWeight: 700 }}>
+        Order summary
+      </p>
+      <div style={{ width: "100%", height: 1, background: "var(--color-line)" }} />
+      {rows.map(([label, value]) => (
+        <div key={label} className="flex items-center justify-between">
+          <span className="text-ink-faint" style={{ fontSize: 12.5 }}>
+            {label}
+          </span>
+          <span className="text-ink" style={{ fontSize: 12.5, fontWeight: 600 }}>
+            {value}
+          </span>
+        </div>
+      ))}
+      <div style={{ width: "100%", height: 1, background: "var(--color-line)" }} />
+      <div className="flex items-center justify-between">
+        <span className="text-ink" style={{ fontSize: 13.5, fontWeight: 600 }}>
+          Order value
+        </span>
+        <span
+          className="font-display text-danger tnum"
+          style={{ fontSize: 15, fontWeight: 700 }}
+        >
+          {amountDisplay}
+        </span>
+      </div>
+      {footer}
+    </section>
   );
 }

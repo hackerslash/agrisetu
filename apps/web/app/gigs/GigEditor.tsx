@@ -6,8 +6,10 @@ import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { Info } from "lucide-react";
 import { vendorApi } from "@repo/api-client";
 import type { Gig } from "@repo/api-client";
+import { Button } from "../../components/ui/Button";
 
 const gigSchema = z.object({
   product: z.string().min(1, "Product name is required"),
@@ -41,26 +43,25 @@ function FormInput({
   [key: string]: unknown;
 }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <label style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}>
-        {label} {required && <span style={{ color: "#EF4444" }}>*</span>}
+    <div>
+      <label className="field-label">
+        {label}{" "}
+        {required && <span className="text-danger">*</span>}
       </label>
       <input
         type={type}
         placeholder={placeholder}
-        className="w-full outline-none"
-        style={{
-          backgroundColor: "#EDE8DF",
-          borderRadius: 14,
-          height: 52,
-          padding: "0 16px",
-          fontSize: 14,
-          color: "#1A1A1A",
-          border: error ? "1.5px solid #EF4444" : "1.5px solid transparent",
-        }}
+        className="field"
+        style={
+          error ? { borderColor: "var(--color-danger)" } : undefined
+        }
         {...(props as React.InputHTMLAttributes<HTMLInputElement>)}
       />
-      {error && <p style={{ fontSize: 12, color: "#EF4444" }}>{error}</p>}
+      {error && (
+        <p className="text-danger" style={{ fontSize: 12, marginTop: 6 }}>
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -129,31 +130,31 @@ export function GigEditor({ initialData }: GigEditorProps) {
   const UNITS = ["kg", "quintal", "ton", "litre", "packet", "bag", "bundle"];
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
-      <div className="flex gap-6">
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6">
+      <div className="flex gap-6 items-start">
         {/* Left: form */}
-        <div
-          className="flex-1 bg-white rounded-2xl flex flex-col gap-5"
-          style={{ padding: 24 }}
-        >
-          <h3
-            style={{
-              fontFamily: "Plus Jakarta Sans",
-              fontSize: 16,
-              fontWeight: 700,
-              color: "#1A1A1A",
-            }}
-          >
-            Gig Details
-          </h3>
+        <div className="panel flex-1 flex flex-col gap-6" style={{ padding: 24 }}>
+          <div>
+            <p className="eyebrow">Listing</p>
+            <h3
+              className="font-display text-ink"
+              style={{ fontSize: 18, fontWeight: 700, marginTop: 4 }}
+            >
+              Gig details
+            </h3>
+            <p className="text-ink-soft" style={{ fontSize: 13, marginTop: 2 }}>
+              Tell farmers what you supply and at what price.
+            </p>
+          </div>
 
           {apiError && (
             <div
-              className="rounded-xl p-3"
+              className="rounded-xl"
               style={{
-                backgroundColor: "#FEF2F2",
-                color: "#B03A2E",
+                backgroundColor: "var(--color-danger-bg)",
+                color: "var(--color-danger)",
                 fontSize: 13,
+                padding: 12,
               }}
             >
               {apiError}
@@ -180,26 +181,18 @@ export function GigEditor({ initialData }: GigEditorProps) {
           </div>
 
           <div className="flex gap-4">
-            <div className="flex-1 flex flex-col gap-1.5">
-              <label
-                style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}
-              >
-                Unit <span style={{ color: "#EF4444" }}>*</span>
+            <div className="flex-1">
+              <label className="field-label">
+                Unit <span className="text-danger">*</span>
               </label>
               <select
                 {...register("unit")}
-                className="w-full outline-none"
-                style={{
-                  backgroundColor: "#EDE8DF",
-                  borderRadius: 14,
-                  height: 52,
-                  padding: "0 16px",
-                  fontSize: 14,
-                  color: "#1A1A1A",
-                  border: errors.unit
-                    ? "1.5px solid #EF4444"
-                    : "1.5px solid transparent",
-                }}
+                className="field"
+                style={
+                  errors.unit
+                    ? { borderColor: "var(--color-danger)" }
+                    : undefined
+                }
               >
                 <option value="">Select unit</option>
                 {UNITS.map((u) => (
@@ -209,14 +202,17 @@ export function GigEditor({ initialData }: GigEditorProps) {
                 ))}
               </select>
               {errors.unit && (
-                <p style={{ fontSize: 12, color: "#EF4444" }}>
+                <p
+                  className="text-danger"
+                  style={{ fontSize: 12, marginTop: 6 }}
+                >
                   {errors.unit.message}
                 </p>
               )}
             </div>
             <div className="flex-1">
               <FormInput
-                label="Min Quantity"
+                label="Min order quantity"
                 type="number"
                 placeholder="100"
                 required
@@ -229,7 +225,7 @@ export function GigEditor({ initialData }: GigEditorProps) {
           <div className="flex gap-4">
             <div className="flex-1">
               <FormInput
-                label="Price per Unit (₹)"
+                label="Price per unit (₹)"
                 type="number"
                 placeholder="250"
                 required
@@ -239,7 +235,7 @@ export function GigEditor({ initialData }: GigEditorProps) {
             </div>
             <div className="flex-1">
               <FormInput
-                label="Available Quantity"
+                label="Available quantity"
                 type="number"
                 placeholder="5000"
                 required
@@ -249,157 +245,120 @@ export function GigEditor({ initialData }: GigEditorProps) {
             </div>
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}>
-              Description (optional)
-            </label>
+          <div>
+            <label className="field-label">Description (optional)</label>
             <textarea
               {...register("description")}
               placeholder="Describe your product — quality, certifications, delivery terms…"
-              className="w-full outline-none resize-none"
+              className="field"
               rows={4}
-              style={{
-                backgroundColor: "#EDE8DF",
-                borderRadius: 14,
-                padding: "14px 16px",
-                fontSize: 14,
-                color: "#1A1A1A",
-                border: "1.5px solid transparent",
-              }}
             />
           </div>
         </div>
 
         {/* Right: publish settings + actions */}
-        <div className="flex flex-col gap-4" style={{ width: 280 }}>
+        <div className="flex flex-col gap-4" style={{ width: 300 }}>
           {/* Publish Settings card */}
-          <div
-            className="bg-white rounded-2xl flex flex-col gap-4"
-            style={{ padding: 20 }}
-          >
-            <p
-              style={{
-                fontFamily: "Plus Jakarta Sans",
-                fontSize: 14,
-                fontWeight: 700,
-                color: "#1A1A1A",
-              }}
-            >
-              Publish Settings
-            </p>
+          <div className="card flex flex-col gap-4" style={{ padding: 20 }}>
+            <div>
+              <p className="eyebrow">Visibility</p>
+              <p
+                className="font-display text-ink"
+                style={{ fontSize: 15, fontWeight: 700, marginTop: 4 }}
+              >
+                Publish settings
+              </p>
+            </div>
 
             {/* Status dropdown */}
-            <div className="flex flex-col gap-1.5">
-              <label
-                style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}
+            <div>
+              <label className="field-label">Status</label>
+              <select
+                value={publishStatus}
+                onChange={(e) =>
+                  setPublishStatus(e.target.value as "DRAFT" | "PUBLISHED")
+                }
+                className="field"
+                style={{ cursor: "pointer" }}
               >
-                Status
-              </label>
-              <div className="relative">
-                <select
-                  value={publishStatus}
-                  onChange={(e) =>
-                    setPublishStatus(e.target.value as "DRAFT" | "PUBLISHED")
-                  }
-                  className="w-full outline-none appearance-none"
-                  style={{
-                    backgroundColor: "#F7F5F0",
-                    borderRadius: 10,
-                    height: 40,
-                    padding: "0 36px 0 14px",
-                    fontSize: 14,
-                    color: "#1A1A1A",
-                    border: "1.5px solid transparent",
-                    cursor: "pointer",
-                  }}
-                >
-                  <option value="PUBLISHED">Published</option>
-                  <option value="DRAFT">Draft</option>
-                </select>
-                <span
-                  className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
-                  style={{ fontSize: 10, color: "#A0A0A0" }}
-                >
-                  ▼
-                </span>
-              </div>
+                <option value="PUBLISHED">Published</option>
+                <option value="DRAFT">Draft</option>
+              </select>
             </div>
 
             {/* Auto-sync toggle */}
-            <div className="flex items-center gap-2.5">
+            <label className="flex items-center gap-2.5 cursor-pointer">
               <button
                 type="button"
                 onClick={() => setAutoSync(!autoSync)}
+                role="switch"
+                aria-checked={autoSync}
                 className="relative rounded-full transition-colors shrink-0"
                 style={{
                   width: 44,
                   height: 24,
-                  backgroundColor: autoSync ? "#2C5F2D" : "#EDE8DF",
+                  backgroundColor: autoSync
+                    ? "var(--color-leaf-600)"
+                    : "var(--color-line-strong)",
                   border: "none",
                   cursor: "pointer",
                   padding: 0,
                 }}
               >
                 <span
-                  className="absolute top-1 rounded-full bg-white shadow transition-all"
+                  className="absolute top-1 rounded-full shadow transition-all"
                   style={{
                     width: 16,
                     height: 16,
                     left: autoSync ? 24 : 4,
+                    backgroundColor: "var(--color-surface)",
                   }}
                 />
               </button>
-              <span style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}>
+              <span
+                className="text-ink"
+                style={{ fontSize: 13, fontWeight: 500 }}
+              >
                 Auto-sync mandi price
               </span>
-            </div>
+            </label>
 
             {/* Info box */}
             <div
-              className="flex gap-2 rounded-xl"
-              style={{ backgroundColor: "#E8F5E9", padding: 12 }}
+              className="flex gap-2.5 rounded-xl"
+              style={{
+                backgroundColor: "var(--color-leaf-50)",
+                padding: 12,
+              }}
             >
-              <span style={{ fontSize: 12, color: "#2C5F2D", flexShrink: 0 }}>
-                ⓘ
-              </span>
-              <p style={{ fontSize: 12, color: "#2C5F2D", lineHeight: 1.5 }}>
-                Publish makes this gig visible to farmers&apos; mobile apps in
+              <Info
+                size={15}
+                className="text-leaf-700 shrink-0"
+                style={{ marginTop: 1 }}
+              />
+              <p
+                className="text-leaf-800"
+                style={{ fontSize: 12, lineHeight: 1.5 }}
+              >
+                Publishing makes this gig visible to farmers&apos; mobile apps in
                 your selected regions.
               </p>
             </div>
           </div>
 
           {/* Action buttons */}
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="flex items-center justify-center rounded-xl font-bold"
-            style={{
-              backgroundColor: "#2C5F2D",
-              color: "white",
-              height: 48,
-              fontSize: 15,
-              fontFamily: "Plus Jakarta Sans",
-              opacity: isSubmitting ? 0.7 : 1,
-            }}
-          >
-            {isSubmitting ? "Saving…" : "Save Status"}
-          </button>
+          <Button type="submit" variant="primary" size="lg" block disabled={isSubmitting}>
+            {isSubmitting ? "Saving…" : isEditing ? "Save changes" : "Create gig"}
+          </Button>
 
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            block
             onClick={() => router.push("/gigs")}
-            className="flex items-center justify-center rounded-xl font-semibold"
-            style={{
-              backgroundColor: "#FEF2F2",
-              color: "#DC2626",
-              height: 44,
-              fontSize: 14,
-              fontFamily: "Plus Jakarta Sans",
-            }}
           >
             Cancel
-          </button>
+          </Button>
         </div>
       </div>
     </form>

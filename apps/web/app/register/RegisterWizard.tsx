@@ -6,8 +6,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { authApi } from "@repo/api-client";
-import { LocateFixed, Upload } from "lucide-react";
+import { LocateFixed, Upload, CheckCircle2, ArrowRight, ArrowLeft } from "lucide-react";
 import { INDIAN_STATES_AND_UTS } from "../../lib/indiaStates";
+import { Button } from "../../components/ui/Button";
 
 // ─── Step 1 Schema ────────────────────────────────────────────────────────────
 
@@ -63,64 +64,84 @@ type Step3Data = {
   qualityFile?: FileList;
 };
 
-// ─── Progress Bar ─────────────────────────────────────────────────────────────
+// ─── Stepper ──────────────────────────────────────────────────────────────────
 
-function ProgressBar({ step }: { step: number }) {
+const STEP_LABELS = ["Business", "GSTIN", "Documents"];
+
+function Stepper({ step }: { step: number }) {
   return (
-    <div
-      className="relative rounded-full overflow-hidden"
-      style={{ height: 4, backgroundColor: "#EDE8DF" }}
-    >
-      <div
-        className="absolute left-0 top-0 h-full rounded-full transition-all"
-        style={{
-          width: `${(step / 3) * 100}%`,
-          backgroundColor: "#2C5F2D",
-        }}
-      />
+    <div className="flex items-center gap-2">
+      {STEP_LABELS.map((label, i) => {
+        const n = i + 1;
+        const done = n < step;
+        const active = n === step;
+        return (
+          <div key={label} className="flex items-center gap-2 flex-1">
+            <span
+              className={
+                done || active
+                  ? "flex items-center justify-center rounded-full bg-leaf-600 text-white tnum"
+                  : "flex items-center justify-center rounded-full bg-sunk text-ink-faint tnum"
+              }
+              style={{ width: 26, height: 26, fontSize: 12.5, fontWeight: 700, flexShrink: 0 }}
+            >
+              {done ? <CheckCircle2 size={15} /> : n}
+            </span>
+            <span
+              className={active ? "text-ink font-semibold" : "text-ink-faint"}
+              style={{ fontSize: 12.5 }}
+            >
+              {label}
+            </span>
+            {i < STEP_LABELS.length - 1 && (
+              <span
+                className="flex-1 rounded-full"
+                style={{
+                  height: 2,
+                  minWidth: 12,
+                  backgroundColor: done ? "var(--color-leaf-400)" : "var(--color-line)",
+                }}
+              />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-// ─── Input Component ──────────────────────────────────────────────────────────
+// ─── Inputs ───────────────────────────────────────────────────────────────────
 
 function FormInput({
   label,
   error,
   type = "text",
   placeholder,
-  style,
   ...props
 }: {
   label: string;
   error?: string;
   type?: string;
   placeholder?: string;
-  style?: React.CSSProperties;
   [key: string]: unknown;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}>
+      <label className="field-label" style={{ marginBottom: 0 }}>
         {label}
       </label>
       <input
         type={type}
         placeholder={placeholder}
-        className="w-full outline-none"
-        style={{
-          backgroundColor: "#EDE8DF",
-          borderRadius: 14,
-          height: 52,
-          padding: "0 16px",
-          fontSize: 14,
-          color: "#1A1A1A",
-          border: error ? "1.5px solid #EF4444" : "1.5px solid transparent",
-          ...(style ?? {}),
-        }}
+        className="field"
+        style={error ? { borderColor: "var(--color-danger)" } : undefined}
         {...(props as React.InputHTMLAttributes<HTMLInputElement>)}
       />
-      {error && <p style={{ fontSize: 12, color: "#EF4444" }}>{error}</p>}
+      {error && (
+        <p className="text-danger" style={{ fontSize: 12 }}>
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -141,48 +162,38 @@ function FormFileInput({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}>
+      <label className="field-label" style={{ marginBottom: 0 }}>
         {label}
       </label>
       <div
-        className="flex items-center gap-3 rounded-[14px]"
+        className="flex items-center gap-3 bg-surface"
         style={{
-          backgroundColor: "#EDE8DF",
-          border: error ? "1.5px solid #EF4444" : "1.5px solid transparent",
-          minHeight: 60,
+          borderRadius: 12,
+          border: error ? "1px solid var(--color-danger)" : "1px solid var(--color-line-strong)",
+          minHeight: 56,
           padding: "10px 12px",
         }}
       >
-        <input
-          id={inputId}
-          type="file"
-          className="sr-only"
-          name={name}
-          {...inputProps}
-        />
+        <input id={inputId} type="file" className="sr-only" name={name} {...inputProps} />
         <label
           htmlFor={inputId}
-          className="flex shrink-0 items-center gap-2 rounded-lg font-semibold cursor-pointer"
-          style={{
-            height: 38,
-            padding: "0 12px",
-            backgroundColor: "#FFFFFF",
-            border: "1px solid #D5CEC2",
-            color: "#1A1A1A",
-            fontSize: 13,
-          }}
+          className="btn btn-ghost btn-sm shrink-0 cursor-pointer"
         >
           <Upload size={14} />
-          Choose File
+          Choose file
         </label>
         <span
-          className="truncate"
-          style={{ fontSize: 13, color: selectedFileName ? "#1A1A1A" : "#7C7C7C" }}
+          className={selectedFileName ? "text-ink truncate" : "text-ink-faint truncate"}
+          style={{ fontSize: 13 }}
         >
           {selectedFileName ?? "No file chosen"}
         </span>
       </div>
-      {error && <p style={{ fontSize: 12, color: "#EF4444" }}>{error}</p>}
+      {error && (
+        <p className="text-danger" style={{ fontSize: 12 }}>
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -196,7 +207,6 @@ export function RegisterWizard() {
   const [locating, setLocating] = useState(false);
   const [submittedMessage, setSubmittedMessage] = useState("");
 
-  // Step 1 form
   const form1 = useForm<Step1FormInput, unknown, Step1Data>({
     resolver: zodResolver(step1Schema),
   });
@@ -225,14 +235,12 @@ export function RegisterWizard() {
     setApiError("");
     setLocating(true);
     try {
-      const position = await new Promise<GeolocationPosition>(
-        (resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,
-            timeout: 10000,
-          });
-        },
-      );
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+        });
+      });
 
       const latitude = Number(position.coords.latitude.toFixed(6));
       const longitude = Number(position.coords.longitude.toFixed(6));
@@ -265,9 +273,7 @@ export function RegisterWizard() {
         );
       }
     } catch {
-      setApiError(
-        "Unable to fetch your location. Please allow location permission.",
-      );
+      setApiError("Unable to fetch your location. Please allow location permission.");
     } finally {
       setLocating(false);
     }
@@ -304,10 +310,7 @@ export function RegisterWizard() {
       await authApi.uploadRegistrationDocument("GST", data.gstFile![0]!);
 
       if (data.qualityFile && data.qualityFile.length > 0) {
-        await authApi.uploadRegistrationDocument(
-          "QUALITY_CERT",
-          data.qualityFile[0]!,
-        );
+        await authApi.uploadRegistrationDocument("QUALITY_CERT", data.qualityFile[0]!);
       }
 
       const result = await authApi.registerStep3({ documents: [] });
@@ -319,87 +322,66 @@ export function RegisterWizard() {
   }
 
   const HEADERS = [
-    { title: "Business Details", sub: "Tell us about your business" },
-    { title: "GSTIN Verification", sub: "Verify your tax registration" },
-    { title: "Upload Documents", sub: "Certifications & identity proof" },
+    { title: "Business details", sub: "Tell us about your business" },
+    { title: "GSTIN verification", sub: "Verify your tax registration" },
+    { title: "Upload documents", sub: "Certifications & identity proof" },
   ];
   const header = HEADERS[step - 1]!;
 
+  const selectStyle: React.CSSProperties = {};
+
   if (submittedMessage) {
     return (
-      <div
-        className="flex flex-col gap-6 rounded-2xl bg-white"
-        style={{ padding: 40 }}
-      >
-        <div className="flex flex-col gap-3">
-          <h2
-            className="font-bold"
-            style={{
-              fontFamily: "Plus Jakarta Sans",
-              fontSize: 24,
-              color: "#1A1A1A",
-            }}
-          >
+      <div className="panel flex flex-col gap-6" style={{ padding: 40 }}>
+        <div
+          className="flex items-center justify-center rounded-2xl bg-leaf-100 text-leaf-700"
+          style={{ width: 56, height: 56 }}
+        >
+          <CheckCircle2 size={28} />
+        </div>
+        <div className="flex flex-col gap-2.5">
+          <h2 className="font-display text-ink" style={{ fontSize: 24, fontWeight: 800 }}>
             Registration submitted
           </h2>
-          <p style={{ fontSize: 15, color: "#5A5A5A", lineHeight: 1.6 }}>
+          <p className="text-ink-soft" style={{ fontSize: 15, lineHeight: 1.6 }}>
             {submittedMessage}
           </p>
-          <p style={{ fontSize: 13, color: "#A0A0A0", lineHeight: 1.6 }}>
-            You can return to the login page after approval.
+          <p className="text-ink-faint" style={{ fontSize: 13, lineHeight: 1.6 }}>
+            We&apos;ll review your details and let you know. You can sign in once your
+            account is approved.
           </p>
         </div>
-
-        <button
-          type="button"
-          onClick={() => router.push("/login")}
-          className="flex items-center justify-center font-semibold rounded-xl"
-          style={{
-            backgroundColor: "#2C5F2D",
-            color: "white",
-            height: 52,
-            fontSize: 15,
-            fontFamily: "Plus Jakarta Sans",
-          }}
-        >
+        <Button onClick={() => router.push("/login")} size="lg" block>
           Back to login
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
-    <div
-      className="flex flex-col gap-6 rounded-2xl bg-white"
-      style={{ padding: 40 }}
-    >
+    <div className="panel flex flex-col gap-6" style={{ padding: 36 }}>
       {/* Header */}
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <h2
-            className="font-bold"
-            style={{
-              fontFamily: "Plus Jakarta Sans",
-              fontSize: 22,
-              color: "#1A1A1A",
-            }}
-          >
+          <h2 className="font-display text-ink" style={{ fontSize: 23, fontWeight: 800 }}>
             {header.title}
           </h2>
-          <span style={{ fontSize: 13, color: "#A0A0A0" }}>
+          <span className="text-ink-faint tnum" style={{ fontSize: 13 }}>
             Step {step} of 3
           </span>
         </div>
-        <p style={{ fontSize: 14, color: "#A0A0A0" }}>{header.sub}</p>
+        <p className="text-ink-soft" style={{ fontSize: 14 }}>
+          {header.sub}
+        </p>
+        <div style={{ marginTop: 4 }}>
+          <Stepper step={step} />
+        </div>
       </div>
-
-      {/* Progress */}
-      <ProgressBar step={step} />
 
       {apiError && (
         <div
-          className="rounded-xl p-3"
-          style={{ backgroundColor: "#FEF2F2", color: "#B03A2E", fontSize: 13 }}
+          className="rounded-xl bg-danger-bg text-danger"
+          style={{ padding: 12, fontSize: 13, lineHeight: 1.5 }}
         >
           {apiError}
         </div>
@@ -407,31 +389,28 @@ export function RegisterWizard() {
 
       {/* Step 1 */}
       {step === 1 && (
-        <form
-          onSubmit={form1.handleSubmit(onStep1)}
-          className="flex flex-col gap-4"
-        >
+        <form onSubmit={form1.handleSubmit(onStep1)} className="flex flex-col gap-4">
           <FormInput
-            label="Business Name"
+            label="Business name"
             placeholder="AgriSupply Co."
             error={form1.formState.errors.businessName?.message}
             {...form1.register("businessName")}
           />
           <FormInput
-            label="Contact Person Name"
+            label="Contact person name"
             placeholder="Rajan Sharma"
             error={form1.formState.errors.contactName?.message}
             {...form1.register("contactName")}
           />
           <FormInput
-            label="Email Address"
+            label="Email address"
             type="email"
             placeholder="vendor@business.com"
             error={form1.formState.errors.email?.message}
             {...form1.register("email")}
           />
           <FormInput
-            label="Phone Number"
+            label="Phone number"
             placeholder="+91 98765 43210"
             error={form1.formState.errors.phone?.message}
             {...form1.register("phone")}
@@ -445,24 +424,10 @@ export function RegisterWizard() {
           />
           <div className="flex gap-3">
             <div className="flex-1 flex flex-col gap-1.5">
-              <label
-                style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}
-              >
+              <label className="field-label" style={{ marginBottom: 0 }}>
                 State
               </label>
-              <select
-                {...form1.register("state")}
-                className="w-full outline-none"
-                style={{
-                  backgroundColor: "#EDE8DF",
-                  borderRadius: 14,
-                  height: 52,
-                  padding: "0 16px",
-                  fontSize: 14,
-                  color: "#1A1A1A",
-                  border: "1.5px solid transparent",
-                }}
-              >
+              <select {...form1.register("state")} className="field" style={selectStyle}>
                 <option value="">Select state</option>
                 {INDIAN_STATES_AND_UTS.map((s) => (
                   <option key={s} value={s}>
@@ -472,24 +437,10 @@ export function RegisterWizard() {
               </select>
             </div>
             <div className="flex-1 flex flex-col gap-1.5">
-              <label
-                style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}
-              >
-                Business Type
+              <label className="field-label" style={{ marginBottom: 0 }}>
+                Business type
               </label>
-              <select
-                {...form1.register("businessType")}
-                className="w-full outline-none"
-                style={{
-                  backgroundColor: "#EDE8DF",
-                  borderRadius: 14,
-                  height: 52,
-                  padding: "0 16px",
-                  fontSize: 14,
-                  color: "#1A1A1A",
-                  border: "1.5px solid transparent",
-                }}
-              >
+              <select {...form1.register("businessType")} className="field" style={selectStyle}>
                 <option value="">Select type</option>
                 <option value="MANUFACTURER">Manufacturer</option>
                 <option value="DISTRIBUTOR">Distributor</option>
@@ -499,7 +450,7 @@ export function RegisterWizard() {
             </div>
           </div>
           <FormInput
-            label="Business Location Address"
+            label="Business location address"
             placeholder="Street, Village/Town, District"
             error={form1.formState.errors.locationAddress?.message}
             {...form1.register("locationAddress")}
@@ -509,7 +460,7 @@ export function RegisterWizard() {
           <div className="flex items-end gap-3">
             <div className="flex-1">
               <FormInput
-                label="Service Radius (km)"
+                label="Service radius (km)"
                 type="number"
                 placeholder="25"
                 step="1"
@@ -517,41 +468,23 @@ export function RegisterWizard() {
                 {...form1.register("serviceRadiusKm")}
               />
             </div>
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={setCurrentLocationForStep1}
-              className="flex items-center justify-center gap-2 font-semibold rounded-xl"
-              style={{
-                backgroundColor: "#EDE8DF",
-                color: "#1A1A1A",
-                height: 52,
-                padding: "0 16px",
-                fontSize: 13,
-              }}
+              style={{ height: "2.75rem" }}
             >
               <LocateFixed size={16} />
-              {locating ? "Fetching..." : "Use current location"}
-            </button>
+              {locating ? "Fetching…" : "Use location"}
+            </Button>
           </div>
-          <button
-            type="submit"
-            disabled={form1.formState.isSubmitting}
-            className="flex items-center justify-center font-semibold rounded-xl"
-            style={{
-              backgroundColor: "#2C5F2D",
-              color: "white",
-              height: 52,
-              fontSize: 15,
-              fontFamily: "Plus Jakarta Sans",
-              opacity: form1.formState.isSubmitting ? 0.7 : 1,
-              cursor: form1.formState.isSubmitting ? "not-allowed" : "pointer",
-            }}
-          >
-            {form1.formState.isSubmitting ? "Saving…" : "Continue →"}
-          </button>
-          <p className="text-center" style={{ fontSize: 13, color: "#A0A0A0" }}>
+          <Button type="submit" disabled={form1.formState.isSubmitting} size="lg" block>
+            {form1.formState.isSubmitting ? "Saving…" : "Continue"}
+            {!form1.formState.isSubmitting && <ArrowRight size={16} />}
+          </Button>
+          <p className="text-center text-ink-faint" style={{ fontSize: 13 }}>
             Already registered?{" "}
-            <a href="/login" style={{ color: "#2C5F2D", fontWeight: 500 }}>
+            <a href="/login" className="text-leaf-700" style={{ fontWeight: 600 }}>
               Sign in
             </a>
           </p>
@@ -560,20 +493,14 @@ export function RegisterWizard() {
 
       {/* Step 2 */}
       {step === 2 && (
-        <form
-          onSubmit={form2.handleSubmit(onStep2)}
-          className="flex flex-col gap-4"
-        >
-          <div
-            className="rounded-xl p-4"
-            style={{ backgroundColor: "#F7F5F0" }}
-          >
-            <p style={{ fontSize: 13, color: "#A0A0A0" }}>
-              GSTIN format: 27AAAPZ9999Z1Z5 (15 characters)
+        <form onSubmit={form2.handleSubmit(onStep2)} className="flex flex-col gap-4">
+          <div className="inset" style={{ padding: 14 }}>
+            <p className="text-ink-soft" style={{ fontSize: 13 }}>
+              GSTIN format: <span className="tnum text-ink">27AAAPZ9999Z1Z5</span> (15 characters)
             </p>
           </div>
           <FormInput
-            label="GSTIN Number"
+            label="GSTIN number"
             placeholder="Enter GSTIN"
             error={form2.formState.errors.gstin?.message}
             {...form2.register("gstin")}
@@ -581,105 +508,70 @@ export function RegisterWizard() {
             maxLength={15}
           />
           <FormInput
-            label="PAN Number (optional)"
+            label="PAN number (optional)"
             placeholder="Enter PAN"
             error={form2.formState.errors.pan?.message}
             {...form2.register("pan")}
           />
           <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => setStep(1)}
-              className="flex-1 flex items-center justify-center font-semibold rounded-xl"
-              style={{
-                backgroundColor: "#F7F5F0",
-                color: "#1A1A1A",
-                height: 52,
-                fontSize: 15,
-              }}
-            >
-              ← Back
-            </button>
-            <button
+            <Button type="button" variant="ghost" size="lg" onClick={() => setStep(1)}>
+              <ArrowLeft size={16} />
+              Back
+            </Button>
+            <Button
               type="submit"
               disabled={form2.formState.isSubmitting}
-              className="flex-[2] flex items-center justify-center font-semibold rounded-xl"
-              style={{
-                backgroundColor: "#2C5F2D",
-                color: "white",
-                height: 52,
-                fontSize: 15,
-                fontFamily: "Plus Jakarta Sans",
-                opacity: form2.formState.isSubmitting ? 0.7 : 1,
-              }}
+              size="lg"
+              className="flex-1"
             >
-              {form2.formState.isSubmitting ? "Verifying…" : "Verify GSTIN →"}
-            </button>
+              {form2.formState.isSubmitting ? "Verifying…" : "Verify GSTIN"}
+              {!form2.formState.isSubmitting && <ArrowRight size={16} />}
+            </Button>
           </div>
         </form>
       )}
 
       {/* Step 3 */}
       {step === 3 && (
-        <form
-          onSubmit={form3.handleSubmit(onStep3)}
-          className="flex flex-col gap-4"
-        >
-          <p style={{ fontSize: 13, color: "#A0A0A0" }}>
-            Upload your verification files (PDF/JPG/PNG/WEBP).
+        <form onSubmit={form3.handleSubmit(onStep3)} className="flex flex-col gap-4">
+          <p className="text-ink-soft" style={{ fontSize: 13 }}>
+            Upload your verification files (PDF / JPG / PNG / WEBP).
           </p>
           <FormFileInput
-            label="PAN Card Document"
+            label="PAN card document"
             accept=".pdf,.jpg,.jpeg,.png,.webp"
             error={form3.formState.errors.panFile?.message}
             selectedFileName={panFileName}
             {...form3.register("panFile")}
           />
           <FormFileInput
-            label="GST Certificate"
+            label="GST certificate"
             accept=".pdf,.jpg,.jpeg,.png,.webp"
             error={form3.formState.errors.gstFile?.message}
             selectedFileName={gstFileName}
             {...form3.register("gstFile")}
           />
           <FormFileInput
-            label="Quality Certificate (optional)"
+            label="Quality certificate (optional)"
             accept=".pdf,.jpg,.jpeg,.png,.webp"
             error={form3.formState.errors.qualityFile?.message}
             selectedFileName={qualityFileName}
             {...form3.register("qualityFile")}
           />
           <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => setStep(2)}
-              className="flex-1 flex items-center justify-center font-semibold rounded-xl"
-              style={{
-                backgroundColor: "#F7F5F0",
-                color: "#1A1A1A",
-                height: 52,
-                fontSize: 15,
-              }}
-            >
-              ← Back
-            </button>
-            <button
+            <Button type="button" variant="ghost" size="lg" onClick={() => setStep(2)}>
+              <ArrowLeft size={16} />
+              Back
+            </Button>
+            <Button
               type="submit"
               disabled={form3.formState.isSubmitting}
-              className="flex-[2] flex items-center justify-center font-semibold rounded-xl"
-              style={{
-                backgroundColor: "#2C5F2D",
-                color: "white",
-                height: 52,
-                fontSize: 15,
-                fontFamily: "Plus Jakarta Sans",
-                opacity: form3.formState.isSubmitting ? 0.7 : 1,
-              }}
+              size="lg"
+              className="flex-1"
             >
-              {form3.formState.isSubmitting
-                ? "Submitting…"
-                : "Complete Registration →"}
-            </button>
+              {form3.formState.isSubmitting ? "Submitting…" : "Complete registration"}
+              {!form3.formState.isSubmitting && <ArrowRight size={16} />}
+            </Button>
           </div>
         </form>
       )}

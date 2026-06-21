@@ -10,33 +10,38 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
+  Cell,
 } from "recharts";
 import {
   IndianRupee,
   Briefcase,
   Package,
   Star,
-  CheckCircle,
   Gavel,
+  ArrowRight,
+  Sun,
+  Sprout,
+  CheckCheck,
 } from "lucide-react";
 import { vendorApi, authApi } from "@repo/api-client";
 import type { Cluster } from "@repo/api-client";
 import { MetricCard } from "../../components/ui/Card";
 import { StatusBadge } from "../../components/ui/StatusBadge";
+import { Button } from "../../components/ui/Button";
 import { formatCurrency, formatDate, formatShortDate } from "../../lib/utils";
 
 type Period = "7d" | "30d" | "90d";
 
-function getGreetingByHour(hour: number): string {
-  if (hour < 12) return "Good morning 🌾";
-  if (hour < 17) return "Good afternoon ☀️";
-  return "Good evening 🌙";
+function getGreeting(hour: number) {
+  if (hour < 12) return { text: "Good morning", Icon: Sprout };
+  if (hour < 17) return { text: "Good afternoon", Icon: Sun };
+  return { text: "Good evening", Icon: Star };
 }
 
 export function DashboardContent() {
   const router = useRouter();
   const [period, setPeriod] = useState<Period>("30d");
-  const greeting = getGreetingByHour(new Date().getHours());
+  const { text: greetText, Icon: GreetIcon } = getGreeting(new Date().getHours());
 
   const { data: vendor } = useQuery({
     queryKey: ["vendor-me"],
@@ -63,14 +68,12 @@ export function DashboardContent() {
     queryFn: () => vendorApi.getGigs("PUBLISHED"),
   });
 
-  // Open clusters vendor can bid on (FORMING / VOTING matching their gigs)
   const { data: openClusters = [] } = useQuery({
     queryKey: ["vendor-clusters"],
     queryFn: () => vendorApi.getClusters(),
-    refetchInterval: 30_000, // poll every 30s for new clusters
+    refetchInterval: 30_000,
   });
 
-  // Urgent orders = PAYMENT status (awaiting dispatch)
   const urgentOrders = (orders as Cluster[]).filter(
     (o) =>
       o.status === "PAYMENT" ||
@@ -78,7 +81,6 @@ export function DashboardContent() {
       o.status === "DISPATCHED",
   );
 
-  // Clusters vendor hasn't bid on yet (no bids entry in response)
   const unbidClusters = (openClusters as Cluster[]).filter(
     (c) => !c.bids || c.bids.length === 0,
   );
@@ -107,203 +109,256 @@ export function DashboardContent() {
         : 100
       : Math.round(((ordersThisMonth - ordersLastMonth) / ordersLastMonth) * 100);
   const ordersTrendSub = `${ordersTrendPercent > 0 ? "+" : ""}${ordersTrendPercent}% vs last month`;
-  const ordersTrendSubColor =
-    ordersTrendPercent > 0
-      ? "#16A34A"
-      : ordersTrendPercent < 0
-        ? "#DC2626"
-        : "#A0A0A0";
+  const ordersTrendTone =
+    ordersTrendPercent > 0 ? "up" : ordersTrendPercent < 0 ? "down" : "muted";
+
+  const attentionCount = unbidClusters.length + urgentOrders.length;
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Greet row */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2
-            style={{
-              fontFamily: "Plus Jakarta Sans",
-              fontSize: 22,
-              fontWeight: 700,
-              color: "#2C5F2D",
-            }}
+    <div className="flex flex-col gap-7">
+      {/* Greeting */}
+      <div className="flex items-end justify-between gap-4 rise">
+        <div className="flex items-start gap-3.5">
+          <div
+            className="flex items-center justify-center rounded-2xl bg-leaf-100 text-leaf-700 shrink-0"
+            style={{ width: 48, height: 48 }}
           >
-            {greeting}, {vendor?.businessName ?? "Vendor"}
-          </h2>
-          <p style={{ fontSize: 14, color: "#A0A0A0", marginTop: 4 }}>
-            Here&apos;s what&apos;s happening with your orders today.
-          </p>
+            <GreetIcon size={24} strokeWidth={2.2} />
+          </div>
+          <div>
+            <h2 className="font-display text-ink" style={{ fontSize: 26, fontWeight: 800 }}>
+              {greetText}, {vendor?.businessName ?? "Vendor"}
+            </h2>
+            <p className="text-ink-soft" style={{ fontSize: 14, marginTop: 3 }}>
+              {attentionCount > 0
+                ? `You have ${attentionCount} ${attentionCount === 1 ? "thing" : "things"} that need your attention today.`
+                : "Everything's running smoothly. Here's your business at a glance."}
+            </p>
+          </div>
         </div>
-        <button
-          onClick={() => router.push("/gigs")}
-          className="flex items-center gap-2 rounded-xl font-semibold"
-          style={{
-            backgroundColor: "#2C5F2D",
-            color: "white",
-            fontSize: 13,
-            padding: "10px 18px",
-            fontFamily: "Plus Jakarta Sans",
-          }}
-        >
+        <Button onClick={() => router.push("/gigs")} variant="primary">
           <Briefcase size={16} />
           Manage Gigs
-        </button>
+        </Button>
       </div>
 
-      {/* Metrics row */}
-      <div className="flex gap-4">
+      {/* Stat strip */}
+      <div className="flex gap-4 rise" style={{ animationDelay: "60ms" }}>
         <MetricCard
-          label="Published Gigs"
-          value={publishedGigs.length}
-          sub="All visible to farmers"
-          icon={<Briefcase size={16} color="#2C5F2D" />}
+          label="Total Revenue"
+          value={formatCurrency(analytics?.totalRevenue ?? 0)}
+          sub={`${formatCurrency(paymentSummary?.inEscrow ?? 0)} held in escrow`}
+          icon={<IndianRupee size={16} />}
+          accent="leaf"
         />
         <MetricCard
           label="Orders This Month"
           value={ordersThisMonth}
           sub={ordersTrendSub}
-          subColor={ordersTrendSubColor}
-          icon={<Package size={16} color="#2C5F2D" />}
+          subTone={ordersTrendTone}
+          icon={<Package size={16} />}
+          accent="ink"
         />
         <MetricCard
-          label="Total Revenue"
-          value={formatCurrency(analytics?.totalRevenue ?? 0)}
-          sub={`${formatCurrency(paymentSummary?.inEscrow ?? 0)} in escrow`}
-          icon={<IndianRupee size={16} color="#2C5F2D" />}
+          label="Published Gigs"
+          value={publishedGigs.length}
+          sub="Visible to farmers now"
+          icon={<Briefcase size={16} />}
+          accent="clay"
         />
         <MetricCard
           label="Avg Rating"
-          value={analytics?.avgRating ? `${analytics.avgRating} ★` : "—"}
-          sub={`Based on ${analytics?.ratingsCount ?? 0} orders`}
-          icon={<Star size={16} color="#2C5F2D" />}
+          value={analytics?.avgRating ? `${analytics.avgRating}★` : "—"}
+          sub={`From ${analytics?.ratingsCount ?? 0} orders`}
+          icon={<Star size={16} />}
+          accent="gold"
         />
       </div>
 
-      {/* Mid row: chart + recent orders */}
-      <div className="flex gap-4" style={{ height: 280 }}>
-        {/* Revenue chart */}
+      {/* Needs attention */}
+      <section
+        className="panel overflow-hidden rise"
+        style={{ animationDelay: "120ms" }}
+      >
         <div
-          className="flex-1 rounded-2xl bg-white"
-          style={{ padding: "20px 20px 12px" }}
+          className="flex items-center justify-between"
+          style={{ padding: "18px 22px", borderBottom: "1px solid var(--color-line)" }}
         >
-          <div
-            className="flex items-center justify-between"
-            style={{ marginBottom: 16 }}
+          <div className="flex items-center gap-2.5">
+            <span
+              className="flex items-center justify-center rounded-lg bg-gold-100 text-gold-700"
+              style={{ width: 30, height: 30 }}
+            >
+              <Gavel size={15} />
+            </span>
+            <h3 className="font-display text-ink" style={{ fontSize: 17, fontWeight: 700 }}>
+              Needs your attention
+            </h3>
+            {attentionCount > 0 && (
+              <span className="pill bg-gold-100 text-gold-700 tnum">{attentionCount}</span>
+            )}
+          </div>
+          <button
+            onClick={() => router.push("/orders")}
+            className="flex items-center gap-1 text-leaf-700"
+            style={{ fontSize: 13, fontWeight: 600 }}
           >
-            <p
-              style={{
-                fontFamily: "Plus Jakarta Sans",
-                fontSize: 15,
-                fontWeight: 700,
-                color: "#1A1A1A",
-              }}
-            >
-              Revenue Over Time
-            </p>
+            View all orders <ArrowRight size={14} />
+          </button>
+        </div>
+
+        {attentionCount === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3" style={{ padding: "44px 20px" }}>
             <div
-              className="flex gap-1 rounded-xl p-1"
-              style={{ backgroundColor: "#EDE8DF" }}
+              className="flex items-center justify-center rounded-2xl bg-leaf-50 text-leaf-600"
+              style={{ width: 56, height: 56 }}
             >
+              <CheckCheck size={26} />
+            </div>
+            <p className="font-display text-ink" style={{ fontSize: 16, fontWeight: 700 }}>
+              You&apos;re all caught up
+            </p>
+            <p className="text-ink-faint" style={{ fontSize: 13, maxWidth: 360, textAlign: "center" }}>
+              No bids or orders need action right now. New farmer clusters appear here the moment
+              they&apos;re ready for your quote.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col">
+            {unbidClusters.slice(0, 4).map((cluster) => (
+              <ActionRow
+                key={cluster.id}
+                kind="bid"
+                title={`${cluster.product} — ${cluster.unit}`}
+                meta={`${cluster.currentQuantity}/${cluster.targetQuantity} ${cluster.unit} · ${cluster.members?.length ?? 0} farmers${cluster.district ? ` · ${cluster.district}` : ""}`}
+                status={cluster.status}
+                onAction={() => router.push("/orders")}
+              />
+            ))}
+            {urgentOrders.slice(0, 4).map((order) => (
+              <ActionRow
+                key={order.id}
+                kind="order"
+                title={`Cluster #${order.id.slice(-6).toUpperCase()} — ${order.product}`}
+                meta={`${order.currentQuantity} ${order.unit} · ${order.members?.length ?? 0} farmers`}
+                status={order.status}
+                onAction={() => router.push(`/orders/${order.id}`)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Chart + recent orders */}
+      <div className="flex gap-5 rise" style={{ height: 320, animationDelay: "180ms" }}>
+        <div className="card flex-1 flex flex-col" style={{ padding: "20px 22px 14px" }}>
+          <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
+            <div>
+              <p className="font-display text-ink" style={{ fontSize: 16, fontWeight: 700 }}>
+                Revenue over time
+              </p>
+              <p className="text-ink-faint" style={{ fontSize: 12.5, marginTop: 2 }}>
+                Released payments from completed orders
+              </p>
+            </div>
+            <div className="inset flex gap-1" style={{ padding: 4 }}>
               {(["7d", "30d", "90d"] as Period[]).map((p) => (
                 <button
                   key={p}
                   onClick={() => setPeriod(p)}
-                  className="rounded-lg font-medium transition-all"
-                  style={{
-                    padding: "4px 10px",
-                    fontSize: 12,
-                    backgroundColor: period === p ? "#2C5F2D" : "transparent",
-                    color: period === p ? "white" : "#A0A0A0",
-                  }}
+                  className={
+                    period === p
+                      ? "rounded-lg bg-leaf-600 text-white font-semibold"
+                      : "rounded-lg text-ink-soft font-medium transition-colors hover:text-ink"
+                  }
+                  style={{ padding: "5px 12px", fontSize: 12 }}
                 >
-                  {p === "7d" ? "7D" : p === "30d" ? "30D" : "90D"}
+                  {p.toUpperCase()}
                 </button>
               ))}
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={190}>
-            <BarChart data={analytics?.revenueChart ?? []} barSize={24}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={analytics?.revenueChart ?? []} barSize={22}>
               <XAxis
                 dataKey="date"
                 tickFormatter={(v: string) => formatShortDate(v)}
-                tick={{ fontSize: 11, fill: "#A0A0A0" }}
+                tick={{ fontSize: 11, fill: "var(--color-ink-faint)" }}
                 axisLine={false}
                 tickLine={false}
+                dy={6}
               />
               <YAxis
                 tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}k`}
-                tick={{ fontSize: 11, fill: "#A0A0A0" }}
+                tick={{ fontSize: 11, fill: "var(--color-ink-faint)" }}
                 axisLine={false}
                 tickLine={false}
-                width={48}
+                width={46}
               />
               <Tooltip
-                formatter={(v: number | undefined) => [
-                  formatCurrency(v ?? 0),
-                  "Revenue",
-                ]}
-                labelFormatter={(l) =>
-                  typeof l === "string" ? formatDate(l) : String(l)
-                }
+                cursor={{ fill: "var(--color-sunk)" }}
+                formatter={(v: number | undefined) => [formatCurrency(v ?? 0), "Revenue"]}
+                labelFormatter={(l) => (typeof l === "string" ? formatDate(l) : String(l))}
                 contentStyle={{
                   borderRadius: 12,
-                  border: "none",
+                  border: "1px solid var(--color-line)",
+                  boxShadow: "var(--shadow-pop)",
                   fontSize: 13,
+                  fontFamily: "var(--font-body)",
                 }}
               />
-              <Bar dataKey="amount" fill="#2C5F2D" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="amount" radius={[6, 6, 0, 0]}>
+                {(analytics?.revenueChart ?? []).map((_, i) => (
+                  <Cell key={i} fill="oklch(0.55 0.12 150)" />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Recent orders */}
-        <div
-          className="rounded-2xl bg-white flex flex-col"
-          style={{ width: 340, padding: 20 }}
-        >
-          <div
-            className="flex items-center justify-between"
-            style={{ marginBottom: 16 }}
-          >
-            <p
-              style={{
-                fontFamily: "Plus Jakarta Sans",
-                fontSize: 15,
-                fontWeight: 700,
-                color: "#1A1A1A",
-              }}
-            >
-              Recent Orders
+        <div className="card flex flex-col" style={{ width: 360, padding: 22 }}>
+          <div className="flex items-center justify-between" style={{ marginBottom: 14 }}>
+            <p className="font-display text-ink" style={{ fontSize: 16, fontWeight: 700 }}>
+              Recent orders
             </p>
             <button
               onClick={() => router.push("/orders")}
-              style={{ fontSize: 13, color: "#2C5F2D", fontWeight: 500 }}
+              className="text-leaf-700"
+              style={{ fontSize: 13, fontWeight: 600 }}
             >
-              View all →
+              View all
             </button>
           </div>
-          <div className="flex flex-col gap-3 flex-1 overflow-auto">
+          <div className="flex flex-col gap-1 flex-1 overflow-auto" style={{ margin: "0 -8px" }}>
             {recentOrders.length === 0 ? (
-              <p style={{ fontSize: 13, color: "#A0A0A0" }}>No orders yet.</p>
+              <div className="flex flex-col items-center justify-center gap-2 flex-1" style={{ padding: 20 }}>
+                <div
+                  className="flex items-center justify-center rounded-2xl bg-sunk text-ink-faint"
+                  style={{ width: 44, height: 44 }}
+                >
+                  <Package size={20} />
+                </div>
+                <p className="text-ink-soft" style={{ fontSize: 13, fontWeight: 600 }}>
+                  No orders yet
+                </p>
+                <p className="text-ink-faint" style={{ fontSize: 12, textAlign: "center" }}>
+                  Win a bid and your orders will appear here.
+                </p>
+              </div>
             ) : (
               recentOrders.map((order) => (
                 <button
                   key={order.id}
                   onClick={() => router.push(`/orders/${order.id}`)}
-                  className="flex items-center justify-between w-full text-left rounded-xl p-3 hover:bg-[#F7F5F0] transition-colors"
+                  className="flex items-center justify-between w-full text-left rounded-xl transition-colors hover:bg-sunk"
+                  style={{ padding: "10px 8px" }}
                 >
-                  <div>
-                    <p
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 600,
-                        color: "#1A1A1A",
-                      }}
-                    >
+                  <div className="min-w-0">
+                    <p className="text-ink truncate" style={{ fontSize: 13.5, fontWeight: 600 }}>
                       {order.product}
                     </p>
-                    <p style={{ fontSize: 12, color: "#A0A0A0" }}>
-                      {order.currentQuantity} {order.unit} ·{" "}
-                      {formatDate(order.createdAt)}
+                    <p className="text-ink-faint tnum" style={{ fontSize: 12 }}>
+                      {order.currentQuantity} {order.unit} · {formatShortDate(order.createdAt)}
                     </p>
                   </div>
                   <StatusBadge status={order.status} />
@@ -313,113 +368,60 @@ export function DashboardContent() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* Open clusters — needs vendor bid */}
-      {unbidClusters.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <p
-            style={{
-              fontFamily: "Plus Jakarta Sans",
-              fontSize: 15,
-              fontWeight: 700,
-              color: "#1A1A1A",
-            }}
-          >
-            New Clusters — Place a Bid
+function ActionRow({
+  kind,
+  title,
+  meta,
+  status,
+  onAction,
+}: {
+  kind: "bid" | "order";
+  title: string;
+  meta: string;
+  status: string;
+  onAction: () => void;
+}) {
+  return (
+    <div
+      className="flex items-center justify-between gap-4 transition-colors hover:bg-sunk"
+      style={{ padding: "16px 22px", borderBottom: "1px solid var(--color-line)" }}
+    >
+      <div className="flex items-center gap-3.5 min-w-0">
+        <span
+          className={
+            kind === "bid"
+              ? "flex items-center justify-center rounded-xl bg-gold-100 text-gold-700 shrink-0"
+              : "flex items-center justify-center rounded-xl bg-leaf-100 text-leaf-700 shrink-0"
+          }
+          style={{ width: 38, height: 38 }}
+        >
+          {kind === "bid" ? <Gavel size={17} /> : <Package size={17} />}
+        </span>
+        <div className="min-w-0">
+          <p className="text-ink truncate" style={{ fontSize: 14, fontWeight: 600 }}>
+            {title}
           </p>
-          {(unbidClusters as Cluster[]).slice(0, 5).map((cluster) => (
-            <div
-              key={cluster.id}
-              className="bg-white rounded-2xl flex items-center justify-between"
-              style={{ padding: "16px 20px" }}
-            >
-              <div>
-                <p style={{ fontSize: 14, fontWeight: 600, color: "#1A1A1A" }}>
-                  {cluster.product} — {cluster.unit}
-                </p>
-                <p style={{ fontSize: 12, color: "#A0A0A0", marginTop: 2 }}>
-                  {cluster.currentQuantity}/{cluster.targetQuantity}{" "}
-                  {cluster.unit} · {cluster.members?.length ?? 0} farmers
-                  {cluster.district ? ` · ${cluster.district}` : ""}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <StatusBadge status={cluster.status} />
-                <button
-                  onClick={() => router.push(`/orders`)}
-                  className="flex items-center gap-1.5 rounded-xl font-semibold"
-                  style={{
-                    backgroundColor: "#2C5F2D",
-                    color: "white",
-                    fontSize: 13,
-                    padding: "8px 16px",
-                  }}
-                >
-                  <Gavel size={14} />
-                  Bid
-                </button>
-              </div>
-            </div>
-          ))}
+          <p className="text-ink-faint tnum truncate" style={{ fontSize: 12.5, marginTop: 1 }}>
+            {meta}
+          </p>
         </div>
-      )}
-
-      {/* Urgent orders section */}
-      {urgentOrders.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <p
-              style={{
-                fontFamily: "Plus Jakarta Sans",
-                fontSize: 15,
-                fontWeight: 700,
-                color: "#1A1A1A",
-              }}
-            >
-              Recent Orders — Action Required
-            </p>
-            <button
-              onClick={() => router.push("/orders")}
-              style={{ fontSize: 13, color: "#2C5F2D", fontWeight: 500 }}
-            >
-              View all orders →
-            </button>
-          </div>
-          {urgentOrders.map((order) => (
-            <div
-              key={order.id}
-              className="bg-white rounded-2xl flex items-center justify-between"
-              style={{ padding: "16px 20px" }}
-            >
-              <div>
-                <p style={{ fontSize: 14, fontWeight: 600, color: "#1A1A1A" }}>
-                  Cluster #{order.id.slice(-6).toUpperCase()} — {order.product}
-                </p>
-                <p style={{ fontSize: 12, color: "#A0A0A0", marginTop: 2 }}>
-                  {order.currentQuantity} {order.unit} ·{" "}
-                  {order.members?.length ?? 0} farmers
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <StatusBadge status={order.status} />
-                <button
-                  onClick={() => router.push(`/orders/${order.id}`)}
-                  className="flex items-center gap-1.5 rounded-xl font-semibold"
-                  style={{
-                    backgroundColor: "#2C5F2D",
-                    color: "white",
-                    fontSize: 13,
-                    padding: "8px 16px",
-                  }}
-                >
-                  <CheckCircle size={14} />
-                  View
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      </div>
+      <div className="flex items-center gap-3 shrink-0">
+        <StatusBadge status={status} />
+        <Button onClick={onAction} variant={kind === "bid" ? "secondary" : "primary"} size="sm">
+          {kind === "bid" ? (
+            <>
+              <Gavel size={14} /> Place bid
+            </>
+          ) : (
+            "Open"
+          )}
+        </Button>
+      </div>
     </div>
   );
 }

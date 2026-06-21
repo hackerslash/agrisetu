@@ -1,20 +1,20 @@
 import type { Metadata } from "next";
-import { Inter, Plus_Jakarta_Sans } from "next/font/google";
+import { Bricolage_Grotesque, Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
 import { Providers } from "../components/Providers";
 import { RootProviders } from "../components/RootProviders";
 
-const inter = Inter({
+const hanken = Hanken_Grotesk({
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-inter",
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-hanken",
   display: "swap",
 });
 
-const plusJakartaSans = Plus_Jakarta_Sans({
+const bricolage = Bricolage_Grotesque({
   subsets: ["latin"],
-  weight: ["700", "800"],
-  variable: "--font-plus-jakarta-sans",
+  weight: ["500", "600", "700", "800"],
+  variable: "--font-bricolage",
   display: "swap",
 });
 
@@ -29,7 +29,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${plusJakartaSans.variable}`}>
+    <html lang="en" className={`${hanken.variable} ${bricolage.variable}`}>
       <body suppressHydrationWarning>
         <Providers>
           <RootProviders>{children}</RootProviders>

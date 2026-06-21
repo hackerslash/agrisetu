@@ -54,8 +54,8 @@ export function AppLayout({
       <VendorOrderNotificationMonitor vendorId={vendor?.id} />
       <Sidebar vendorName={vendor?.businessName} />
       <div
-        className="flex flex-col flex-1"
-        style={{ marginLeft: 240, minHeight: "100vh" }}
+        className="flex flex-col flex-1 bg-paper"
+        style={{ marginLeft: 248, minHeight: "100vh" }}
       >
         <TopBar
           title={title}
@@ -64,10 +64,7 @@ export function AppLayout({
           showDatePill={showDatePill}
           actions={topBarActions}
         />
-        <main
-          className="flex-1"
-          style={{ padding: "28px 32px", backgroundColor: "#F7F5F0" }}
-        >
+        <main className="flex-1" style={{ padding: "30px 36px" }}>
           {children}
         </main>
       </div>

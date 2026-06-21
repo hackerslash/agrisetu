@@ -5,38 +5,36 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Upload, AlertTriangle, LocateFixed } from "lucide-react";
+import { Upload, AlertTriangle, LocateFixed, FileText } from "lucide-react";
 import { INDIAN_STATES_AND_UTS } from "../../lib/indiaStates";
+import { vendorApi, authApi } from "@repo/api-client";
+import type { Vendor, DocType, VendorDocument } from "@repo/api-client";
+import { Button } from "../../components/ui/Button";
 
 function Toggle({ defaultChecked = true }: { defaultChecked?: boolean }) {
   const [on, setOn] = useState(defaultChecked);
   return (
     <button
       type="button"
+      role="switch"
+      aria-checked={on}
       onClick={() => setOn(!on)}
       className="relative rounded-full transition-colors flex-shrink-0"
       style={{
         width: 44,
         height: 24,
-        backgroundColor: on ? "#2C5F2D" : "#EDE8DF",
-        border: "none",
+        backgroundColor: on ? "var(--color-leaf-600)" : "var(--color-line-strong)",
         cursor: "pointer",
         padding: 0,
       }}
     >
       <span
-        className="absolute top-1 rounded-full bg-white shadow transition-all"
-        style={{
-          width: 16,
-          height: 16,
-          left: on ? 24 : 4,
-        }}
+        className="absolute top-1 rounded-full bg-white transition-all"
+        style={{ width: 16, height: 16, left: on ? 24 : 4, boxShadow: "0 1px 2px rgba(0,0,0,0.2)" }}
       />
     </button>
   );
 }
-import { vendorApi, authApi } from "@repo/api-client";
-import type { Vendor, DocType, VendorDocument } from "@repo/api-client";
 
 const VENDOR_DOC_CONFIG: Array<{ docType: DocType; label: string }> = [
   { docType: "PAN", label: "PAN Card" },
@@ -87,7 +85,7 @@ const passwordSchema = z
   });
 type PasswordFormData = z.infer<typeof passwordSchema>;
 
-// ─── Subcomponent: Input ──────────────────────────────────────────────────────
+// ─── Subcomponents ────────────────────────────────────────────────────────────
 
 function FormInput({
   label,
@@ -104,26 +102,41 @@ function FormInput({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}>
+      <label className="field-label" style={{ marginBottom: 0 }}>
         {label}
       </label>
       <input
         type={type}
         placeholder={placeholder}
-        className="w-full outline-none"
-        style={{
-          backgroundColor: "#EDE8DF",
-          borderRadius: 14,
-          height: 52,
-          padding: "0 16px",
-          fontSize: 14,
-          color: "#1A1A1A",
-          border: error ? "1.5px solid #EF4444" : "1.5px solid transparent",
-        }}
+        className="field"
+        style={error ? { borderColor: "var(--color-danger)" } : undefined}
         {...(props as React.InputHTMLAttributes<HTMLInputElement>)}
       />
-      {error && <p style={{ fontSize: 12, color: "#EF4444" }}>{error}</p>}
+      {error && (
+        <p className="text-danger" style={{ fontSize: 12 }}>
+          {error}
+        </p>
+      )}
     </div>
+  );
+}
+
+function Banner({ tone, children }: { tone: "success" | "error"; children: React.ReactNode }) {
+  return (
+    <div
+      className={tone === "success" ? "bg-leaf-50 text-leaf-700" : "bg-danger-bg text-danger"}
+      style={{ borderRadius: 12, padding: 12, fontSize: 13, marginBottom: 16 }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="font-display text-ink" style={{ fontSize: 16, fontWeight: 700, marginBottom: 18 }}>
+      {children}
+    </h3>
   );
 }
 
@@ -137,9 +150,7 @@ export function SettingsContent() {
   const [passwordError, setPasswordError] = useState("");
   const [documentError, setDocumentError] = useState("");
   const [documentSuccess, setDocumentSuccess] = useState("");
-  const [uploadingDocType, setUploadingDocType] = useState<DocType | null>(
-    null,
-  );
+  const [uploadingDocType, setUploadingDocType] = useState<DocType | null>(null);
   const [locating, setLocating] = useState(false);
 
   const { data: vendor, isLoading } = useQuery({
@@ -215,14 +226,12 @@ export function SettingsContent() {
     setProfileError("");
     setLocating(true);
     try {
-      const position = await new Promise<GeolocationPosition>(
-        (resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,
-            timeout: 10000,
-          });
-        },
-      );
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+        });
+      });
 
       const latitude = Number(position.coords.latitude.toFixed(6));
       const longitude = Number(position.coords.longitude.toFixed(6));
@@ -299,7 +308,9 @@ export function SettingsContent() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center" style={{ height: 400 }}>
-        <p style={{ fontSize: 14, color: "#A0A0A0" }}>Loading settings…</p>
+        <p className="text-ink-faint" style={{ fontSize: 14 }}>
+          Loading settings…
+        </p>
       </div>
     );
   }
@@ -309,59 +320,24 @@ export function SettingsContent() {
       {/* Left column */}
       <div className="flex-1 flex flex-col gap-5">
         {/* Business profile */}
-        <div className="bg-white rounded-2xl" style={{ padding: 24 }}>
-          <h3
-            style={{
-              fontFamily: "Plus Jakarta Sans",
-              fontSize: 16,
-              fontWeight: 700,
-              color: "#1A1A1A",
-              marginBottom: 20,
-            }}
-          >
-            Business Profile
-          </h3>
+        <div className="card" style={{ padding: 24 }}>
+          <SectionTitle>Business profile</SectionTitle>
 
-          {profileSuccess && (
-            <div
-              className="mb-4 rounded-xl p-3"
-              style={{
-                backgroundColor: "#D1FAE5",
-                color: "#065F46",
-                fontSize: 13,
-              }}
-            >
-              Profile updated successfully!
-            </div>
-          )}
-          {profileError && (
-            <div
-              className="mb-4 rounded-xl p-3"
-              style={{
-                backgroundColor: "#FEF2F2",
-                color: "#B03A2E",
-                fontSize: 13,
-              }}
-            >
-              {profileError}
-            </div>
-          )}
+          {profileSuccess && <Banner tone="success">Profile updated successfully.</Banner>}
+          {profileError && <Banner tone="error">{profileError}</Banner>}
 
-          <form
-            onSubmit={profileForm.handleSubmit(onProfileSubmit)}
-            className="flex flex-col gap-4"
-          >
+          <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="flex flex-col gap-4">
             <div className="flex gap-4">
               <div className="flex-1">
                 <FormInput
-                  label="Business Name"
+                  label="Business name"
                   error={profileForm.formState.errors.businessName?.message}
                   {...profileForm.register("businessName")}
                 />
               </div>
               <div className="flex-1">
                 <FormInput
-                  label="Contact Person"
+                  label="Contact person"
                   error={profileForm.formState.errors.contactName?.message}
                   {...profileForm.register("contactName")}
                 />
@@ -376,24 +352,10 @@ export function SettingsContent() {
                 />
               </div>
               <div className="flex-1 flex flex-col gap-1.5">
-                <label
-                  style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}
-                >
+                <label className="field-label" style={{ marginBottom: 0 }}>
                   State
                 </label>
-                <select
-                  {...profileForm.register("state")}
-                  className="w-full outline-none"
-                  style={{
-                    backgroundColor: "#EDE8DF",
-                    borderRadius: 14,
-                    height: 52,
-                    padding: "0 16px",
-                    fontSize: 14,
-                    color: "#1A1A1A",
-                    border: "1.5px solid transparent",
-                  }}
-                >
+                <select {...profileForm.register("state")} className="field">
                   <option value="">Select state</option>
                   {INDIAN_STATES_AND_UTS.map((s) => (
                     <option key={s} value={s}>
@@ -404,24 +366,10 @@ export function SettingsContent() {
               </div>
             </div>
             <div className="flex flex-col gap-1.5">
-              <label
-                style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}
-              >
-                Business Type
+              <label className="field-label" style={{ marginBottom: 0 }}>
+                Business type
               </label>
-              <select
-                {...profileForm.register("businessType")}
-                className="w-full outline-none"
-                style={{
-                  backgroundColor: "#EDE8DF",
-                  borderRadius: 14,
-                  height: 52,
-                  padding: "0 16px",
-                  fontSize: 14,
-                  color: "#1A1A1A",
-                  border: "1.5px solid transparent",
-                }}
-              >
+              <select {...profileForm.register("businessType")} className="field">
                 <option value="">Select type</option>
                 <option value="MANUFACTURER">Manufacturer</option>
                 <option value="DISTRIBUTOR">Distributor</option>
@@ -430,7 +378,7 @@ export function SettingsContent() {
               </select>
             </div>
             <FormInput
-              label="Business Location Address"
+              label="Business location address"
               placeholder="Street, Village/Town, District"
               error={profileForm.formState.errors.locationAddress?.message}
               {...profileForm.register("locationAddress")}
@@ -440,7 +388,7 @@ export function SettingsContent() {
             <div className="flex gap-4 items-end">
               <div className="flex-1">
                 <FormInput
-                  label="Service Radius (km)"
+                  label="Service radius (km)"
                   type="number"
                   placeholder="25"
                   error={profileForm.formState.errors.serviceRadiusKm?.message}
@@ -448,96 +396,35 @@ export function SettingsContent() {
                   {...profileForm.register("serviceRadiusKm")}
                 />
               </div>
-              <button
-                type="button"
-                onClick={useCurrentLocation}
-                className="flex items-center justify-center gap-2 rounded-xl font-semibold"
-                style={{
-                  backgroundColor: "#EDE8DF",
-                  color: "#1A1A1A",
-                  height: 48,
-                  padding: "0 16px",
-                  fontSize: 13,
-                }}
-              >
+              <Button type="button" variant="ghost" onClick={useCurrentLocation}>
                 <LocateFixed size={16} />
-                {locating ? "Fetching..." : "Fetch location"}
-              </button>
+                {locating ? "Fetching…" : "Fetch location"}
+              </Button>
             </div>
             <div className="flex flex-col gap-1.5">
-              <label
-                style={{ fontSize: 13, fontWeight: 500, color: "#A0A0A0" }}
-              >
+              <label className="field-label" style={{ marginBottom: 0 }}>
                 Email (read-only)
               </label>
               <div
-                className="flex items-center"
-                style={{
-                  backgroundColor: "#F7F5F0",
-                  borderRadius: 14,
-                  height: 52,
-                  padding: "0 16px",
-                  fontSize: 14,
-                  color: "#A0A0A0",
-                }}
+                className="inset flex items-center text-ink-faint"
+                style={{ height: 44, padding: "0 14px", fontSize: 14 }}
               >
                 {vendor?.email}
               </div>
             </div>
-            <button
-              type="submit"
-              disabled={profileForm.formState.isSubmitting}
-              className="rounded-xl font-semibold"
-              style={{
-                backgroundColor: "#2C5F2D",
-                color: "white",
-                height: 48,
-                fontSize: 14,
-                fontFamily: "Plus Jakarta Sans",
-              }}
-            >
-              {profileForm.formState.isSubmitting ? "Saving…" : "Save Changes"}
-            </button>
+            <div>
+              <Button type="submit" disabled={profileForm.formState.isSubmitting}>
+                {profileForm.formState.isSubmitting ? "Saving…" : "Save changes"}
+              </Button>
+            </div>
           </form>
         </div>
 
         {/* Certifications */}
-        <div className="bg-white rounded-2xl" style={{ padding: 24 }}>
-          <h3
-            style={{
-              fontFamily: "Plus Jakarta Sans",
-              fontSize: 16,
-              fontWeight: 700,
-              color: "#1A1A1A",
-              marginBottom: 16,
-            }}
-          >
-            Documents & Certifications
-          </h3>
-          {documentSuccess && (
-            <div
-              className="mb-4 rounded-xl p-3"
-              style={{
-                backgroundColor: "#D1FAE5",
-                color: "#065F46",
-                fontSize: 13,
-              }}
-            >
-              {documentSuccess}
-            </div>
-          )}
-          {documentError && (
-            <div
-              className="mb-4 rounded-xl p-3"
-              style={{
-                backgroundColor: "#FEF2F2",
-                color: "#B03A2E",
-                fontSize: 13,
-              }}
-            >
-              {documentError}
-            </div>
-          )}
+        <div className="card" style={{ padding: 24 }}>
+          <SectionTitle>Documents &amp; certifications</SectionTitle>
+          {documentSuccess && <Banner tone="success">{documentSuccess}</Banner>}
+          {documentError && <Banner tone="error">{documentError}</Banner>}
           <div className="flex flex-col gap-3">
             {VENDOR_DOC_CONFIG.map(({ docType, label }) => {
               const existing = (vendor?.documents ?? []).find(
@@ -547,55 +434,45 @@ export function SettingsContent() {
               return (
                 <div
                   key={docType}
-                  className="flex items-center justify-between rounded-xl"
-                  style={{ padding: "12px 16px", backgroundColor: "#F7F5F0" }}
+                  className="inset flex items-center justify-between"
+                  style={{ padding: "12px 16px" }}
                 >
-                  <div>
-                    <p
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 600,
-                        color: "#1A1A1A",
-                      }}
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={
+                        existing
+                          ? "flex items-center justify-center rounded-lg bg-leaf-50 text-leaf-700"
+                          : "flex items-center justify-center rounded-lg bg-surface text-ink-faint"
+                      }
+                      style={{ width: 36, height: 36, border: existing ? "none" : "1px solid var(--color-line)" }}
                     >
-                      {label}
-                    </p>
-                    <p style={{ fontSize: 12, color: "#A0A0A0" }}>
-                      {existing
-                        ? `Uploaded ${new Date(existing.uploadedAt).toLocaleDateString()}`
-                        : "Not uploaded yet"}
-                    </p>
+                      <FileText size={16} />
+                    </span>
+                    <div>
+                      <p className="text-ink" style={{ fontSize: 13.5, fontWeight: 600 }}>
+                        {label}
+                      </p>
+                      <p className="text-ink-faint" style={{ fontSize: 12 }}>
+                        {existing
+                          ? `Uploaded ${new Date(existing.uploadedAt).toLocaleDateString()}`
+                          : "Not uploaded yet"}
+                      </p>
+                    </div>
                   </div>
                   <label
-                    className="flex items-center gap-1.5 rounded-lg"
+                    className="btn btn-soft btn-sm"
                     style={{
-                      fontSize: 12,
-                      color: "#2C5F2D",
-                      padding: "6px 12px",
-                      backgroundColor: "#D1FAE5",
                       cursor:
-                        uploadingDocType && uploadingDocType !== docType
-                          ? "not-allowed"
-                          : "pointer",
-                      opacity:
-                        uploadingDocType && uploadingDocType !== docType
-                          ? 0.5
-                          : 1,
+                        uploadingDocType && uploadingDocType !== docType ? "not-allowed" : "pointer",
+                      opacity: uploadingDocType && uploadingDocType !== docType ? 0.5 : 1,
                     }}
                   >
                     <Upload size={13} />
-                    {uploadingDocType === docType
-                      ? "Uploading…"
-                      : existing
-                        ? "Re-upload"
-                        : "Upload"}
+                    {uploadingDocType === docType ? "Uploading…" : existing ? "Re-upload" : "Upload"}
                     <input
                       type="file"
                       accept=".pdf,.jpg,.jpeg,.png,.webp"
-                      disabled={
-                        uploadDocumentMutation.isPending &&
-                        uploadingDocType !== docType
-                      }
+                      disabled={uploadDocumentMutation.isPending && uploadingDocType !== docType}
                       style={{ display: "none" }}
                       onChange={(e) => {
                         const file = e.target.files?.[0];
@@ -614,46 +491,26 @@ export function SettingsContent() {
       {/* Right column */}
       <div className="flex flex-col gap-5" style={{ width: 360 }}>
         {/* Notifications */}
-        <div className="bg-white rounded-2xl" style={{ padding: 24 }}>
-          <h3
-            style={{
-              fontFamily: "Plus Jakarta Sans",
-              fontSize: 16,
-              fontWeight: 700,
-              color: "#1A1A1A",
-              marginBottom: 16,
-            }}
-          >
-            Notification Preferences
-          </h3>
+        <div className="card" style={{ padding: 24 }}>
+          <SectionTitle>Notification preferences</SectionTitle>
           {[
-            {
-              label: "New Order Alerts",
-              sub: "When a cluster matches your gig",
-              on: true,
-            },
-            {
-              label: "Order Updates",
-              sub: "Status changes on your orders",
-              on: true,
-            },
-            {
-              label: "Payment Released",
-              sub: "Escrow releases & payouts",
-              on: true,
-            },
+            { label: "New order alerts", sub: "When a cluster matches your gig", on: true },
+            { label: "Order updates", sub: "Status changes on your orders", on: true },
+            { label: "Payment released", sub: "Escrow releases & payouts", on: true },
             { label: "Promotional", sub: "Updates from AgriSetu", on: false },
-          ].map(({ label, sub, on }) => (
+          ].map(({ label, sub, on }, i, arr) => (
             <div
               key={label}
               className="flex items-center justify-between py-3"
-              style={{ borderBottom: "1px solid #F0EDE8" }}
+              style={i < arr.length - 1 ? { borderBottom: "1px solid var(--color-line)" } : undefined}
             >
               <div>
-                <p style={{ fontSize: 14, fontWeight: 500, color: "#1A1A1A" }}>
+                <p className="text-ink" style={{ fontSize: 14, fontWeight: 500 }}>
                   {label}
                 </p>
-                <p style={{ fontSize: 12, color: "#A0A0A0" }}>{sub}</p>
+                <p className="text-ink-faint" style={{ fontSize: 12 }}>
+                  {sub}
+                </p>
               </div>
               <Toggle defaultChecked={on} />
             </div>
@@ -661,138 +518,72 @@ export function SettingsContent() {
         </div>
 
         {/* Security */}
-        <div className="bg-white rounded-2xl" style={{ padding: 24 }}>
-          <h3
-            style={{
-              fontFamily: "Plus Jakarta Sans",
-              fontSize: 16,
-              fontWeight: 700,
-              color: "#1A1A1A",
-              marginBottom: 16,
-            }}
-          >
-            Security
-          </h3>
+        <div className="card" style={{ padding: 24 }}>
+          <SectionTitle>Security</SectionTitle>
 
-          {passwordSuccess && (
-            <div
-              className="mb-4 rounded-xl p-3"
-              style={{
-                backgroundColor: "#D1FAE5",
-                color: "#065F46",
-                fontSize: 13,
-              }}
-            >
-              Password changed successfully!
-            </div>
-          )}
-          {passwordError && (
-            <div
-              className="mb-4 rounded-xl p-3"
-              style={{
-                backgroundColor: "#FEF2F2",
-                color: "#B03A2E",
-                fontSize: 13,
-              }}
-            >
-              {passwordError}
-            </div>
-          )}
+          {passwordSuccess && <Banner tone="success">Password changed successfully.</Banner>}
+          {passwordError && <Banner tone="error">{passwordError}</Banner>}
 
-          <form
-            onSubmit={passwordForm.handleSubmit(onPasswordSubmit)}
-            className="flex flex-col gap-4"
-          >
+          <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="flex flex-col gap-4">
             <FormInput
-              label="Current Password"
+              label="Current password"
               type="password"
               placeholder="••••••••"
               error={passwordForm.formState.errors.currentPassword?.message}
               {...passwordForm.register("currentPassword")}
             />
             <FormInput
-              label="New Password"
+              label="New password"
               type="password"
               placeholder="Min. 8 characters"
               error={passwordForm.formState.errors.newPassword?.message}
               {...passwordForm.register("newPassword")}
             />
             <FormInput
-              label="Confirm New Password"
+              label="Confirm new password"
               type="password"
               placeholder="••••••••"
               error={passwordForm.formState.errors.confirmPassword?.message}
               {...passwordForm.register("confirmPassword")}
             />
-            <button
-              type="submit"
-              disabled={changePasswordMutation.isPending}
-              className="rounded-xl font-semibold"
-              style={{
-                backgroundColor: "#2C5F2D",
-                color: "white",
-                height: 48,
-                fontSize: 14,
-              }}
-            >
-              {changePasswordMutation.isPending
-                ? "Updating…"
-                : "Change Password"}
-            </button>
+            <div>
+              <Button type="submit" disabled={changePasswordMutation.isPending} block>
+                {changePasswordMutation.isPending ? "Updating…" : "Change password"}
+              </Button>
+            </div>
           </form>
         </div>
 
         {/* Danger zone */}
         <div
-          className="rounded-2xl"
           style={{
+            borderRadius: 20,
             padding: 24,
-            backgroundColor: "#FEF2F2",
-            border: "1.5px solid #FCA5A5",
+            backgroundColor: "var(--color-danger-bg)",
+            border: "1px solid color-mix(in oklch, var(--color-danger) 35%, transparent)",
           }}
         >
           <div className="flex items-center gap-2 mb-3">
-            <AlertTriangle size={18} color="#B03A2E" />
-            <h3
-              style={{
-                fontFamily: "Plus Jakarta Sans",
-                fontSize: 16,
-                fontWeight: 700,
-                color: "#B03A2E",
-              }}
-            >
-              Danger Zone
+            <AlertTriangle size={18} className="text-danger" />
+            <h3 className="font-display text-danger" style={{ fontSize: 16, fontWeight: 700 }}>
+              Danger zone
             </h3>
           </div>
-          <p
-            style={{
-              fontSize: 13,
-              color: "#B03A2E",
-              marginBottom: 16,
-              lineHeight: 1.5,
-            }}
-          >
-            Deleting your account is permanent and cannot be undone. All your
-            gigs, bids, and order history will be removed.
+          <p className="text-danger" style={{ fontSize: 13, marginBottom: 16, lineHeight: 1.5 }}>
+            Deleting your account is permanent and cannot be undone. All your gigs, bids, and order
+            history will be removed.
           </p>
-          <button
-            className="w-full rounded-xl font-semibold"
-            style={{
-              backgroundColor: "#B03A2E",
-              color: "white",
-              height: 48,
-              fontSize: 14,
-            }}
+          <Button
+            variant="danger"
+            block
             onClick={() => {
-              if (
-                window.confirm("Are you sure? This action cannot be undone.")
-              ) {
+              if (window.confirm("Are you sure? This action cannot be undone.")) {
                 alert("Account deletion would be processed. (Mock)");
               }
             }}
           >
-            Delete Account
-          </button>
+            Delete account
+          </Button>
         </div>
       </div>
     </div>

@@ -1,22 +1,72 @@
 @import "tailwindcss";
 
-@theme {
-  --color-primary: #2c5f2d;
-  --color-primary-dark: #1e4220;
-  --color-primary-light: #3d7a3e;
-  --color-bg: #f7f5f0;
-  --color-surface: #ffffff;
-  --color-input: #ede8df;
-  --color-muted: #a0a0a0;
-  --color-textprimary: #1a1a1a;
-  --color-warning-bg: #fff3cd;
-  --color-warning-text: #d97706;
-  --color-danger-bg: #fef2f2;
-  --color-danger-text: #b03a2e;
-  --color-error: #ef4444;
+/* ============================================================
+   AgriSetu — "Harvest" design system
+   Three brand hues with fixed roles (leaf / clay / gold) over
+   warm-tinted neutrals. OKLCH throughout. Light mode.
+   ============================================================ */
 
-  --font-heading: "Plus Jakarta Sans", sans-serif;
-  --font-body: "Inter", sans-serif;
+@theme {
+  /* ---- Leaf — primary / growth / positive -------------------- */
+  --color-leaf-50: oklch(0.97 0.02 150);
+  --color-leaf-100: oklch(0.94 0.045 150);
+  --color-leaf-200: oklch(0.87 0.075 150);
+  --color-leaf-300: oklch(0.78 0.1 150);
+  --color-leaf-400: oklch(0.64 0.12 150);
+  --color-leaf-500: oklch(0.55 0.12 150);
+  --color-leaf-600: oklch(0.47 0.115 150);
+  --color-leaf-700: oklch(0.4 0.1 151);
+  --color-leaf-800: oklch(0.33 0.08 152);
+  --color-leaf-900: oklch(0.27 0.06 153);
+
+  /* ---- Clay — secondary / warm / earthy ---------------------- */
+  --color-clay-50: oklch(0.96 0.022 45);
+  --color-clay-100: oklch(0.92 0.045 45);
+  --color-clay-200: oklch(0.85 0.075 44);
+  --color-clay-400: oklch(0.66 0.13 42);
+  --color-clay-500: oklch(0.58 0.135 40);
+  --color-clay-600: oklch(0.51 0.13 38);
+  --color-clay-700: oklch(0.44 0.11 36);
+
+  /* ---- Gold — accent / harvest / attention ------------------- */
+  --color-gold-50: oklch(0.97 0.03 88);
+  --color-gold-100: oklch(0.94 0.06 86);
+  --color-gold-200: oklch(0.9 0.09 84);
+  --color-gold-300: oklch(0.86 0.12 83);
+  --color-gold-400: oklch(0.82 0.135 82);
+  --color-gold-500: oklch(0.76 0.13 80);
+  --color-gold-700: oklch(0.55 0.1 75);
+
+  /* ---- Warm neutrals (tinted toward harvest hue) ------------- */
+  --color-paper: oklch(0.985 0.006 84);
+  --color-surface: oklch(0.998 0.0025 84);
+  --color-sunk: oklch(0.962 0.008 82);
+  --color-line: oklch(0.912 0.009 78);
+  --color-line-strong: oklch(0.85 0.012 76);
+  --color-ink: oklch(0.27 0.014 60);
+  --color-ink-soft: oklch(0.45 0.013 62);
+  --color-ink-faint: oklch(0.6 0.011 66);
+
+  /* ---- Semantic status -------------------------------------- */
+  --color-success: oklch(0.5 0.12 150);
+  --color-success-bg: oklch(0.95 0.04 150);
+  --color-warning: oklch(0.56 0.12 66);
+  --color-warning-bg: oklch(0.95 0.05 82);
+  --color-danger: oklch(0.52 0.16 28);
+  --color-danger-bg: oklch(0.95 0.035 30);
+  --color-info: oklch(0.52 0.1 245);
+  --color-info-bg: oklch(0.95 0.03 245);
+
+  /* ---- Fonts ------------------------------------------------- */
+  --font-display: var(--font-bricolage), "Bricolage Grotesque", sans-serif;
+  --font-body: var(--font-hanken), "Hanken Grotesk", sans-serif;
+
+  /* ---- Shadows (warm, soft) --------------------------------- */
+  --shadow-card: 0 1px 2px oklch(0.4 0.03 60 / 0.04),
+    0 6px 20px oklch(0.4 0.03 60 / 0.05);
+  --shadow-pop: 0 4px 12px oklch(0.35 0.03 60 / 0.08),
+    0 16px 40px oklch(0.35 0.03 60 / 0.12);
+  --shadow-focus: 0 0 0 3px oklch(0.47 0.115 150 / 0.18);
 }
 
 @layer base {
@@ -29,13 +79,16 @@
   html,
   body {
     max-width: 100vw;
-    overflow-x: hidden;
   }
 
   body {
-    font-family: "Inter", sans-serif;
-    background-color: #f7f5f0;
-    color: #1a1a1a;
+    font-family: var(--font-body);
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-size: 0.9375rem; /* 15px base */
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 
   h1,
@@ -44,11 +97,257 @@
   h4,
   h5,
   h6 {
-    font-family: "Plus Jakarta Sans", sans-serif;
+    font-family: var(--font-display);
+    color: var(--color-ink);
+    letter-spacing: -0.01em;
+    line-height: 1.12;
   }
 
   a {
     color: inherit;
     text-decoration: none;
+  }
+
+  /* Tabular figures everywhere numbers carry meaning */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+
+  ::selection {
+    background: var(--color-leaf-200);
+    color: var(--color-leaf-900);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-leaf-600);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Warm, slim scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--color-line-strong);
+    border-radius: 999px;
+    border: 3px solid var(--color-paper);
+  }
+}
+
+@layer components {
+  /* ---- Surfaces -------------------------------------------- */
+  .card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: 20px;
+    box-shadow: var(--shadow-card);
+  }
+  .panel {
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: 24px;
+  }
+  .inset {
+    background: var(--color-sunk);
+    border-radius: 14px;
+  }
+
+  /* ---- Eyebrow / section label ----------------------------- */
+  .eyebrow {
+    font-family: var(--font-body);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-ink-faint);
+  }
+
+  /* ---- Buttons --------------------------------------------- */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 2.625rem;
+    padding: 0 1.15rem;
+    border-radius: 12px;
+    font-family: var(--font-body);
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition:
+      background-color 0.18s ease,
+      border-color 0.18s ease,
+      color 0.18s ease,
+      transform 0.12s ease,
+      box-shadow 0.18s ease;
+    white-space: nowrap;
+  }
+  .btn:active {
+    transform: translateY(1px);
+  }
+  .btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+  }
+  .btn-sm {
+    height: 2.25rem;
+    padding: 0 0.85rem;
+    font-size: 0.8125rem;
+    border-radius: 10px;
+  }
+  .btn-lg {
+    height: 3rem;
+    padding: 0 1.5rem;
+    font-size: 0.9375rem;
+  }
+
+  .btn-primary {
+    background: var(--color-leaf-600);
+    color: oklch(0.99 0.01 150);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-leaf-700);
+  }
+
+  .btn-secondary {
+    background: var(--color-clay-500);
+    color: oklch(0.99 0.01 60);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background: var(--color-clay-600);
+  }
+
+  .btn-ghost {
+    background: var(--color-surface);
+    color: var(--color-ink);
+    border-color: var(--color-line-strong);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--color-sunk);
+    border-color: var(--color-ink-faint);
+  }
+
+  .btn-soft {
+    background: var(--color-leaf-100);
+    color: var(--color-leaf-800);
+  }
+  .btn-soft:hover:not(:disabled) {
+    background: var(--color-leaf-200);
+  }
+
+  .btn-danger {
+    background: var(--color-danger);
+    color: oklch(0.99 0.01 30);
+  }
+  .btn-danger:hover:not(:disabled) {
+    filter: brightness(0.94);
+  }
+
+  /* ---- Form fields ----------------------------------------- */
+  .field {
+    width: 100%;
+    height: 2.75rem;
+    padding: 0 0.9rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-line-strong);
+    border-radius: 12px;
+    font-family: var(--font-body);
+    font-size: 0.9375rem;
+    color: var(--color-ink);
+    transition:
+      border-color 0.16s ease,
+      box-shadow 0.16s ease;
+  }
+  .field::placeholder {
+    color: var(--color-ink-faint);
+  }
+  .field:focus {
+    outline: none;
+    border-color: var(--color-leaf-500);
+    box-shadow: var(--shadow-focus);
+  }
+  textarea.field {
+    height: auto;
+    padding: 0.75rem 0.9rem;
+    line-height: 1.55;
+    resize: vertical;
+  }
+  .field-label {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--color-ink-soft);
+    margin-bottom: 0.4rem;
+  }
+
+  /* ---- Pills / tags ---------------------------------------- */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  /* ---- Loading skeleton ------------------------------------ */
+  .skeleton {
+    background: linear-gradient(
+      100deg,
+      var(--color-sunk) 30%,
+      oklch(0.94 0.008 82) 50%,
+      var(--color-sunk) 70%
+    );
+    background-size: 200% 100%;
+    animation: skeleton 1.4s ease-in-out infinite;
+    border-radius: 10px;
+  }
+  @keyframes skeleton {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+}
+
+@layer utilities {
+  /* Staggered entrance for page-load reveals */
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .rise {
+    animation: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }

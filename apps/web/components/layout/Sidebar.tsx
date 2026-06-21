@@ -30,22 +30,16 @@ export function Sidebar({ vendorName }: SidebarProps) {
 
   return (
     <aside
-      className="fixed left-0 top-0 h-screen flex flex-col justify-between py-8"
-      style={{
-        width: 240,
-        backgroundColor: "#ffffff",
-        borderRight: "1px solid #f0ede8",
-      }}
+      className="fixed left-0 top-0 h-screen flex flex-col justify-between bg-surface"
+      style={{ width: 248, borderRight: "1px solid var(--color-line)" }}
     >
-      {/* Top */}
-      <div className="flex flex-col gap-8 px-5">
-        {/* Logo */}
-        <div className="pb-5">
-          <BrandLogo theme="light" titleSize={16} badgeSize={36} iconSize={18} />
+      <div className="flex flex-col gap-7 px-4 pt-7">
+        <div className="px-2">
+          <BrandLogo titleSize={17} badgeSize={38} iconSize={20} />
         </div>
 
-        {/* Nav */}
         <nav className="flex flex-col gap-1">
+          <p className="eyebrow px-3 pb-1">Menu</p>
           {navItems.map(({ href, label, icon: Icon }) => {
             const isActive =
               pathname === href || pathname.startsWith(href + "/");
@@ -53,29 +47,21 @@ export function Sidebar({ vendorName }: SidebarProps) {
               <Link
                 key={href}
                 href={href}
-                className="flex items-center gap-3 rounded-xl transition-colors"
+                className={
+                  isActive
+                    ? "flex items-center gap-3 rounded-xl bg-leaf-600 text-white font-semibold"
+                    : "flex items-center gap-3 rounded-xl text-ink-soft font-medium transition-colors hover:bg-sunk hover:text-ink"
+                }
                 style={{
                   height: 44,
                   padding: "0 12px",
-                  backgroundColor: isActive ? "#2C5F2D" : "transparent",
-                  color: isActive ? "#ffffff" : "#A0A0A0",
                   fontSize: 14,
-                  fontWeight: isActive ? 600 : 400,
-                }}
-                onMouseEnter={(e) => {
-                  if (!isActive) {
-                    e.currentTarget.style.backgroundColor = "#F7F5F0";
-                    e.currentTarget.style.color = "#1A1A1A";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive) {
-                    e.currentTarget.style.backgroundColor = "transparent";
-                    e.currentTarget.style.color = "#A0A0A0";
-                  }
+                  boxShadow: isActive
+                    ? "0 6px 16px oklch(0.47 0.115 150 / 0.25)"
+                    : "none",
                 }}
               >
-                <Icon size={18} />
+                <Icon size={18} strokeWidth={isActive ? 2.4 : 2} />
                 <span>{label}</span>
               </Link>
             );
@@ -83,37 +69,21 @@ export function Sidebar({ vendorName }: SidebarProps) {
         </nav>
       </div>
 
-      {/* Bottom vendor card */}
-      <div className="px-5">
-        <div
-          className="flex items-center gap-2.5 rounded-xl"
-          style={{
-            padding: "10px 12px",
-            backgroundColor: "#F7F5F0",
-          }}
-        >
+      <div className="px-4 pb-6">
+        <div className="inset flex items-center gap-2.5" style={{ padding: "11px 12px" }}>
           <div
-            className="flex items-center justify-center rounded-full flex-shrink-0"
-            style={{
-              width: 32,
-              height: 32,
-              backgroundColor: "#2C5F2D",
-              color: "white",
-              fontSize: 13,
-              fontWeight: 600,
-              fontFamily: "Plus Jakarta Sans",
-            }}
+            className="flex items-center justify-center rounded-full bg-leaf-600 text-white flex-shrink-0 font-display"
+            style={{ width: 34, height: 34, fontSize: 14, fontWeight: 700 }}
           >
             {vendorName?.[0]?.toUpperCase() ?? "V"}
           </div>
           <div className="min-w-0">
-            <p
-              className="truncate font-semibold"
-              style={{ fontSize: 13, color: "#1A1A1A" }}
-            >
+            <p className="truncate font-semibold text-ink" style={{ fontSize: 13 }}>
               {vendorName ?? "Vendor"}
             </p>
-            <p style={{ fontSize: 11, color: "#A0A0A0" }}>Vendor Account</p>
+            <p className="text-ink-faint" style={{ fontSize: 11 }}>
+              Vendor account
+            </p>
           </div>
         </div>
       </div>

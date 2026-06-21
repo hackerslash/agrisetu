@@ -5,6 +5,17 @@ import { X, ShoppingBag, CheckCircle, Bell } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 
+const TONE: Record<string, { chip: string; icon: React.ReactNode }> = {
+  order_delivered: {
+    chip: "bg-leaf-100 text-leaf-700",
+    icon: <CheckCircle size={16} />,
+  },
+  order_new: {
+    chip: "bg-gold-100 text-gold-700",
+    icon: <ShoppingBag size={16} />,
+  },
+};
+
 export function ToastContainer() {
   const { toasts, dismissToast } = useNotifications();
   const router = useRouter();
@@ -21,80 +32,78 @@ export function ToastContainer() {
         zIndex: 9999,
         display: "flex",
         flexDirection: "column",
-        gap: 10,
-        maxWidth: 360,
+        gap: 12,
+        maxWidth: 380,
       }}
     >
-      {toasts.map((toast) => (
-        <div
-          key={toast.id}
-          className="flex items-start gap-3 rounded-2xl shadow-lg"
-          style={{
-            backgroundColor: "#1A1A1A",
-            color: "white",
-            padding: "14px 16px",
-            animation: "slideUp 0.25s ease",
-          }}
-        >
+      {toasts.map((toast) => {
+        const tone = TONE[toast.type] ?? {
+          chip: "bg-info-bg text-info",
+          icon: <Bell size={16} />,
+        };
+        return (
           <div
-            className="flex items-center justify-center rounded-xl shrink-0"
-            style={{ width: 36, height: 36, backgroundColor: "#2C5F2D" }}
+            key={toast.id}
+            className="card flex items-start gap-3"
+            style={{
+              padding: "14px 16px",
+              boxShadow: "var(--shadow-pop)",
+              animation: "toastIn 0.32s cubic-bezier(0.22,1,0.36,1)",
+            }}
           >
-            {toast.type === "order_delivered" ? (
-              <CheckCircle size={16} color="white" />
-            ) : toast.type === "order_new" ? (
-              <ShoppingBag size={16} color="white" />
-            ) : (
-              <Bell size={16} color="white" />
-            )}
+            <div
+              className={`flex items-center justify-center rounded-xl shrink-0 ${tone.chip}`}
+              style={{ width: 36, height: 36 }}
+            >
+              {tone.icon}
+            </div>
+            <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+              <p className="text-ink" style={{ fontSize: 13.5, fontWeight: 700 }}>
+                {toast.title}
+              </p>
+              <p className="text-ink-soft" style={{ fontSize: 12.5, lineHeight: 1.45 }}>
+                {toast.message}
+              </p>
+              {toast.orderId && (
+                <button
+                  onClick={() => {
+                    void queryClient.invalidateQueries({
+                      queryKey: ["vendor-order", toast.orderId],
+                      refetchType: "active",
+                    });
+                    void queryClient.invalidateQueries({
+                      queryKey: ["vendor-orders"],
+                      refetchType: "active",
+                    });
+                    router.push(`/orders/${toast.orderId}`);
+                    dismissToast(toast.id);
+                  }}
+                  className="text-leaf-700"
+                  style={{
+                    marginTop: 6,
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  View order →
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => dismissToast(toast.id)}
+              aria-label="Dismiss"
+              className="text-ink-faint transition-colors hover:text-ink"
+              style={{ cursor: "pointer", padding: 0 }}
+            >
+              <X size={15} />
+            </button>
           </div>
-          <div className="flex flex-col gap-0.5 flex-1">
-            <p style={{ fontSize: 13, fontWeight: 600, color: "white" }}>
-              {toast.title}
-            </p>
-            <p style={{ fontSize: 12, color: "#A0A0A0", lineHeight: 1.4 }}>
-              {toast.message}
-            </p>
-            {toast.orderId && (
-              <button
-                onClick={() => {
-                  void queryClient.invalidateQueries({
-                    queryKey: ["vendor-order", toast.orderId],
-                    refetchType: "active",
-                  });
-                  void queryClient.invalidateQueries({
-                    queryKey: ["vendor-orders"],
-                    refetchType: "active",
-                  });
-                  router.push(`/orders/${toast.orderId}`);
-                  dismissToast(toast.id);
-                }}
-                style={{
-                  marginTop: 6,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "#4ADE80",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: 0,
-                  textAlign: "left",
-                }}
-              >
-                View Order →
-              </button>
-            )}
-          </div>
-          <button
-            onClick={() => dismissToast(toast.id)}
-            style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}
-          >
-            <X size={14} color="#A0A0A0" />
-          </button>
-        </div>
-      ))}
+        );
+      })}
       <style>{`
-        @keyframes slideUp {
+        @keyframes toastIn {
           from { transform: translateY(16px); opacity: 0; }
           to { transform: translateY(0); opacity: 1; }
         }

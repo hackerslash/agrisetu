@@ -16,7 +16,9 @@ export function GigEditorWrapper({ id }: { id: string }) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center" style={{ height: 300 }}>
-        <p style={{ fontSize: 14, color: "#A0A0A0" }}>Loading gig…</p>
+        <p className="text-ink-faint" style={{ fontSize: 14 }}>
+          Loading gig…
+        </p>
       </div>
     );
   }

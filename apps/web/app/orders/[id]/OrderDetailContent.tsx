@@ -16,6 +16,7 @@ import {
 import { vendorApi } from "@repo/api-client";
 import type { Cluster } from "@repo/api-client";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
+import { Button } from "../../../components/ui/Button";
 import { formatCurrency, formatDate } from "../../../lib/utils";
 import { useNotifications } from "../../../lib/NotificationContext";
 
@@ -41,62 +42,39 @@ function ConfirmModal({
   return (
     <div
       className="fixed inset-0 flex items-center justify-center z-50"
-      style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
+      style={{ backgroundColor: "oklch(0.27 0.014 60 / 0.45)" }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onCancel();
       }}
     >
       <div
-        className="bg-white rounded-2xl flex flex-col gap-5"
-        style={{ width: 400, padding: 28 }}
+        className="panel flex flex-col gap-5 rise"
+        style={{ width: 420, padding: 28, boxShadow: "var(--shadow-pop)" }}
       >
-        <p
-          style={{
-            fontFamily: "Plus Jakarta Sans",
-            fontSize: 17,
-            fontWeight: 700,
-            color: "#1A1A1A",
-          }}
+        <h3
+          className="font-display text-ink"
+          style={{ fontSize: 19, fontWeight: 700 }}
         >
           {title}
-        </p>
+        </h3>
         {description && (
-          <p style={{ fontSize: 13, color: "#5A5A5A", lineHeight: 1.5 }}>
+          <p className="text-ink-soft" style={{ fontSize: 14, lineHeight: 1.55 }}>
             {description}
           </p>
         )}
         {children}
         <div className="flex gap-3">
-          <button
-            onClick={onCancel}
-            className="flex-1 rounded-xl font-medium"
-            style={{
-              height: 44,
-              backgroundColor: "#EDE8DF",
-              color: "#1A1A1A",
-              fontSize: 14,
-              border: "none",
-              cursor: "pointer",
-            }}
-          >
+          <Button onClick={onCancel} variant="ghost" block>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={onConfirm}
             disabled={loading}
-            className="flex-1 rounded-xl font-semibold"
-            style={{
-              height: 44,
-              backgroundColor: confirmColor ?? "#2C5F2D",
-              color: "white",
-              fontSize: 14,
-              border: "none",
-              cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.7 : 1,
-            }}
+            variant={confirmColor === "danger" ? "danger" : "primary"}
+            block
           >
             {loading ? "Processing…" : confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -185,8 +163,13 @@ export function OrderDetailContent({ id }: { id: string }) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center" style={{ height: 300 }}>
-        <p style={{ fontSize: 14, color: "#A0A0A0" }}>Loading order…</p>
+      <div className="flex flex-col gap-5">
+        <div className="skeleton" style={{ height: 56, maxWidth: 320 }} />
+        <div className="skeleton" style={{ height: 120 }} />
+        <div className="flex gap-5">
+          <div className="skeleton flex-1" style={{ height: 260 }} />
+          <div className="skeleton" style={{ width: 260, height: 260 }} />
+        </div>
       </div>
     );
   }
@@ -194,24 +177,24 @@ export function OrderDetailContent({ id }: { id: string }) {
   if (!order) {
     return (
       <div
-        className="flex flex-col items-center justify-center gap-3"
-        style={{ height: 300 }}
+        className="flex flex-col items-center justify-center gap-4"
+        style={{ height: 320 }}
       >
-        <p style={{ fontSize: 14, color: "#A0A0A0" }}>Order not found.</p>
-        <button
-          onClick={() => router.push("/orders")}
-          style={{
-            backgroundColor: "#2C5F2D",
-            color: "white",
-            fontSize: 13,
-            padding: "8px 20px",
-            borderRadius: 12,
-            border: "none",
-            cursor: "pointer",
-          }}
+        <div
+          className="flex items-center justify-center rounded-2xl bg-sunk text-ink-faint"
+          style={{ width: 56, height: 56 }}
         >
-          Back to Orders
-        </button>
+          <Package size={26} />
+        </div>
+        <p
+          className="font-display text-ink"
+          style={{ fontSize: 16, fontWeight: 700 }}
+        >
+          Order not found
+        </p>
+        <Button onClick={() => router.push("/orders")} variant="primary">
+          Back to orders
+        </Button>
       </div>
     );
   }
@@ -228,14 +211,14 @@ export function OrderDetailContent({ id }: { id: string }) {
     switch (cluster.status) {
       case "PAYMENT":
         return {
-          label: "Mark as Processing",
+          label: "Mark as processing",
           action: () => setConfirmAction("process"),
           icon: Package,
         };
       case "PROCESSING":
       case "OUT_FOR_DELIVERY":
         return {
-          label: "Mark as Dispatched",
+          label: "Mark as dispatched",
           action: () => setConfirmAction("dispatch"),
           icon: Truck,
         };
@@ -300,36 +283,34 @@ export function OrderDetailContent({ id }: { id: string }) {
   ).length;
   const totalFarmers = farmerDeliverySummary.length;
 
+  const ICON_FOR_STATUS = nextAction?.icon;
+
   return (
     <div className="flex flex-col gap-5">
       {/* Back + header */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 rise">
         <button
           onClick={() => router.push("/orders")}
-          className="flex items-center justify-center rounded-xl hover:bg-white transition-colors"
+          className="flex items-center justify-center rounded-xl text-ink-soft transition-colors hover:bg-sunk hover:text-ink"
           style={{
-            width: 36,
-            height: 36,
-            border: "none",
-            cursor: "pointer",
-            backgroundColor: "transparent",
+            width: 38,
+            height: 38,
+            border: "1px solid var(--color-line)",
+            background: "var(--color-surface)",
           }}
+          aria-label="Back to orders"
         >
-          <ArrowLeft size={18} color="#5A5A5A" />
+          <ArrowLeft size={18} />
         </button>
         <div>
-          <p
-            style={{
-              fontFamily: "Plus Jakarta Sans",
-              fontSize: 18,
-              fontWeight: 700,
-              color: "#1A1A1A",
-            }}
+          <h2
+            className="font-display text-ink tnum"
+            style={{ fontSize: 22, fontWeight: 800 }}
           >
             Order #{cluster.id.slice(-6).toUpperCase()}
-          </p>
-          <p style={{ fontSize: 13, color: "#A0A0A0" }}>
-            Created {formatDate(cluster.createdAt)}
+          </h2>
+          <p className="text-ink-faint" style={{ fontSize: 13, marginTop: 2 }}>
+            {cluster.product} · Created {formatDate(cluster.createdAt)}
           </p>
         </div>
         <div style={{ marginLeft: "auto" }}>
@@ -339,19 +320,17 @@ export function OrderDetailContent({ id }: { id: string }) {
 
       {/* Progress stepper */}
       {!isFailed && (
-        <div className="bg-white rounded-2xl" style={{ padding: "20px 24px" }}>
+        <section
+          className="card rise"
+          style={{ padding: "22px 24px", animationDelay: "60ms" }}
+        >
           <p
-            style={{
-              fontFamily: "Plus Jakarta Sans",
-              fontSize: 14,
-              fontWeight: 700,
-              color: "#1A1A1A",
-              marginBottom: 20,
-            }}
+            className="font-display text-ink"
+            style={{ fontSize: 16, fontWeight: 700, marginBottom: 22 }}
           >
-            Order Progress
+            Order progress
           </p>
-          <div className="flex items-center">
+          <div className="flex items-start">
             {ORDER_STEPS.map((step, idx) => {
               // A step is "done" if we've passed it (current step index is greater)
               const done = currentStepIdx > idx;
@@ -359,48 +338,43 @@ export function OrderDetailContent({ id }: { id: string }) {
               const active = !isCompleted && currentStepIdx === idx;
               // If fully completed, all steps are done
               const allDone = isCompleted;
+              const reached = allDone || done;
               const Icon = step.icon;
               return (
-                <div key={step.status} className="flex items-center flex-1">
+                <div key={step.status} className="flex items-start flex-1">
                   <div
-                    className="flex flex-col items-center gap-1.5"
-                    style={{ minWidth: 60 }}
+                    className="flex flex-col items-center gap-2"
+                    style={{ minWidth: 64 }}
                   >
                     <div
-                      className="flex items-center justify-center rounded-full"
+                      className={
+                        reached
+                          ? "flex items-center justify-center rounded-full bg-leaf-600 text-white"
+                          : active
+                            ? "flex items-center justify-center rounded-full bg-leaf-100 text-leaf-700"
+                            : "flex items-center justify-center rounded-full bg-sunk text-ink-faint"
+                      }
                       style={{
-                        width: 40,
-                        height: 40,
-                        backgroundColor:
-                          allDone || done
-                            ? "#2C5F2D"
-                            : active
-                              ? "#E8F5E9"
-                              : "#F3F4F6",
-                        border: active ? "2px solid #2C5F2D" : "none",
+                        width: 44,
+                        height: 44,
+                        border: active
+                          ? "2px solid var(--color-leaf-600)"
+                          : "2px solid transparent",
                       }}
                     >
-                      <Icon
-                        size={18}
-                        color={
-                          allDone || done
-                            ? "white"
-                            : active
-                              ? "#2C5F2D"
-                              : "#9CA3AF"
-                        }
-                      />
+                      <Icon size={19} />
                     </div>
                     <p
+                      className={
+                        reached
+                          ? "text-leaf-700"
+                          : active
+                            ? "text-ink"
+                            : "text-ink-faint"
+                      }
                       style={{
-                        fontSize: 11,
-                        fontWeight: active || done || allDone ? 600 : 400,
-                        color:
-                          allDone || done
-                            ? "#2C5F2D"
-                            : active
-                              ? "#1A1A1A"
-                              : "#9CA3AF",
+                        fontSize: 12,
+                        fontWeight: reached || active ? 600 : 500,
                         textAlign: "center",
                         whiteSpace: "nowrap",
                       }}
@@ -410,14 +384,14 @@ export function OrderDetailContent({ id }: { id: string }) {
                   </div>
                   {idx < ORDER_STEPS.length - 1 && (
                     <div
+                      className={reached ? "bg-leaf-600" : "bg-line"}
                       style={{
                         flex: 1,
                         height: 2,
-                        backgroundColor:
-                          allDone || done ? "#2C5F2D" : "#E5E7EB",
-                        marginBottom: 20,
+                        marginTop: 21,
                         marginLeft: 4,
                         marginRight: 4,
+                        borderRadius: 999,
                       }}
                     />
                   )}
@@ -425,27 +399,22 @@ export function OrderDetailContent({ id }: { id: string }) {
               );
             })}
           </div>
-        </div>
+        </section>
       )}
 
       {/* Main content grid */}
-      <div className="flex gap-5">
+      <div className="flex gap-5 rise" style={{ animationDelay: "120ms" }}>
         {/* Left: details */}
         <div className="flex flex-col gap-4 flex-1">
           {/* Cluster info */}
-          <div className="bg-white rounded-2xl" style={{ padding: 20 }}>
+          <section className="card" style={{ padding: 22 }}>
             <p
-              style={{
-                fontFamily: "Plus Jakarta Sans",
-                fontSize: 14,
-                fontWeight: 700,
-                color: "#1A1A1A",
-                marginBottom: 16,
-              }}
+              className="font-display text-ink"
+              style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}
             >
-              Cluster Details
+              Cluster details
             </p>
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
               {[
                 { label: "Product", value: cluster.product },
                 {
@@ -453,69 +422,78 @@ export function OrderDetailContent({ id }: { id: string }) {
                   value: `${cluster.currentQuantity} ${cluster.unit}`,
                 },
                 {
-                  label: "Target Quantity",
+                  label: "Target quantity",
                   value: `${cluster.targetQuantity} ${cluster.unit}`,
                 },
                 {
-                  label: "Total Amount",
+                  label: "Total amount",
                   value: formatCurrency(totalAmount),
                 },
               ].map(({ label, value }) => (
-                <div key={label} className="flex justify-between">
-                  <span style={{ fontSize: 13, color: "#A0A0A0" }}>
+                <div
+                  key={label}
+                  className="flex justify-between items-center"
+                  style={{ padding: "8px 0" }}
+                >
+                  <span className="text-ink-soft" style={{ fontSize: 13.5 }}>
                     {label}
                   </span>
                   <span
-                    style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}
+                    className="text-ink tnum"
+                    style={{ fontSize: 13.5, fontWeight: 600 }}
                   >
                     {value}
                   </span>
                 </div>
               ))}
             </div>
-          </div>
+          </section>
 
           {/* Location */}
           {(cluster.district ?? cluster.state) && (
-            <div
-              className="bg-white rounded-2xl flex items-start gap-3"
-              style={{ padding: 20 }}
+            <section
+              className="card flex items-start gap-3"
+              style={{ padding: 22 }}
             >
               <div
-                className="flex items-center justify-center rounded-xl shrink-0"
-                style={{ width: 36, height: 36, backgroundColor: "#F0FDF4" }}
+                className="flex items-center justify-center rounded-xl bg-leaf-50 text-leaf-600 shrink-0"
+                style={{ width: 38, height: 38 }}
               >
-                <MapPin size={16} color="#2C5F2D" />
+                <MapPin size={17} />
               </div>
               <div>
-                <p style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}>
-                  Delivery Location
+                <p className="text-ink" style={{ fontSize: 14, fontWeight: 600 }}>
+                  Delivery location
                 </p>
-                <p style={{ fontSize: 13, color: "#5A5A5A", marginTop: 2 }}>
+                <p className="text-ink-soft" style={{ fontSize: 13.5, marginTop: 2 }}>
                   {[cluster.district, cluster.state].filter(Boolean).join(", ")}
                 </p>
               </div>
-            </div>
+            </section>
           )}
 
           {/* Members */}
           {(cluster.members ?? []).length > 0 && (
-            <div className="bg-white rounded-2xl" style={{ padding: 20 }}>
+            <section className="card" style={{ padding: 22 }}>
               <div
                 className="flex items-center gap-2"
-                style={{ marginBottom: 12 }}
+                style={{ marginBottom: 14 }}
               >
-                <Users size={15} color="#2C5F2D" />
-                <p
-                  style={{
-                    fontFamily: "Plus Jakarta Sans",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    color: "#1A1A1A",
-                  }}
+                <span
+                  className="flex items-center justify-center rounded-lg bg-leaf-50 text-leaf-600"
+                  style={{ width: 28, height: 28 }}
                 >
-                  Farmers ({deliveredFarmers}/{totalFarmers} delivered)
+                  <Users size={15} />
+                </span>
+                <p
+                  className="font-display text-ink"
+                  style={{ fontSize: 16, fontWeight: 700 }}
+                >
+                  Farmers
                 </p>
+                <span className="pill bg-sunk text-ink-soft tnum">
+                  {deliveredFarmers}/{totalFarmers} delivered
+                </span>
               </div>
               <div className="flex flex-col gap-2">
                 {farmerDeliverySummary.slice(0, 5).map((m) => {
@@ -524,77 +502,70 @@ export function OrderDetailContent({ id }: { id: string }) {
                   const isPartial =
                     m.deliveredOrders > 0 && m.deliveredOrders < m.totalOrders;
                   return (
-                  <div
-                    key={m.farmerId}
-                    className="flex justify-between items-center"
-                    style={{
-                      padding: "8px 12px",
-                      backgroundColor: "#F7F5F0",
-                      borderRadius: 10,
-                    }}
-                  >
-                    <div className="flex flex-col">
-                      <span style={{ fontSize: 13, color: "#1A1A1A" }}>
-                        {m.farmerName}
-                      </span>
-                      <span style={{ fontSize: 12, color: "#5A5A5A" }}>
-                        {m.quantity} {cluster.unit}
+                    <div
+                      key={m.farmerId}
+                      className="inset flex justify-between items-center"
+                      style={{ padding: "10px 14px" }}
+                    >
+                      <div className="flex flex-col">
+                        <span className="text-ink" style={{ fontSize: 13.5 }}>
+                          {m.farmerName}
+                        </span>
+                        <span
+                          className="text-ink-faint tnum"
+                          style={{ fontSize: 12 }}
+                        >
+                          {m.quantity} {cluster.unit}
+                        </span>
+                      </div>
+                      <span
+                        className={
+                          isDelivered
+                            ? "pill bg-leaf-50 text-leaf-700"
+                            : isPartial
+                              ? "pill bg-gold-100 text-gold-700"
+                              : "pill bg-sunk text-ink-soft"
+                        }
+                      >
+                        {isDelivered
+                          ? "Delivered"
+                          : isPartial
+                            ? `Partial ${m.deliveredOrders}/${m.totalOrders}`
+                            : "Pending"}
                       </span>
                     </div>
-                    <span
-                      style={{
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: isDelivered
-                          ? "#065F46"
-                          : isPartial
-                            ? "#92400E"
-                            : "#6B7280",
-                      }}
-                    >
-                      {isDelivered
-                        ? "Delivered"
-                        : isPartial
-                          ? `Partial (${m.deliveredOrders}/${m.totalOrders})`
-                          : "Pending"}
-                    </span>
-                  </div>
-                );
+                  );
                 })}
                 {farmerDeliverySummary.length > 5 && (
-                  <p style={{ fontSize: 12, color: "#A0A0A0", paddingLeft: 4 }}>
+                  <p
+                    className="text-ink-faint"
+                    style={{ fontSize: 12.5, paddingLeft: 4, marginTop: 2 }}
+                  >
                     +{farmerDeliverySummary.length - 5} more farmers
                   </p>
                 )}
               </div>
-            </div>
+            </section>
           )}
         </div>
 
         {/* Right: actions */}
-        <div className="flex flex-col gap-4" style={{ width: 260 }}>
-          <div
-            className="bg-white rounded-2xl flex flex-col gap-3"
-            style={{ padding: 20 }}
-          >
+        <div className="flex flex-col gap-4" style={{ width: 264 }}>
+          <section className="card flex flex-col gap-3" style={{ padding: 22 }}>
             <p
-              style={{
-                fontFamily: "Plus Jakarta Sans",
-                fontSize: 14,
-                fontWeight: 700,
-                color: "#1A1A1A",
-              }}
+              className="font-display text-ink"
+              style={{ fontSize: 16, fontWeight: 700 }}
             >
               Actions
             </p>
 
             {isFailed && (
               <div
-                className="rounded-xl flex items-center gap-2"
-                style={{ backgroundColor: "#FEF2F2", padding: "12px 14px" }}
+                className="rounded-xl flex items-start gap-2.5"
+                style={{ background: "var(--color-danger-bg)", padding: "12px 14px" }}
               >
-                <XCircle size={16} color="#DC2626" />
-                <p style={{ fontSize: 13, color: "#DC2626" }}>
+                <XCircle size={16} className="text-danger shrink-0" style={{ marginTop: 1 }} />
+                <p className="text-danger" style={{ fontSize: 13, lineHeight: 1.5 }}>
                   This order has been rejected.
                 </p>
               </div>
@@ -602,11 +573,11 @@ export function OrderDetailContent({ id }: { id: string }) {
 
             {isCompleted && (
               <div
-                className="rounded-xl flex items-center gap-2"
-                style={{ backgroundColor: "#D1FAE5", padding: "12px 14px" }}
+                className="rounded-xl flex items-start gap-2.5"
+                style={{ background: "var(--color-success-bg)", padding: "12px 14px" }}
               >
-                <CheckCircle size={16} color="#065F46" />
-                <p style={{ fontSize: 13, color: "#065F46" }}>
+                <CheckCircle size={16} className="text-success shrink-0" style={{ marginTop: 1 }} />
+                <p className="text-success" style={{ fontSize: 13, lineHeight: 1.5 }}>
                   Order successfully delivered.
                 </p>
               </div>
@@ -614,10 +585,11 @@ export function OrderDetailContent({ id }: { id: string }) {
 
             {!isFailed && !isCompleted && cluster.status === "PAYMENT" && (
               <div
-                className="rounded-xl"
-                style={{ backgroundColor: "#EFF6FF", padding: "12px 14px" }}
+                className="rounded-xl flex items-start gap-2.5"
+                style={{ background: "var(--color-info-bg)", padding: "12px 14px" }}
               >
-                <p style={{ fontSize: 13, color: "#1D4ED8", lineHeight: 1.5 }}>
+                <Clock size={16} className="text-info shrink-0" style={{ marginTop: 1 }} />
+                <p className="text-info" style={{ fontSize: 13, lineHeight: 1.5 }}>
                   New order received. Review and start processing when ready.
                 </p>
               </div>
@@ -628,83 +600,66 @@ export function OrderDetailContent({ id }: { id: string }) {
               (cluster.status === "DISPATCHED" ||
                 cluster.status === "OUT_FOR_DELIVERY") && (
                 <div
-                  className="rounded-xl"
-                  style={{ backgroundColor: "#FEF3C7", padding: "12px 14px" }}
+                  className="rounded-xl flex items-start gap-2.5"
+                  style={{ background: "var(--color-warning-bg)", padding: "12px 14px" }}
                 >
-                  <p style={{ fontSize: 13, color: "#92400E", lineHeight: 1.5 }}>
+                  <Truck size={16} className="text-warning shrink-0" style={{ marginTop: 1 }} />
+                  <p className="text-warning" style={{ fontSize: 13, lineHeight: 1.5 }}>
                     {deliveredFarmers} of {totalFarmers} farmers confirmed
                     delivery.
                   </p>
                 </div>
               )}
 
-            {nextAction && (
-              <button
-                onClick={nextAction.action}
-                className="flex items-center justify-center gap-2 rounded-xl font-semibold"
-                style={{
-                  backgroundColor: "#2C5F2D",
-                  color: "white",
-                  height: 44,
-                  fontSize: 14,
-                  border: "none",
-                  cursor: "pointer",
-                }}
-              >
-                <nextAction.icon size={15} />
+            {nextAction && ICON_FOR_STATUS && (
+              <Button onClick={nextAction.action} variant="primary" block>
+                <ICON_FOR_STATUS size={16} />
                 {nextAction.label}
-              </button>
+              </Button>
             )}
 
             {canReject && (
-              <button
+              <Button
                 onClick={() => router.push(`/orders/${id}/reject`)}
-                className="flex items-center justify-center gap-2 rounded-xl font-semibold"
-                style={{
-                  backgroundColor: "#FEF2F2",
-                  color: "#DC2626",
-                  height: 44,
-                  fontSize: 14,
-                  border: "none",
-                  cursor: "pointer",
-                }}
+                variant="ghost"
+                block
               >
-                <XCircle size={15} />
-                Reject Order
-              </button>
+                <XCircle size={15} className="text-danger" />
+                Reject order
+              </Button>
             )}
-          </div>
+          </section>
 
           {/* Payment summary */}
-          <div className="bg-white rounded-2xl" style={{ padding: 20 }}>
+          <section className="card" style={{ padding: 22 }}>
             <p
-              style={{
-                fontFamily: "Plus Jakarta Sans",
-                fontSize: 14,
-                fontWeight: 700,
-                color: "#1A1A1A",
-                marginBottom: 12,
-              }}
+              className="font-display text-ink"
+              style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}
             >
               Payment
             </p>
-            <div className="flex flex-col gap-2">
-              <div className="flex justify-between">
-                <span style={{ fontSize: 13, color: "#A0A0A0" }}>Total</span>
+            <div className="flex flex-col gap-2.5">
+              <div className="flex justify-between items-center">
+                <span className="text-ink-soft" style={{ fontSize: 13.5 }}>
+                  Total
+                </span>
                 <span
-                  style={{ fontSize: 13, fontWeight: 700, color: "#2C5F2D" }}
+                  className="text-leaf-700 tnum"
+                  style={{ fontSize: 15, fontWeight: 700 }}
                 >
                   {formatCurrency(totalAmount)}
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span style={{ fontSize: 13, color: "#A0A0A0" }}>Payments</span>
-                <span style={{ fontSize: 13, color: "#1A1A1A" }}>
+              <div className="flex justify-between items-center">
+                <span className="text-ink-soft" style={{ fontSize: 13.5 }}>
+                  Payments
+                </span>
+                <span className="text-ink tnum" style={{ fontSize: 13.5 }}>
                   {cluster.payments?.length ?? 0}
                 </span>
               </div>
             </div>
-          </div>
+          </section>
         </div>
       </div>
 
@@ -713,8 +668,8 @@ export function OrderDetailContent({ id }: { id: string }) {
         <ConfirmModal
           title={
             confirmAction === "process"
-              ? "Mark as Processing?"
-              : "Mark as Dispatched?"
+              ? "Mark as processing?"
+              : "Mark as dispatched?"
           }
           description={
             confirmAction === "process"
@@ -723,8 +678,8 @@ export function OrderDetailContent({ id }: { id: string }) {
           }
           confirmLabel={
             confirmAction === "process"
-              ? "Confirm Processing"
-              : "Confirm Dispatched"
+              ? "Confirm processing"
+              : "Confirm dispatched"
           }
           onConfirm={handleConfirmAction}
           onCancel={() => setConfirmAction(null)}

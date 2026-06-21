@@ -3,10 +3,19 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { Eye, Gavel, X, Search, Download } from "lucide-react";
+import {
+  Eye,
+  Gavel,
+  X,
+  Search,
+  Download,
+  Package,
+  ArrowRight,
+} from "lucide-react";
 import { vendorApi } from "@repo/api-client";
 import type { Cluster, Gig } from "@repo/api-client";
 import { StatusBadge } from "../../components/ui/StatusBadge";
+import { Button } from "../../components/ui/Button";
 import { formatCurrency, formatDate } from "../../lib/utils";
 
 type FilterTab = "ALL" | "PAYMENT" | "DISPATCHED" | "COMPLETED" | "FAILED";
@@ -191,213 +200,178 @@ export function OrdersContent() {
     });
   }
 
+  const stat = [
+    { label: "New orders", value: stats.new, accent: "leaf" as const },
+    { label: "In progress", value: stats.inProgress, accent: "gold" as const },
+    { label: "Fulfilled", value: stats.completed, accent: "clay" as const },
+  ];
+
+  const STAT_VALUE: Record<"leaf" | "gold" | "clay", string> = {
+    leaf: "text-leaf-700",
+    gold: "text-gold-700",
+    clay: "text-clay-700",
+  };
+
   return (
-    <div className="flex flex-col gap-6">
-      {/* Stats strip */}
-      <div className="flex gap-3">
-        {[
-          { label: "New Orders", value: stats.new, color: "#1A1A1A" },
-          { label: "Processing", value: stats.inProgress, color: "#F59E0B" },
-          {
-            label: "Order Fulfilled",
-            value: stats.completed,
-            color: "#16A34A",
-          },
-        ].map(({ label, value, color }) => (
-          <div
-            key={label}
-            className="flex flex-col gap-1 rounded-2xl"
-            style={{
-              flex: 1,
-              backgroundColor: "#FFFFFF",
-              padding: "14px 20px",
-            }}
+    <div className="flex flex-col gap-7">
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="flex items-end justify-between gap-4 rise">
+        <div>
+          <h2
+            className="font-display text-ink"
+            style={{ fontSize: 26, fontWeight: 800 }}
           >
+            Orders &amp; bids
+          </h2>
+          <p className="text-ink-soft" style={{ fontSize: 14, marginTop: 3 }}>
+            Place bids on open farmer clusters and track every order you win
+            through to delivery.
+          </p>
+        </div>
+      </div>
+
+      {/* ── Stat strip ─────────────────────────────────────────────────────── */}
+      <div className="flex gap-4 rise" style={{ animationDelay: "60ms" }}>
+        {stat.map(({ label, value, accent }) => (
+          <div key={label} className="card flex-1 p-5">
+            <p className="eyebrow">{label}</p>
             <p
-              style={{
-                fontSize: 22,
-                fontWeight: 700,
-                fontFamily: "Plus Jakarta Sans",
-                color,
-              }}
+              className={`tnum font-display mt-2.5 ${STAT_VALUE[accent]}`}
+              style={{ fontSize: 30, fontWeight: 700, lineHeight: 1.05 }}
             >
               {value}
             </p>
-            <p style={{ fontSize: 12, color: "#A0A0A0" }}>{label}</p>
           </div>
         ))}
       </div>
 
       {/* ── Open Clusters — place bids ─────────────────────────────────────── */}
       {unbidClusters.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <Gavel size={16} color="#2C5F2D" />
-            <p
-              style={{
-                fontFamily: "Plus Jakarta Sans",
-                fontSize: 15,
-                fontWeight: 700,
-                color: "#1A1A1A",
-              }}
-            >
-              Open Clusters — Place Your Bid
-            </p>
-            <span
-              style={{
-                fontSize: 12,
-                backgroundColor: "#D1FAE5",
-                color: "#065F46",
-                padding: "2px 8px",
-                borderRadius: 20,
-                fontWeight: 600,
-              }}
-            >
-              {unbidClusters.length} new
-            </span>
+        <section
+          className="panel overflow-hidden rise"
+          style={{ animationDelay: "120ms" }}
+        >
+          <div
+            className="flex items-center justify-between gap-3"
+            style={{
+              padding: "18px 22px",
+              borderBottom: "1px solid var(--color-line)",
+            }}
+          >
+            <div className="flex items-center gap-2.5">
+              <span
+                className="flex items-center justify-center rounded-lg bg-gold-100 text-gold-700"
+                style={{ width: 30, height: 30 }}
+              >
+                <Gavel size={15} />
+              </span>
+              <h3
+                className="font-display text-ink"
+                style={{ fontSize: 17, fontWeight: 700 }}
+              >
+                Open clusters to bid on
+              </h3>
+              <span className="pill bg-gold-100 text-gold-700 tnum">
+                {unbidClusters.length} new
+              </span>
+            </div>
           </div>
 
-          <div className="bg-white rounded-2xl overflow-hidden">
-            <div
-              className="grid items-center"
-              style={{
-                gridTemplateColumns: "1.5fr 1fr 1fr 0.8fr 1.4fr 100px",
-                padding: "10px 20px",
-                backgroundColor: "#F7F5F0",
-                borderBottom: "1px solid #F0EDE8",
-              }}
-            >
-              {[
-                "Product / Location",
-                "Quantity",
-                "Target",
-                "Farmers",
-                "Status",
-                "",
-              ].map((h) => (
-                <span
-                  key={h}
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: "#A0A0A0",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                  }}
-                >
-                  {h}
-                </span>
-              ))}
-            </div>
-
-            {(unbidClusters as Cluster[]).map((cluster, idx) => (
+          <div className="flex flex-col">
+            {(unbidClusters as Cluster[]).map((cluster) => (
               <div
                 key={cluster.id}
-                className="grid items-center"
+                className="flex items-center justify-between gap-4 transition-colors hover:bg-sunk"
                 style={{
-                  gridTemplateColumns: "1.5fr 1fr 1fr 0.8fr 1.4fr 100px",
-                  padding: "14px 20px",
-                  backgroundColor: idx % 2 === 1 ? "#FAFAF9" : "#FFFFFF",
-                  borderBottom: "1px solid #F0EDE8",
+                  padding: "16px 22px",
+                  borderBottom: "1px solid var(--color-line)",
                 }}
               >
-                <div>
-                  <p
-                    style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <span
+                    className="flex items-center justify-center rounded-xl bg-leaf-100 text-leaf-700 shrink-0"
+                    style={{ width: 38, height: 38 }}
                   >
-                    {cluster.product}
-                  </p>
-                  <p style={{ fontSize: 12, color: "#A0A0A0" }}>
-                    {cluster.district ?? "—"}
-                    {cluster.state ? `, ${cluster.state}` : ""}
-                  </p>
+                    <Package size={17} />
+                  </span>
+                  <div className="min-w-0">
+                    <p
+                      className="text-ink truncate"
+                      style={{ fontSize: 14, fontWeight: 600 }}
+                    >
+                      {cluster.product}
+                    </p>
+                    <p
+                      className="text-ink-faint tnum truncate"
+                      style={{ fontSize: 12.5, marginTop: 1 }}
+                    >
+                      {cluster.currentQuantity}/{cluster.targetQuantity}{" "}
+                      {cluster.unit} · {getUniqueFarmerCount(cluster)} farmers
+                      {cluster.district ? ` · ${cluster.district}` : ""}
+                    </p>
+                  </div>
                 </div>
-                <span style={{ fontSize: 13, color: "#1A1A1A" }}>
-                  {cluster.currentQuantity} {cluster.unit}
-                </span>
-                <span style={{ fontSize: 13, color: "#1A1A1A" }}>
-                  {cluster.targetQuantity} {cluster.unit}
-                </span>
-                <span style={{ fontSize: 13, color: "#1A1A1A" }}>
-                  {getUniqueFarmerCount(cluster)}
-                </span>
-                <div>
+                <div className="flex items-center gap-3 shrink-0">
                   <StatusBadge status={cluster.status} />
+                  <Button
+                    onClick={() => openBidForm(cluster)}
+                    variant="secondary"
+                    size="sm"
+                  >
+                    <Gavel size={14} /> Place bid
+                  </Button>
                 </div>
-                <button
-                  onClick={() => openBidForm(cluster)}
-                  className="flex items-center gap-1.5 rounded-xl font-semibold"
-                  style={{
-                    backgroundColor: "#2C5F2D",
-                    color: "white",
-                    fontSize: 13,
-                    padding: "7px 14px",
-                    border: "none",
-                    cursor: "pointer",
-                  }}
-                >
-                  <Gavel size={13} />
-                  Bid
-                </button>
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
       {/* ── Bid dialog ─────────────────────────────────────────────────────── */}
       {bidState && (
         <div
           className="fixed inset-0 flex items-center justify-center z-50"
-          style={{ backgroundColor: "rgba(0,0,0,0.4)" }}
+          style={{ backgroundColor: "oklch(0.27 0.014 60 / 0.45)" }}
           onClick={(e) => {
             if (e.target === e.currentTarget) setBidState(null);
           }}
         >
           <div
-            className="bg-white rounded-2xl flex flex-col gap-5"
-            style={{ width: 420, padding: 28 }}
+            className="panel flex flex-col gap-5 rise"
+            style={{ width: 440, padding: 28, boxShadow: "var(--shadow-pop)" }}
           >
             <div className="flex items-center justify-between">
-              <p
-                style={{
-                  fontFamily: "Plus Jakarta Sans",
-                  fontSize: 17,
-                  fontWeight: 700,
-                  color: "#1A1A1A",
-                }}
+              <h3
+                className="font-display text-ink"
+                style={{ fontSize: 19, fontWeight: 700 }}
               >
-                Place Bid
-              </p>
+                Place your bid
+              </h3>
               <button
                 onClick={() => setBidState(null)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                }}
+                className="flex items-center justify-center rounded-lg text-ink-faint transition-colors hover:bg-sunk hover:text-ink"
+                style={{ width: 32, height: 32 }}
+                aria-label="Close"
               >
-                <X size={20} color="#A0A0A0" />
+                <X size={18} />
               </button>
             </div>
 
-            <div
-              className="rounded-xl"
-              style={{ backgroundColor: "#F7F5F0", padding: "12px 16px" }}
-            >
-              <p style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}>
-                {bidState.product} — {bidState.currentQuantity} {bidState.unit}
+            <div className="inset" style={{ padding: "14px 16px" }}>
+              <p className="text-ink" style={{ fontSize: 14, fontWeight: 600 }}>
+                {bidState.product}
               </p>
-              <p style={{ fontSize: 12, color: "#A0A0A0", marginTop: 2 }}>
+              <p
+                className="text-ink-faint tnum"
+                style={{ fontSize: 12.5, marginTop: 2 }}
+              >
                 Cluster needs {bidState.currentQuantity} {bidState.unit} total
               </p>
             </div>
 
-            <div className="flex flex-col gap-2">
-              <label
-                style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}
-              >
-                Your Price per {bidState.unit} (₹) *
+            <div>
+              <label className="field-label">
+                Your price per {bidState.unit} (₹)
               </label>
               <input
                 type="number"
@@ -406,29 +380,22 @@ export function OrdersContent() {
                 onChange={(e) =>
                   setBidState({ ...bidState, price: e.target.value })
                 }
-                className="outline-none w-full"
-                style={{
-                  backgroundColor: "#EDE8DF",
-                  borderRadius: 12,
-                  height: 48,
-                  padding: "0 14px",
-                  fontSize: 14,
-                  border: bidError
-                    ? "1.5px solid #EF4444"
-                    : "1.5px solid transparent",
-                }}
+                className="field tnum"
+                style={
+                  bidError
+                    ? { borderColor: "var(--color-danger)" }
+                    : undefined
+                }
               />
               {bidError && (
-                <p style={{ fontSize: 12, color: "#EF4444" }}>{bidError}</p>
+                <p className="text-danger" style={{ fontSize: 12.5, marginTop: 6 }}>
+                  {bidError}
+                </p>
               )}
             </div>
 
-            <div className="flex flex-col gap-2">
-              <label
-                style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A" }}
-              >
-                Note to farmers (optional)
-              </label>
+            <div>
+              <label className="field-label">Note to farmers (optional)</label>
               <textarea
                 placeholder="e.g. Certified organic, delivery within 3 days"
                 value={bidState.note}
@@ -436,136 +403,100 @@ export function OrdersContent() {
                   setBidState({ ...bidState, note: e.target.value })
                 }
                 rows={3}
-                className="outline-none w-full resize-none"
-                style={{
-                  backgroundColor: "#EDE8DF",
-                  borderRadius: 12,
-                  padding: "12px 14px",
-                  fontSize: 14,
-                  border: "1.5px solid transparent",
-                }}
+                className="field"
               />
             </div>
 
             <div className="flex gap-3">
-              <button
+              <Button
                 onClick={() => setBidState(null)}
-                className="flex-1 rounded-xl font-medium"
-                style={{
-                  height: 44,
-                  backgroundColor: "#EDE8DF",
-                  color: "#1A1A1A",
-                  fontSize: 14,
-                  border: "none",
-                  cursor: "pointer",
-                }}
+                variant="ghost"
+                block
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={submitBid}
                 disabled={placeBidMutation.isPending}
-                className="flex-1 rounded-xl font-semibold"
-                style={{
-                  height: 44,
-                  backgroundColor: "#2C5F2D",
-                  color: "white",
-                  fontSize: 14,
-                  border: "none",
-                  cursor: placeBidMutation.isPending
-                    ? "not-allowed"
-                    : "pointer",
-                  opacity: placeBidMutation.isPending ? 0.7 : 1,
-                }}
+                variant="primary"
+                block
               >
-                {placeBidMutation.isPending ? "Placing…" : "Confirm Bid"}
-              </button>
+                {placeBidMutation.isPending ? "Placing…" : "Confirm bid"}
+              </Button>
             </div>
           </div>
         </div>
       )}
 
       {/* ── Won Orders ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-3">
+      <section
+        className="panel overflow-hidden rise"
+        style={{ animationDelay: "180ms" }}
+      >
+        {/* Toolbar */}
         <div
-          className="flex gap-1 rounded-xl p-1"
-          style={{ backgroundColor: "#EDE8DF" }}
+          className="flex items-center justify-between gap-3 flex-wrap"
+          style={{
+            padding: "16px 22px",
+            borderBottom: "1px solid var(--color-line)",
+          }}
         >
-          {TABS.map((tab) => (
-            <button
-              key={tab.value}
-              onClick={() =>
-                setActiveTab(tab.value as FilterTab | "IN_PROGRESS")
-              }
-              className="rounded-lg font-medium transition-all"
+          <div className="inset flex gap-1" style={{ padding: 4 }}>
+            {TABS.map((tab) => {
+              const isActive =
+                activeTab === (tab.value as FilterTab | "IN_PROGRESS");
+              return (
+                <button
+                  key={tab.value}
+                  onClick={() =>
+                    setActiveTab(tab.value as FilterTab | "IN_PROGRESS")
+                  }
+                  className={
+                    isActive
+                      ? "rounded-lg bg-leaf-600 text-white font-semibold"
+                      : "rounded-lg text-ink-soft font-medium transition-colors hover:text-ink"
+                  }
+                  style={{ padding: "6px 14px", fontSize: 13 }}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-2.5">
+            <div
+              className="flex items-center gap-2 rounded-xl text-ink-faint"
               style={{
-                padding: "6px 16px",
-                fontSize: 13,
-                backgroundColor:
-                  activeTab === (tab.value as FilterTab | "IN_PROGRESS")
-                    ? "#2C5F2D"
-                    : "transparent",
-                color:
-                  activeTab === (tab.value as FilterTab | "IN_PROGRESS")
-                    ? "white"
-                    : "#A0A0A0",
+                border: "1px solid var(--color-line)",
+                height: 40,
+                padding: "0 14px",
+                width: 220,
+                background: "var(--color-surface)",
               }}
             >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2.5">
-          {/* Search */}
-          <div
-            className="flex items-center gap-2 rounded-xl"
-            style={{
-              backgroundColor: "#FFFFFF",
-              height: 40,
-              padding: "0 14px",
-              width: 220,
-            }}
-          >
-            <Search size={16} color="#A0A0A0" />
-            <span style={{ fontSize: 13, color: "#A0A0A0" }}>
-              Search orders...
-            </span>
+              <Search size={16} />
+              <span style={{ fontSize: 13 }}>Search orders…</span>
+            </div>
+            <Button variant="ghost" size="sm">
+              <Download size={15} />
+              Export CSV
+            </Button>
           </div>
-          {/* Export CSV */}
-          <button
-            className="flex items-center gap-1.5 rounded-lg"
-            style={{
-              backgroundColor: "#FFFFFF",
-              color: "#2C5F2D",
-              fontSize: 13,
-              fontWeight: 600,
-              height: 40,
-              padding: "0 16px",
-              border: "none",
-              cursor: "pointer",
-            }}
-          >
-            <Download size={15} color="#2C5F2D" />
-            Export CSV
-          </button>
         </div>
-      </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-2xl overflow-hidden">
-        {/* Header */}
+        {/* Column header */}
         <div
-          className="grid items-center"
+          className="grid items-center bg-sunk"
           style={{
-            gridTemplateColumns: "1.2fr 1.5fr 1fr 0.8fr 1fr 1.4fr 1fr 80px",
-            padding: "12px 20px",
-            backgroundColor: "#F7F5F0",
-            borderBottom: "1px solid #F0EDE8",
+            gridTemplateColumns:
+              "1.2fr 1.5fr 0.9fr 0.9fr 1fr 1.4fr 1fr 80px",
+            padding: "11px 22px",
+            borderBottom: "1px solid var(--color-line)",
           }}
         >
           {[
-            "Order ID",
-            "Cluster / Product",
+            "Order",
+            "Product",
             "Qty",
             "Farmers",
             "Amount",
@@ -573,168 +504,159 @@ export function OrdersContent() {
             "Date",
             "",
           ].map((h) => (
-            <span
-              key={h}
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: "#A0A0A0",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-              }}
-            >
+            <span key={h} className="eyebrow">
               {h}
             </span>
           ))}
         </div>
 
         {isLoading ? (
-          <div
-            className="flex items-center justify-center"
-            style={{ height: 200 }}
-          >
-            <p style={{ fontSize: 14, color: "#A0A0A0" }}>Loading orders…</p>
+          <div className="flex flex-col gap-2" style={{ padding: "16px 22px" }}>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="skeleton" style={{ height: 44 }} />
+            ))}
           </div>
         ) : filtered.length === 0 ? (
           <div
             className="flex flex-col items-center justify-center gap-3"
-            style={{ height: 200 }}
+            style={{ padding: "52px 20px" }}
           >
-            <p style={{ fontSize: 14, color: "#A0A0A0" }}>
-              No orders yet. Place bids on open clusters above to get started.
+            <div
+              className="flex items-center justify-center rounded-2xl bg-leaf-50 text-leaf-600"
+              style={{ width: 56, height: 56 }}
+            >
+              <Package size={26} />
+            </div>
+            <p
+              className="font-display text-ink"
+              style={{ fontSize: 16, fontWeight: 700 }}
+            >
+              No orders here yet
+            </p>
+            <p
+              className="text-ink-faint"
+              style={{ fontSize: 13, maxWidth: 380, textAlign: "center" }}
+            >
+              {activeTab === "ALL"
+                ? "Win a bid on an open cluster above and your orders will land here, ready to fulfill."
+                : "Nothing in this view right now. Try the All tab to see every order."}
             </p>
           </div>
         ) : (
-          paginated.map((order, idx) => {
+          paginated.map((order) => {
             const deliveryProgress = getFarmerDeliveryProgress(order);
             return (
-              <div
+              <button
                 key={order.id}
-                className="grid items-center"
+                onClick={() => router.push(`/orders/${order.id}`)}
+                className="grid items-center w-full text-left transition-colors hover:bg-sunk"
                 style={{
-                  gridTemplateColumns: "1.2fr 1.5fr 1fr 0.8fr 1fr 1.4fr 1fr 80px",
-                  padding: "14px 20px",
-                  backgroundColor: idx % 2 === 1 ? "#FAFAF9" : "#FFFFFF",
-                  borderBottom: "1px solid #F0EDE8",
+                  gridTemplateColumns:
+                    "1.2fr 1.5fr 0.9fr 0.9fr 1fr 1.4fr 1fr 80px",
+                  padding: "14px 22px",
+                  borderBottom: "1px solid var(--color-line)",
                 }}
               >
                 <span
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: "#2C5F2D",
-                    fontFamily: "monospace",
-                  }}
+                  className="tnum text-leaf-700"
+                  style={{ fontSize: 13, fontWeight: 700 }}
                 >
                   #{order.id.slice(-6).toUpperCase()}
                 </span>
-                <div>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}>
+                <div className="min-w-0">
+                  <p
+                    className="text-ink truncate"
+                    style={{ fontSize: 13.5, fontWeight: 600 }}
+                  >
                     {order.product}
                   </p>
-                  <p style={{ fontSize: 12, color: "#A0A0A0" }}>
+                  <p className="text-ink-faint truncate" style={{ fontSize: 12 }}>
                     {order.district ?? "Cluster"}
                   </p>
                 </div>
-                <span style={{ fontSize: 13, color: "#1A1A1A" }}>
+                <span className="text-ink tnum" style={{ fontSize: 13 }}>
                   {order.currentQuantity} {order.unit}
                 </span>
                 <div className="flex flex-col">
-                  <span style={{ fontSize: 13, color: "#1A1A1A" }}>
+                  <span className="text-ink tnum" style={{ fontSize: 13 }}>
                     {getUniqueFarmerCount(order)}
                   </span>
                   {(order.status === "DISPATCHED" ||
                     order.status === "OUT_FOR_DELIVERY" ||
                     order.status === "COMPLETED") && (
-                    <span style={{ fontSize: 11, color: "#A0A0A0" }}>
-                      {deliveryProgress.delivered}/{deliveryProgress.total} delivered
+                    <span
+                      className="text-ink-faint tnum"
+                      style={{ fontSize: 11 }}
+                    >
+                      {deliveryProgress.delivered}/{deliveryProgress.total}{" "}
+                      delivered
                     </span>
                   )}
                 </div>
-                <span style={{ fontSize: 13, color: "#1A1A1A" }}>
+                <span className="text-ink tnum" style={{ fontSize: 13 }}>
                   {formatCurrency(getTotalAmount(order))}
                 </span>
                 <div>
                   <StatusBadge status={order.status} />
                 </div>
-                <span style={{ fontSize: 13, color: "#A0A0A0" }}>
+                <span
+                  className="text-ink-faint tnum"
+                  style={{ fontSize: 12.5 }}
+                >
                   {formatDate(order.createdAt)}
                 </span>
-                <button
-                  onClick={() => router.push(`/orders/${order.id}`)}
-                  className="flex items-center gap-1 rounded-lg font-medium hover:bg-[#F7F5F0] transition-colors"
-                  style={{ padding: "6px 10px", fontSize: 13, color: "#2C5F2D" }}
+                <span
+                  className="flex items-center gap-1 text-leaf-700"
+                  style={{ fontSize: 13, fontWeight: 600 }}
                 >
                   <Eye size={14} />
                   View
-                </button>
-              </div>
+                </span>
+              </button>
             );
           })
         )}
 
         {/* Footer */}
         <div
-          className="flex items-center justify-between"
-          style={{ padding: "12px 20px", backgroundColor: "#F7F5F0" }}
+          className="flex items-center justify-between bg-sunk"
+          style={{ padding: "12px 22px" }}
         >
-          <span style={{ fontSize: 13, color: "#A0A0A0" }}>
-            Showing {from}-{to} of {filtered.length} order
+          <span className="text-ink-faint tnum" style={{ fontSize: 13 }}>
+            Showing {from}–{to} of {filtered.length} order
             {filtered.length !== 1 ? "s" : ""}
           </span>
           {filtered.length > 0 && (
-            <div className="flex items-center gap-2">
-              <button
+            <div className="flex items-center gap-2.5">
+              <Button
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                style={{
-                  height: 30,
-                  minWidth: 68,
-                  padding: "0 10px",
-                  borderRadius: 8,
-                  border: "1px solid #E5E7EB",
-                  backgroundColor: currentPage === 1 ? "#F3F4F6" : "#FFFFFF",
-                  color: currentPage === 1 ? "#9CA3AF" : "#1A1A1A",
-                  cursor: currentPage === 1 ? "not-allowed" : "pointer",
-                  fontSize: 12,
-                  fontWeight: 600,
-                }}
+                variant="ghost"
+                size="sm"
               >
                 Previous
-              </button>
+              </Button>
               <span
-                style={{
-                  fontSize: 12,
-                  color: "#6B7280",
-                  minWidth: 72,
-                  textAlign: "center",
-                }}
+                className="text-ink-soft tnum"
+                style={{ fontSize: 12.5, minWidth: 72, textAlign: "center" }}
               >
-                Page {currentPage}/{totalPages}
+                Page {currentPage} / {totalPages}
               </span>
-              <button
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              <Button
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                }
                 disabled={currentPage === totalPages}
-                style={{
-                  height: 30,
-                  minWidth: 52,
-                  padding: "0 10px",
-                  borderRadius: 8,
-                  border: "1px solid #E5E7EB",
-                  backgroundColor:
-                    currentPage === totalPages ? "#F3F4F6" : "#FFFFFF",
-                  color: currentPage === totalPages ? "#9CA3AF" : "#1A1A1A",
-                  cursor: currentPage === totalPages ? "not-allowed" : "pointer",
-                  fontSize: 12,
-                  fontWeight: 600,
-                }}
+                variant="ghost"
+                size="sm"
               >
                 Next
-              </button>
+                <ArrowRight size={14} />
+              </Button>
             </div>
           )}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

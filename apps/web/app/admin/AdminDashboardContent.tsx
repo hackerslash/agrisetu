@@ -17,9 +17,15 @@ import {
   ShieldAlert,
   UserCheck,
   XCircle,
+  FileText,
+  Inbox,
 } from "lucide-react";
 import { getPortalHomePath } from "../../lib/portal";
 import { formatDate } from "../../lib/utils";
+import { BrandLogo } from "../../components/ui/BrandLogo";
+import { MetricCard } from "../../components/ui/Card";
+import { Button } from "../../components/ui/Button";
+import { StatusBadge } from "../../components/ui/StatusBadge";
 
 const TABS: Array<{ label: string; value: VendorStatus }> = [
   { label: "Pending", value: "PENDING_REVIEW" },
@@ -27,47 +33,6 @@ const TABS: Array<{ label: string; value: VendorStatus }> = [
   { label: "Suspended", value: "SUSPENDED" },
   { label: "Rejected", value: "REJECTED" },
 ];
-
-function SummaryCard({
-  label,
-  value,
-  icon,
-  tone,
-}: {
-  label: string;
-  value: number;
-  icon: React.ReactNode;
-  tone: string;
-}) {
-  return (
-    <div
-      className="rounded-2xl bg-white"
-      style={{ padding: 20, border: "1px solid #E9E4DA" }}
-    >
-      <div className="flex items-center justify-between">
-        <div>
-          <p style={{ fontSize: 13, color: "#6B7280" }}>{label}</p>
-          <p
-            style={{
-              fontSize: 28,
-              fontWeight: 700,
-              color: "#1A1A1A",
-              marginTop: 6,
-            }}
-          >
-            {value}
-          </p>
-        </div>
-        <div
-          className="flex items-center justify-center rounded-2xl"
-          style={{ width: 44, height: 44, backgroundColor: tone }}
-        >
-          {icon}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function VendorRow({
   vendor,
@@ -82,41 +47,31 @@ function VendorRow({
     <button
       type="button"
       onClick={onSelect}
-      className="w-full text-left rounded-2xl transition-colors"
+      className="w-full text-left transition-colors"
       style={{
         padding: 16,
-        border: selected ? "1px solid #2C5F2D" : "1px solid #E9E4DA",
-        backgroundColor: selected ? "#F0FDF4" : "#FFFFFF",
+        borderRadius: 16,
+        border: selected ? "1px solid var(--color-leaf-500)" : "1px solid var(--color-line)",
+        backgroundColor: selected ? "var(--color-leaf-50)" : "var(--color-surface)",
       }}
     >
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p style={{ fontSize: 15, fontWeight: 700, color: "#1A1A1A" }}>
+        <div className="min-w-0">
+          <p className="text-ink truncate" style={{ fontSize: 15, fontWeight: 700 }}>
             {vendor.businessName}
           </p>
-          <p style={{ fontSize: 13, color: "#6B7280", marginTop: 4 }}>
+          <p className="text-ink-soft truncate" style={{ fontSize: 13, marginTop: 3 }}>
             {vendor.contactName} · {vendor.email}
           </p>
         </div>
-        <span
-          className="rounded-full"
-          style={{
-            padding: "4px 10px",
-            fontSize: 11,
-            fontWeight: 700,
-            color: "#2C5F2D",
-            backgroundColor: "#E8F5E9",
-          }}
-        >
-          {vendor.status.replaceAll("_", " ")}
-        </span>
+        <StatusBadge status={vendor.status} />
       </div>
-      <p style={{ fontSize: 12, color: "#9CA3AF", marginTop: 10 }}>
+      <p className="text-ink-faint" style={{ fontSize: 12, marginTop: 10 }}>
         Submitted{" "}
         {vendor.submittedAt ? formatDate(vendor.submittedAt) : formatDate(vendor.createdAt)}
       </p>
       {vendor.reviewNote && (
-        <p style={{ fontSize: 12, color: "#B45309", marginTop: 8 }}>
+        <p className="text-clay-700" style={{ fontSize: 12, marginTop: 8 }}>
           Note: {vendor.reviewNote}
         </p>
       )}
@@ -266,13 +221,24 @@ export function AdminDashboardContent() {
 
   if (accountLoading || (account?.role !== "SUPERADMIN" && !accountError)) {
     return (
-      <div
-        className="flex items-center justify-center"
-        style={{ minHeight: "100vh", backgroundColor: "#F7F5F0" }}
-      >
-        <p style={{ fontSize: 14, fontWeight: 600, color: "#2C5F2D" }}>
-          Loading admin dashboard...
-        </p>
+      <div className="flex items-center justify-center bg-paper" style={{ minHeight: "100vh" }}>
+        <div className="flex flex-col items-center gap-4">
+          <span
+            aria-hidden
+            className="rounded-full"
+            style={{
+              width: 34,
+              height: 34,
+              border: "3px solid var(--color-leaf-100)",
+              borderTopColor: "var(--color-leaf-600)",
+              animation: "spin 0.8s linear infinite",
+            }}
+          />
+          <p className="text-ink-soft" style={{ fontSize: 14, fontWeight: 600 }}>
+            Loading admin dashboard…
+          </p>
+        </div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
@@ -286,104 +252,84 @@ export function AdminDashboardContent() {
     reactivateMutation.isPending;
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#F7F5F0" }}>
+    <div className="bg-paper" style={{ minHeight: "100vh" }}>
       <header
-        className="flex items-center justify-between"
+        className="flex items-center justify-between bg-surface"
         style={{
-          padding: "24px 32px",
-          borderBottom: "1px solid #E9E4DA",
-          backgroundColor: "#FFFFFF",
+          padding: "18px 32px",
+          borderBottom: "1px solid var(--color-line)",
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
         }}
       >
-        <div>
-          <p
-            style={{
-              fontSize: 12,
-              fontWeight: 700,
-              color: "#6B7280",
-              letterSpacing: "0.08em",
-            }}
-          >
-            SUPERADMIN PORTAL
-          </p>
-          <h1
-            style={{
-              fontSize: 28,
-              fontWeight: 800,
-              color: "#1A1A1A",
-              marginTop: 6,
-            }}
-          >
-            Vendor verification desk
-          </h1>
+        <div className="flex items-center gap-4">
+          <BrandLogo subtitle="Admin Console" />
+          <span className="pill bg-clay-50 text-clay-700">Superadmin</span>
         </div>
 
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="flex items-center gap-2 rounded-xl"
-          style={{
-            padding: "10px 14px",
-            border: "1px solid #E9E4DA",
-            backgroundColor: "#FFFFFF",
-            color: "#1A1A1A",
-            fontSize: 14,
-            fontWeight: 600,
-          }}
-        >
+        <Button variant="ghost" onClick={handleLogout}>
           <LogOut size={16} />
           Logout
-        </button>
+        </Button>
       </header>
 
-      <main style={{ padding: 32 }}>
-        <div className="grid grid-cols-4 gap-4">
-          <SummaryCard
+      <main style={{ padding: "28px 32px" }}>
+        <div className="rise" style={{ marginBottom: 22 }}>
+          <p className="eyebrow">Vendor verification</p>
+          <h1 className="font-display text-ink" style={{ fontSize: 26, fontWeight: 800, marginTop: 4 }}>
+            Verification desk
+          </h1>
+          <p className="text-ink-soft" style={{ fontSize: 14, marginTop: 3 }}>
+            Review applications and manage vendor accounts across the network.
+          </p>
+        </div>
+
+        <div className="flex gap-4 rise" style={{ animationDelay: "60ms" }}>
+          <MetricCard
             label="Pending review"
             value={summary?.pending ?? 0}
-            icon={<Clock3 size={20} color="#8A5A00" />}
-            tone="#FEF3C7"
+            icon={<Clock3 size={16} />}
+            accent="gold"
           />
-          <SummaryCard
+          <MetricCard
             label="Active vendors"
             value={summary?.active ?? 0}
-            icon={<UserCheck size={20} color="#166534" />}
-            tone="#DCFCE7"
+            icon={<UserCheck size={16} />}
+            accent="leaf"
           />
-          <SummaryCard
+          <MetricCard
             label="Rejected"
             value={summary?.rejected ?? 0}
-            icon={<XCircle size={20} color="#991B1B" />}
-            tone="#FEE2E2"
+            icon={<XCircle size={16} />}
+            accent="ink"
           />
-          <SummaryCard
+          <MetricCard
             label="Suspended"
             value={summary?.suspended ?? 0}
-            icon={<ShieldAlert size={20} color="#9A3412" />}
-            tone="#FED7AA"
+            icon={<ShieldAlert size={16} />}
+            accent="clay"
           />
         </div>
 
-        <div className="grid grid-cols-[420px_minmax(0,1fr)] gap-6" style={{ marginTop: 24 }}>
-          <section
-            className="rounded-3xl bg-white"
-            style={{ padding: 20, border: "1px solid #E9E4DA" }}
-          >
-            <div className="flex items-center gap-2" style={{ marginBottom: 16 }}>
+        <div
+          className="grid gap-6 rise"
+          style={{ gridTemplateColumns: "420px minmax(0,1fr)", marginTop: 24, animationDelay: "120ms" }}
+        >
+          {/* List */}
+          <section className="panel flex flex-col" style={{ padding: 18 }}>
+            <div className="inset flex gap-1" style={{ padding: 4, marginBottom: 16 }}>
               {TABS.map((tab) => (
                 <button
                   key={tab.value}
                   type="button"
                   onClick={() => setActiveTab(tab.value)}
-                  className="rounded-full"
-                  style={{
-                    padding: "8px 12px",
-                    fontSize: 12,
-                    fontWeight: 700,
-                    backgroundColor:
-                      activeTab === tab.value ? "#2C5F2D" : "#F3F4F6",
-                    color: activeTab === tab.value ? "#FFFFFF" : "#4B5563",
-                  }}
+                  className={
+                    activeTab === tab.value
+                      ? "flex-1 rounded-lg bg-leaf-600 text-white font-semibold"
+                      : "flex-1 rounded-lg text-ink-soft font-medium transition-colors hover:text-ink"
+                  }
+                  style={{ padding: "7px 8px", fontSize: 12.5 }}
                 >
                   {tab.label}
                 </button>
@@ -392,11 +338,27 @@ export function AdminDashboardContent() {
 
             <div className="flex flex-col gap-3">
               {vendorsLoading ? (
-                <p style={{ fontSize: 13, color: "#6B7280" }}>Loading vendors...</p>
+                Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="skeleton" style={{ height: 92 }} />
+                ))
               ) : vendors.length === 0 ? (
-                <p style={{ fontSize: 13, color: "#6B7280" }}>
-                  No vendors found for this status.
-                </p>
+                <div
+                  className="flex flex-col items-center justify-center gap-3"
+                  style={{ padding: "44px 16px" }}
+                >
+                  <div
+                    className="flex items-center justify-center rounded-2xl bg-sunk text-ink-faint"
+                    style={{ width: 52, height: 52 }}
+                  >
+                    <Inbox size={24} />
+                  </div>
+                  <p className="text-ink-soft" style={{ fontSize: 13.5, fontWeight: 600 }}>
+                    No vendors in this list
+                  </p>
+                  <p className="text-ink-faint" style={{ fontSize: 12.5, textAlign: "center" }}>
+                    Nothing to review under “{TABS.find((t) => t.value === activeTab)?.label}” right now.
+                  </p>
+                </div>
               ) : (
                 vendors.map((vendor) => (
                   <VendorRow
@@ -410,48 +372,37 @@ export function AdminDashboardContent() {
             </div>
           </section>
 
-          <section
-            className="rounded-3xl bg-white"
-            style={{ padding: 24, border: "1px solid #E9E4DA" }}
-          >
+          {/* Detail */}
+          <section className="panel" style={{ padding: 28 }}>
             {!selectedVendorId ? (
-              <p style={{ fontSize: 14, color: "#6B7280" }}>
+              <p className="text-ink-soft" style={{ fontSize: 14 }}>
                 Select a vendor to review.
               </p>
             ) : vendorDetailLoading || !selectedVendor ? (
-              <p style={{ fontSize: 14, color: "#6B7280" }}>Loading vendor details...</p>
+              <div className="flex flex-col gap-4">
+                <div className="skeleton" style={{ height: 32, width: "55%" }} />
+                <div className="skeleton" style={{ height: 18, width: "40%" }} />
+                <div className="grid grid-cols-2 gap-4" style={{ marginTop: 12 }}>
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="skeleton" style={{ height: 64 }} />
+                  ))}
+                </div>
+              </div>
             ) : (
-              <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-7">
                 <div>
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <h2
-                        style={{
-                          fontSize: 24,
-                          fontWeight: 800,
-                          color: "#1A1A1A",
-                        }}
-                      >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <h2 className="font-display text-ink" style={{ fontSize: 24, fontWeight: 800 }}>
                         {selectedVendor.businessName}
                       </h2>
-                      <p style={{ fontSize: 14, color: "#6B7280", marginTop: 4 }}>
+                      <p className="text-ink-soft" style={{ fontSize: 14, marginTop: 4 }}>
                         {selectedVendor.contactName} · {selectedVendor.email}
                       </p>
                     </div>
-                    <span
-                      className="rounded-full"
-                      style={{
-                        padding: "6px 12px",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        backgroundColor: "#EEF2FF",
-                        color: "#3730A3",
-                      }}
-                    >
-                      {selectedVendor.status.replaceAll("_", " ")}
-                    </span>
+                    <StatusBadge status={selectedVendor.status} />
                   </div>
-                  <p style={{ fontSize: 13, color: "#6B7280", marginTop: 10 }}>
+                  <p className="text-ink-faint" style={{ fontSize: 13, marginTop: 10 }}>
                     Submitted{" "}
                     {selectedVendor.submittedAt
                       ? formatDate(selectedVendor.submittedAt)
@@ -459,27 +410,25 @@ export function AdminDashboardContent() {
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    ["Phone", selectedVendor.phone],
-                    ["State", selectedVendor.state ?? "Not provided"],
-                    ["Business type", selectedVendor.businessType ?? "Not provided"],
-                    ["GSTIN", selectedVendor.gstin ?? "Not provided"],
-                    ["PAN", selectedVendor.pan ?? "Not provided"],
+                <div className="grid grid-cols-2 gap-3">
+                  {(
                     [
-                      "Service radius",
-                      selectedVendor.serviceRadiusKm
-                        ? `${selectedVendor.serviceRadiusKm} km`
-                        : "Not provided",
-                    ],
-                  ].map(([label, value]) => (
-                    <div
-                      key={label}
-                      className="rounded-2xl"
-                      style={{ padding: 16, backgroundColor: "#F9FAFB" }}
-                    >
-                      <p style={{ fontSize: 12, color: "#6B7280" }}>{label}</p>
-                      <p style={{ fontSize: 14, fontWeight: 600, color: "#1A1A1A", marginTop: 6 }}>
+                      ["Phone", selectedVendor.phone],
+                      ["State", selectedVendor.state ?? "Not provided"],
+                      ["Business type", selectedVendor.businessType ?? "Not provided"],
+                      ["GSTIN", selectedVendor.gstin ?? "Not provided"],
+                      ["PAN", selectedVendor.pan ?? "Not provided"],
+                      [
+                        "Service radius",
+                        selectedVendor.serviceRadiusKm
+                          ? `${selectedVendor.serviceRadiusKm} km`
+                          : "Not provided",
+                      ],
+                    ] as Array<[string, string]>
+                  ).map(([label, value]) => (
+                    <div key={label} className="inset" style={{ padding: 14 }}>
+                      <p className="eyebrow">{label}</p>
+                      <p className="text-ink" style={{ fontSize: 14, fontWeight: 600, marginTop: 6 }}>
                         {value}
                       </p>
                     </div>
@@ -487,19 +436,12 @@ export function AdminDashboardContent() {
                 </div>
 
                 <div>
-                  <p
-                    style={{
-                      fontSize: 14,
-                      fontWeight: 700,
-                      color: "#1A1A1A",
-                      marginBottom: 10,
-                    }}
-                  >
+                  <p className="font-display text-ink" style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>
                     Uploaded documents
                   </p>
-                  <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-2.5">
                     {(selectedVendor.documents ?? []).length === 0 ? (
-                      <p style={{ fontSize: 13, color: "#6B7280" }}>
+                      <p className="text-ink-faint" style={{ fontSize: 13 }}>
                         No documents uploaded.
                       </p>
                     ) : (
@@ -509,17 +451,22 @@ export function AdminDashboardContent() {
                           href={document.fileUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="rounded-2xl"
+                          className="flex items-center gap-3 bg-surface transition-colors hover:bg-sunk"
                           style={{
                             padding: 14,
-                            backgroundColor: "#F9FAFB",
-                            border: "1px solid #E5E7EB",
-                            color: "#2C5F2D",
-                            fontSize: 14,
-                            fontWeight: 600,
+                            borderRadius: 12,
+                            border: "1px solid var(--color-line)",
                           }}
                         >
-                          {document.docType.replaceAll("_", " ")}
+                          <span
+                            className="flex items-center justify-center rounded-lg bg-leaf-50 text-leaf-700 shrink-0"
+                            style={{ width: 34, height: 34 }}
+                          >
+                            <FileText size={16} />
+                          </span>
+                          <span className="text-ink" style={{ fontSize: 14, fontWeight: 600 }}>
+                            {document.docType.replaceAll("_", " ")}
+                          </span>
                         </a>
                       ))
                     )}
@@ -529,32 +476,21 @@ export function AdminDashboardContent() {
                 {(selectedVendor.status === "PENDING_REVIEW" ||
                   selectedVendor.status === "ACTIVE" ||
                   selectedVendor.status === "SUSPENDED") && (
-                  <div className="flex flex-col gap-3">
-                    <label
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: "#1A1A1A",
-                      }}
-                    >
+                  <div className="flex flex-col gap-2">
+                    <label className="field-label" style={{ marginBottom: 2 }}>
                       Review note
                     </label>
                     <textarea
                       value={reviewNote}
                       onChange={(event) => setReviewNote(event.target.value)}
-                      placeholder="Required for reject and suspend actions."
+                      placeholder="Required when rejecting or suspending a vendor."
                       rows={4}
-                      style={{
-                        borderRadius: 16,
-                        border: "1px solid #D1D5DB",
-                        padding: 14,
-                        fontSize: 14,
-                        color: "#1A1A1A",
-                        resize: "vertical",
-                      }}
+                      className="field"
                     />
                     {actionError && (
-                      <p style={{ fontSize: 13, color: "#B91C1C" }}>{actionError}</p>
+                      <p className="text-danger" style={{ fontSize: 13 }}>
+                        {actionError}
+                      </p>
                     )}
                   </div>
                 )}
@@ -562,78 +498,36 @@ export function AdminDashboardContent() {
                 <div className="flex flex-wrap gap-3">
                   {selectedVendor.status === "PENDING_REVIEW" && (
                     <>
-                      <button
-                        type="button"
-                        onClick={() => void runAction("approve")}
-                        disabled={actionLoading}
-                        className="flex items-center gap-2 rounded-xl"
-                        style={{
-                          padding: "12px 16px",
-                          backgroundColor: "#166534",
-                          color: "#FFFFFF",
-                          fontSize: 14,
-                          fontWeight: 700,
-                          opacity: actionLoading ? 0.7 : 1,
-                        }}
-                      >
+                      <Button onClick={() => void runAction("approve")} disabled={actionLoading}>
                         <CheckCircle2 size={16} />
                         Approve vendor
-                      </button>
-                      <button
-                        type="button"
+                      </Button>
+                      <Button
+                        variant="danger"
                         onClick={() => void runAction("reject")}
                         disabled={actionLoading}
-                        className="rounded-xl"
-                        style={{
-                          padding: "12px 16px",
-                          backgroundColor: "#991B1B",
-                          color: "#FFFFFF",
-                          fontSize: 14,
-                          fontWeight: 700,
-                          opacity: actionLoading ? 0.7 : 1,
-                        }}
                       >
                         Reject application
-                      </button>
+                      </Button>
                     </>
                   )}
 
                   {selectedVendor.status === "ACTIVE" && (
-                    <button
-                      type="button"
+                    <Button
+                      variant="secondary"
                       onClick={() => void runAction("suspend")}
                       disabled={actionLoading}
-                      className="rounded-xl"
-                      style={{
-                        padding: "12px 16px",
-                        backgroundColor: "#9A3412",
-                        color: "#FFFFFF",
-                        fontSize: 14,
-                        fontWeight: 700,
-                        opacity: actionLoading ? 0.7 : 1,
-                      }}
                     >
+                      <ShieldAlert size={16} />
                       Suspend vendor
-                    </button>
+                    </Button>
                   )}
 
                   {selectedVendor.status === "SUSPENDED" && (
-                    <button
-                      type="button"
-                      onClick={() => void runAction("reactivate")}
-                      disabled={actionLoading}
-                      className="rounded-xl"
-                      style={{
-                        padding: "12px 16px",
-                        backgroundColor: "#1D4ED8",
-                        color: "#FFFFFF",
-                        fontSize: 14,
-                        fontWeight: 700,
-                        opacity: actionLoading ? 0.7 : 1,
-                      }}
-                    >
+                    <Button onClick={() => void runAction("reactivate")} disabled={actionLoading}>
+                      <UserCheck size={16} />
                       Reactivate vendor
-                    </button>
+                    </Button>
                   )}
                 </div>
               </div>

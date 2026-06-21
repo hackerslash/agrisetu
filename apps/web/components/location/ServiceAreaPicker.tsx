@@ -26,17 +26,10 @@ const ServiceAreaLeafletMap = dynamic(() => import("./ServiceAreaLeafletMap"), {
   ssr: false,
   loading: () => (
     <div
-      className="flex items-center justify-center"
-      style={{
-        width: "100%",
-        height: 300,
-        borderRadius: 14,
-        backgroundColor: "#EDE8DF",
-        color: "#A0A0A0",
-        fontSize: 13,
-      }}
+      className="flex items-center justify-center bg-sunk text-ink-faint"
+      style={{ width: "100%", height: 300, borderRadius: 14, fontSize: 13 }}
     >
-      Loading map...
+      Loading map…
     </div>
   ),
 });
@@ -141,45 +134,22 @@ export function ServiceAreaPicker({
   }
 
   return (
-    <div
-      className="rounded-2xl"
-      style={{
-        backgroundColor: "#F7F5F0",
-        padding: 16,
-        border: "1px solid #E4DFD6",
-      }}
-    >
-      <div
-        className="flex items-center justify-between"
-        style={{ marginBottom: 12 }}
-      >
+    <div className="inset" style={{ padding: 16, border: "1px solid var(--color-line)" }}>
+      <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
         <div>
-          <p
-            style={{
-              fontSize: 14,
-              fontWeight: 700,
-              color: "#1A1A1A",
-            }}
-          >
+          <p className="text-ink" style={{ fontSize: 14, fontWeight: 700 }}>
             {title}
           </p>
-          <p style={{ fontSize: 12, color: "#6B7280", marginTop: 2 }}>
-            Click map or drag marker to set your base location.
+          <p className="text-ink-faint" style={{ fontSize: 12, marginTop: 2 }}>
+            Click the map or drag the marker to set your base location.
           </p>
         </div>
         <button
           type="button"
           onClick={fetchCurrentLocation}
-          className="rounded-xl font-semibold"
-          style={{
-            backgroundColor: "#EDE8DF",
-            color: "#1A1A1A",
-            height: 40,
-            padding: "0 14px",
-            fontSize: 12,
-          }}
+          className="btn btn-ghost btn-sm"
         >
-          {locating ? "Fetching..." : "Fetch location"}
+          {locating ? "Fetching…" : "Use my location"}
         </button>
       </div>
 
@@ -194,32 +164,24 @@ export function ServiceAreaPicker({
 
       <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
         <div
-          style={{
-            backgroundColor: "#FFFFFF",
-            borderRadius: 12,
-            padding: "10px 12px",
-            border: "1px solid #EDE8DF",
-          }}
+          className="bg-surface"
+          style={{ borderRadius: 12, padding: "10px 12px", border: "1px solid var(--color-line)" }}
         >
-          <p style={{ fontSize: 11, color: "#6B7280", marginBottom: 4 }}>
+          <p className="eyebrow" style={{ marginBottom: 4 }}>
             Coordinates
           </p>
-          <p style={{ fontSize: 13, color: "#1A1A1A", fontWeight: 600 }}>
+          <p className="text-ink tnum" style={{ fontSize: 13, fontWeight: 600 }}>
             {coordinateLabel}
           </p>
         </div>
         <div
-          style={{
-            backgroundColor: "#FFFFFF",
-            borderRadius: 12,
-            padding: "10px 12px",
-            border: "1px solid #EDE8DF",
-          }}
+          className="bg-surface"
+          style={{ borderRadius: 12, padding: "10px 12px", border: "1px solid var(--color-line)" }}
         >
-          <p style={{ fontSize: 11, color: "#6B7280", marginBottom: 4 }}>
-            Service Radius
+          <p className="eyebrow" style={{ marginBottom: 4 }}>
+            Service radius
           </p>
-          <p style={{ fontSize: 13, color: "#1A1A1A", fontWeight: 600 }}>
+          <p className="text-ink tnum" style={{ fontSize: 13, fontWeight: 600 }}>
             {radiusKm.toFixed(0)} km
           </p>
         </div>
@@ -240,22 +202,12 @@ export function ServiceAreaPicker({
               serviceRadiusKm: Number(event.target.value),
             });
           }}
-          style={{ width: "100%" }}
+          style={{ width: "100%", accentColor: "var(--color-leaf-600)" }}
         />
       </div>
 
       <div style={{ marginTop: 12 }}>
-        <label
-          style={{
-            display: "block",
-            fontSize: 12,
-            fontWeight: 600,
-            color: "#1A1A1A",
-            marginBottom: 6,
-          }}
-        >
-          Location Address (auto-fetched)
-        </label>
+        <label className="field-label">Location address (auto-filled)</label>
         <textarea
           value={value.locationAddress ?? ""}
           onChange={(event) => {
@@ -268,22 +220,13 @@ export function ServiceAreaPicker({
             });
           }}
           rows={2}
-          placeholder="Select location on map to auto-fill address"
-          style={{
-            width: "100%",
-            borderRadius: 12,
-            border: "1px solid #E4DFD6",
-            backgroundColor: "#FFFFFF",
-            padding: "10px 12px",
-            fontSize: 13,
-            color: "#1A1A1A",
-            resize: "vertical",
-          }}
+          placeholder="Select a location on the map to auto-fill the address"
+          className="field"
         />
       </div>
 
       {(lookupState || error) && (
-        <p style={{ marginTop: 8, fontSize: 12, color: "#B03A2E" }}>
+        <p className="text-danger" style={{ marginTop: 8, fontSize: 12 }}>
           {error || lookupState}
         </p>
       )}

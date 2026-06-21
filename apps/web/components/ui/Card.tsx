@@ -8,7 +8,7 @@ interface CardProps {
 
 export function Card({ children, className, style }: CardProps) {
   return (
-    <div className={cn("bg-white rounded-2xl p-5", className)} style={style}>
+    <div className={cn("card p-5", className)} style={style}>
       {children}
     </div>
   );
@@ -19,53 +19,62 @@ interface MetricCardProps {
   value: string | number;
   sub?: string;
   icon?: React.ReactNode;
-  color?: string;
-  subColor?: string;
+  /** subtle accent tone for the value + icon chip */
+  accent?: "leaf" | "clay" | "gold" | "ink";
+  subTone?: "up" | "down" | "muted";
 }
+
+const ACCENT_VALUE: Record<NonNullable<MetricCardProps["accent"]>, string> = {
+  leaf: "text-leaf-700",
+  clay: "text-clay-700",
+  gold: "text-gold-700",
+  ink: "text-ink",
+};
+
+const ACCENT_CHIP: Record<NonNullable<MetricCardProps["accent"]>, string> = {
+  leaf: "bg-leaf-50 text-leaf-600",
+  clay: "bg-clay-50 text-clay-600",
+  gold: "bg-gold-100 text-gold-700",
+  ink: "bg-sunk text-ink-soft",
+};
+
+const SUB_TONE: Record<NonNullable<MetricCardProps["subTone"]>, string> = {
+  up: "text-leaf-600",
+  down: "text-danger",
+  muted: "text-ink-faint",
+};
 
 export function MetricCard({
   label,
   value,
   sub,
   icon,
-  subColor,
+  accent = "ink",
+  subTone = "muted",
 }: MetricCardProps) {
   return (
-    <Card className="flex-1" style={{ padding: 20 }}>
-      <div className="flex flex-col gap-3">
-        {/* Top row: label + icon */}
-        <div className="flex items-center justify-between">
-          <p style={{ fontSize: 13, fontWeight: 500, color: "#A0A0A0" }}>
-            {label}
-          </p>
-          {icon && (
-            <div
-              className="flex items-center justify-center rounded-lg"
-              style={{
-                width: 32,
-                height: 32,
-                backgroundColor: "rgba(44,95,45,0.09)",
-              }}
-            >
-              {icon}
-            </div>
-          )}
-        </div>
-        {/* Large value */}
-        <p
-          style={{
-            fontFamily: "Plus Jakarta Sans",
-            fontSize: 36,
-            fontWeight: 700,
-            color: "#2C5F2D",
-            lineHeight: 1,
-          }}
-        >
-          {value}
-        </p>
-        {/* Sub */}
-        {sub && <p style={{ fontSize: 12, color: subColor ?? "#A0A0A0" }}>{sub}</p>}
+    <div className="card flex-1 p-5">
+      <div className="flex items-center justify-between gap-3">
+        <p className="eyebrow">{label}</p>
+        {icon && (
+          <span
+            className={cn(
+              "flex items-center justify-center rounded-xl",
+              ACCENT_CHIP[accent],
+            )}
+            style={{ width: 32, height: 32 }}
+          >
+            {icon}
+          </span>
+        )}
       </div>
-    </Card>
+      <p
+        className={cn("tnum font-display mt-3", ACCENT_VALUE[accent])}
+        style={{ fontSize: 32, fontWeight: 700, lineHeight: 1.05 }}
+      >
+        {value}
+      </p>
+      {sub && <p className={cn("mt-1.5 text-xs", SUB_TONE[subTone])}>{sub}</p>}
+    </div>
   );
 }
