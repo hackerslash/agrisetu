@@ -1,4 +1,4 @@
-name: Deploy To Server
+name: Deploy to Production
 
 on:
   push:
@@ -7,20 +7,88 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy-main
+  group: deploy-production
   cancel-in-progress: true
 
 jobs:
   deploy:
+    name: Deploy to agrisetu-app
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+
     steps:
-      - name: SSH deploy
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           script_stop: true
-          command_timeout: 45m
+          command_timeout: 20m
           script: |
-            cd /opt/agrisetu && git checkout main && git pull --ff-only origin main && npm ci && npm run db:migrate && npm run build --workspace=apps/api && npm run build --workspace=apps/web && sudo -n systemctl restart agrisetu-api agrisetu-web && sudo -n systemctl reload nginx
+            set -euo pipefail
+            cd /opt/agrisetu
+
+            echo "==> Pulling latest code"
+            git fetch origin main
+            git checkout main
+            git pull --ff-only origin main
+
+            echo "==> Installing dependencies"
+            npm ci --workspace=apps/api --workspace=apps/web
+
+            echo "==> Building API (prisma + tsc)"
+            cd apps/api
+            npx prisma generate
+            npm run build
+            cd ../..
+
+            echo "==> Building Vendor Portal (Next.js)"
+            cd apps/web
+            npm run build
+            cd ../..
+
+            echo "==> Running DB migrations"
+            cd apps/api && npx prisma migrate deploy && cd ../..
+
+            echo "==> Restarting services"
+            sudo systemctl restart agrisetu-api
+            sleep 3
+
+            echo "==> Health check — API"
+            for i in $(seq 1 10); do
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/health || true)
+              if [ "$STATUS" = "200" ]; then
+                echo "API healthy after restart (attempt $i)"
+                break
+              fi
+              echo "Attempt $i: API returned $STATUS, waiting..."
+              sleep 3
+            done
+            if [ "$STATUS" != "200" ]; then
+              echo "ERROR: API did not come up healthy — rolling back"
+              git stash
+              sudo systemctl restart agrisetu-api
+              exit 1
+            fi
+
+            echo "==> Restarting vendor portal"
+            sudo systemctl restart agrisetu-web
+            sleep 5
+
+            echo "==> Health check — Web"
+            for i in $(seq 1 10); do
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 || true)
+              if [ "$STATUS" = "200" ]; then
+                echo "Web healthy after restart (attempt $i)"
+                break
+              fi
+              echo "Attempt $i: Web returned $STATUS, waiting..."
+              sleep 3
+            done
+            if [ "$STATUS" != "200" ]; then
+              echo "ERROR: Web did not come up healthy"
+              exit 1
+            fi
+
+            echo "==> Deploy complete"
