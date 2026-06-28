@@ -1,17 +1,10 @@
-import {
-  BedrockRuntimeClient,
-  ConverseCommand,
-} from "@aws-sdk/client-bedrock-runtime";
 import { ClusterStatus } from "@prisma/client";
 import { isValidCoordinate, isWithinRadiusKm } from "../lib/geo.js";
+import { callManifestAI } from "../lib/manifest-ai.js";
 import { logger } from "../lib/logger.js";
 import { prisma } from "../lib/prisma.js";
 
 const DEFAULT_CLUSTER_CONTEXT_RADIUS_KM = 50;
-
-const bedrockClient = new BedrockRuntimeClient({
-  region: process.env.AWS_REGION || "us-east-1",
-});
 
 export type ResolvedRequirement = {
   requirementProduct: string;
@@ -50,25 +43,11 @@ async function callModel(
   systemPrompt: string,
   userContent: string,
 ): Promise<Record<string, unknown> | null> {
-  const modelId =
-    process.env.BEDROCK_MODEL_ID?.trim() ||
-    "anthropic.claude-3-sonnet-20240229-v1:0";
   try {
-    const response = await bedrockClient.send(
-      new ConverseCommand({
-        modelId,
-        system: [{ text: systemPrompt }],
-        messages: [{ role: "user", content: [{ text: userContent }] }],
-        inferenceConfig: { temperature: 0.1, maxTokens: 500 },
-      }),
-    );
-    let text = "";
-    for (const part of response.output?.message?.content ?? []) {
-      if (part.text) text += part.text;
-    }
+    const text = await callManifestAI({ systemPrompt, userContent, temperature: 0.1, maxTokens: 500 });
     return extractJsonObject(text);
   } catch (err) {
-    logger.error("[requirement-resolution] Bedrock error:", err);
+    logger.error("[requirement-resolution] Manifest AI error:", err);
     return null;
   }
 }

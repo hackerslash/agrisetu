@@ -1,9 +1,6 @@
 import { vendorSafeSelect, farmerSafeSelect } from "../lib/selects.js";
 import { prisma } from "../lib/prisma.js";
-import {
-  BedrockRuntimeClient,
-  ConverseCommand,
-} from "@aws-sdk/client-bedrock-runtime";
+import { callManifestAI } from "../lib/manifest-ai.js";
 import {
   ClusterStatus,
   GigStatus,
@@ -45,10 +42,6 @@ const CLUSTER_PAYMENT_WINDOW_MINUTES =
       : DEFAULT_CLUSTER_PAYMENT_WINDOW_MINUTES;
 const CLUSTER_PAYMENT_WINDOW_MS =
   CLUSTER_PAYMENT_WINDOW_MINUTES * 60 * 1000;
-
-const bedrockClient = new BedrockRuntimeClient({
-  region: process.env.AWS_REGION || "us-east-1",
-});
 
 function normalizeUnit(unit: string) {
   return normalizeUnitValue(unit);
@@ -517,10 +510,6 @@ export async function refreshClusterAutobids(clusterId: string): Promise<void> {
   // Use AI to score semantic match between cluster requirement and gig products
   let matchingGigIds: Set<string> = new Set();
   try {
-    const modelId =
-      process.env.BEDROCK_MODEL_ID?.trim() ||
-      "anthropic.claude-3-sonnet-20240229-v1:0";
-
     const gigList = serviceableGigs.map((g, i) => `${i + 1}. id="${g.id}" product="${g.product}"`).join("\n");
     const systemPrompt =
       "You are a product matcher for an agricultural procurement platform. " +
@@ -534,19 +523,7 @@ export async function refreshClusterAutobids(clusterId: string): Promise<void> {
       availableGigs: gigList,
     });
 
-    const response = await bedrockClient.send(
-      new ConverseCommand({
-        modelId,
-        system: [{ text: systemPrompt }],
-        messages: [{ role: "user", content: [{ text: userContent }] }],
-        inferenceConfig: { temperature: 0.1, maxTokens: 500 },
-      }),
-    );
-
-    let text = "";
-    for (const part of response.output?.message?.content ?? []) {
-      if (part.text) text += part.text;
-    }
+    const text = await callManifestAI({ systemPrompt, userContent, temperature: 0.1, maxTokens: 500 });
 
     // Parse JSON
     const firstBrace = text.indexOf("{");
@@ -564,7 +541,7 @@ export async function refreshClusterAutobids(clusterId: string): Promise<void> {
       }
     }
   } catch (err) {
-    logger.error("[cluster] refreshClusterAutobids AI error:", err);
+    logger.error("[cluster] refreshClusterAutobids Manifest AI error:", err);
     // Fallback: treat all serviceable gigs as matching (product-name insensitive match)
     for (const gig of serviceableGigs) {
       if (gig.product.toLowerCase().trim() === cluster.product.toLowerCase().trim()) {

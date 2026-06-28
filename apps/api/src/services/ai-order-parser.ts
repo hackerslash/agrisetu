@@ -1,9 +1,6 @@
 import { readFileSync } from "fs";
 import { join } from "path";
-import {
-  BedrockRuntimeClient,
-  ConverseCommand,
-} from "@aws-sdk/client-bedrock-runtime";
+import { callManifestAI } from "../lib/manifest-ai.js";
 import { logger } from "../lib/logger.js";
 
 export type VoiceAssistantIntent =
@@ -54,10 +51,6 @@ const ASSISTANT_INTENTS: VoiceAssistantIntent[] = [
   "GENERAL_QUESTION",
   "UNKNOWN",
 ];
-
-const bedrockClient = new BedrockRuntimeClient({
-  region: process.env.AWS_REGION || "us-east-1",
-});
 
 let staticKbContext = "";
 try {
@@ -192,6 +185,118 @@ function buildNonOrderExtraction(
   };
 }
 
+const INTENT_ALIAS_MAP: Record<string, VoiceAssistantIntent> = {
+  // Exact matches
+  PLACE_ORDER: "PLACE_ORDER",
+  TRACK_ORDERS: "TRACK_ORDERS",
+  PENDING_PAYMENTS: "PENDING_PAYMENTS",
+  CLUSTER_STATUS: "CLUSTER_STATUS",
+  VOTING_STATUS: "VOTING_STATUS",
+  UPDATE_PROFILE: "UPDATE_PROFILE",
+  GENERAL_QUESTION: "GENERAL_QUESTION",
+  UNKNOWN: "UNKNOWN",
+
+  // PLACE_ORDER aliases
+  ORDER: "PLACE_ORDER",
+  PLACE: "PLACE_ORDER",
+  PLACE_ORDER_INTENT: "PLACE_ORDER",
+  CREATE_ORDER: "PLACE_ORDER",
+  NEW_ORDER: "PLACE_ORDER",
+  BUY: "PLACE_ORDER",
+  PURCHASE: "PLACE_ORDER",
+  BUYING: "PLACE_ORDER",
+  ORDERING: "PLACE_ORDER",
+  ORDER_PLACEMENT: "PLACE_ORDER",
+  MAKE_ORDER: "PLACE_ORDER",
+  BOOK_ORDER: "PLACE_ORDER",
+  BOOK: "PLACE_ORDER",
+  PLACE_AN_ORDER: "PLACE_ORDER",
+
+  // TRACK_ORDERS aliases
+  TRACK_ORDER: "TRACK_ORDERS",
+  TRACK: "TRACK_ORDERS",
+  TRACKING: "TRACK_ORDERS",
+  ORDER_TRACKING: "TRACK_ORDERS",
+  CHECK_ORDERS: "TRACK_ORDERS",
+  CHECK_ORDER: "TRACK_ORDERS",
+  ORDER_STATUS: "TRACK_ORDERS",
+  MY_ORDERS: "TRACK_ORDERS",
+  VIEW_ORDERS: "TRACK_ORDERS",
+  SHOW_ORDERS: "TRACK_ORDERS",
+  ORDER_HISTORY: "TRACK_ORDERS",
+  ORDERS: "TRACK_ORDERS",
+  TRACK_MY_ORDERS: "TRACK_ORDERS",
+  TRACK_DELIVERY: "TRACK_ORDERS",
+  DELIVERY_STATUS: "TRACK_ORDERS",
+
+  // PENDING_PAYMENTS aliases
+  PENDING_PAYMENT: "PENDING_PAYMENTS",
+  PAYMENT_PENDING: "PENDING_PAYMENTS",
+  PAYMENTS: "PENDING_PAYMENTS",
+  PAYMENT: "PENDING_PAYMENTS",
+  CHECK_PAYMENTS: "PENDING_PAYMENTS",
+  CHECK_PAYMENT: "PENDING_PAYMENTS",
+  PAYMENT_STATUS: "PENDING_PAYMENTS",
+  DUE_PAYMENTS: "PENDING_PAYMENTS",
+  UNPAID: "PENDING_PAYMENTS",
+  PAYMENT_DUE: "PENDING_PAYMENTS",
+  PAY: "PENDING_PAYMENTS",
+  MY_PAYMENTS: "PENDING_PAYMENTS",
+  VIEW_PAYMENTS: "PENDING_PAYMENTS",
+
+  // CLUSTER_STATUS aliases
+  CLUSTER: "CLUSTER_STATUS",
+  CLUSTER_TRACK: "CLUSTER_STATUS",
+  CLUSTERS: "CLUSTER_STATUS",
+  CHECK_CLUSTER: "CLUSTER_STATUS",
+  CHECK_CLUSTERS: "CLUSTER_STATUS",
+  GROUP_ORDER: "CLUSTER_STATUS",
+  GROUP_ORDERS: "CLUSTER_STATUS",
+  GROUP_STATUS: "CLUSTER_STATUS",
+  GROUP: "CLUSTER_STATUS",
+  MY_CLUSTERS: "CLUSTER_STATUS",
+  VIEW_CLUSTERS: "CLUSTER_STATUS",
+  CLUSTER_INFO: "CLUSTER_STATUS",
+
+  // VOTING_STATUS aliases
+  VOTE: "VOTING_STATUS",
+  VOTING: "VOTING_STATUS",
+  VENDOR_VOTING: "VOTING_STATUS",
+  BID: "VOTING_STATUS",
+  BIDDING: "VOTING_STATUS",
+  VOTING_PENDING: "VOTING_STATUS",
+  PENDING_VOTES: "VOTING_STATUS",
+  CHECK_VOTING: "VOTING_STATUS",
+  MY_VOTES: "VOTING_STATUS",
+  VOTE_STATUS: "VOTING_STATUS",
+
+  // UPDATE_PROFILE aliases
+  PROFILE: "UPDATE_PROFILE",
+  EDIT_PROFILE: "UPDATE_PROFILE",
+  PROFILE_UPDATE: "UPDATE_PROFILE",
+  MY_PROFILE: "UPDATE_PROFILE",
+  CHANGE_PROFILE: "UPDATE_PROFILE",
+  MODIFY_PROFILE: "UPDATE_PROFILE",
+  ACCOUNT: "UPDATE_PROFILE",
+  EDIT_ACCOUNT: "UPDATE_PROFILE",
+  SETTINGS: "UPDATE_PROFILE",
+  PROFILE_EDIT: "UPDATE_PROFILE",
+  UPDATE_DETAILS: "UPDATE_PROFILE",
+
+  // GENERAL_QUESTION aliases
+  QUESTION: "GENERAL_QUESTION",
+  GENERAL: "GENERAL_QUESTION",
+  GENERAL_QUERY: "GENERAL_QUESTION",
+  QUERY: "GENERAL_QUESTION",
+  ASK: "GENERAL_QUESTION",
+  HELP: "GENERAL_QUESTION",
+  INFO: "GENERAL_QUESTION",
+  INFORMATION: "GENERAL_QUESTION",
+  FAQ: "GENERAL_QUESTION",
+  ENQUIRY: "GENERAL_QUESTION",
+  INQUIRY: "GENERAL_QUESTION",
+};
+
 function normalizeAssistantIntent(
   input: unknown,
   transcript?: string,
@@ -203,30 +308,18 @@ function normalizeAssistantIntent(
       .replace(/[^A-Z]+/g, "_")
       .replace(/^_+|_+$/g, "");
 
-    if ((ASSISTANT_INTENTS as string[]).includes(key)) {
-      return key as VoiceAssistantIntent;
+    const directMatch = INTENT_ALIAS_MAP[key];
+    if (directMatch) {
+      return directMatch;
     }
 
-    if (key === "ORDER" || key === "PLACE" || key === "PLACE_ORDER_INTENT") {
-      return "PLACE_ORDER";
-    }
-    if (key === "TRACK_ORDER" || key === "TRACK") {
-      return "TRACK_ORDERS";
-    }
-    if (key === "PENDING_PAYMENT" || key === "PAYMENT_PENDING") {
-      return "PENDING_PAYMENTS";
-    }
-    if (key === "CLUSTER" || key === "CLUSTER_TRACK") {
-      return "CLUSTER_STATUS";
-    }
-    if (key === "VOTE" || key === "VOTING") {
-      return "VOTING_STATUS";
-    }
-    if (key === "PROFILE" || key === "EDIT_PROFILE") {
-      return "UPDATE_PROFILE";
-    }
-    if (key === "QUESTION" || key === "GENERAL" || key === "GENERAL_QUERY") {
-      return "GENERAL_QUESTION";
+    // Substring matching: check if any known alias is contained within the key
+    // or if the key is contained within a known alias.
+    // This handles cases like "PLACE_ORDER_ACTION" or "INTENT_TRACK_ORDERS" etc.
+    for (const [alias, intent] of Object.entries(INTENT_ALIAS_MAP)) {
+      if (alias.length >= 4 && (key.includes(alias) || alias.includes(key))) {
+        return intent;
+      }
     }
   }
 
@@ -259,50 +352,53 @@ function inferIntentFromTranscriptFallback(
   if (!normalized) return "UNKNOWN";
 
   if (
-    /\b(update|edit|change)\b.*\b(profile|account|phone|name|address)\b/.test(
+    /\b(update|edit|change|badlo|badalna|sudharo)\b.*\b(profile|account|phone|name|address|naam|pata)\b/.test(
       normalized,
     ) ||
-    /\bprofile\b/.test(normalized)
+    /\b(profile|profail)\b/.test(normalized)
   ) {
     return "UPDATE_PROFILE";
   }
 
   if (
-    /\b(track|status|show|check|where)\b.*\b(order|orders|delivery)\b/.test(
+    /\b(track|status|show|check|where|dikhao|dikha|kahan|kab|batao)\b.*\b(order|orders|delivery|aaya|pohcha|pohoch)\b/.test(
       normalized,
-    )
+    ) ||
+    /\b(mera|mere|my)\b.*\b(order|orders)\b/.test(normalized) ||
+    /\b(order|orders)\b.*\b(kahan|kab|status|track)\b/.test(normalized)
   ) {
     return "TRACK_ORDERS";
   }
 
   if (
-    /\b(payment|payments|pay|due|pending)\b/.test(normalized) &&
-    /\b(pending|due|remaining|left|unpaid|status|which)\b/.test(normalized)
+    (/\b(payment|payments|pay|due|pending|paisa|paise|bhugtan|baki)\b/.test(normalized) &&
+      /\b(pending|due|remaining|left|unpaid|status|which|kitna|kab|baki|bacha)\b/.test(normalized)) ||
+    /\b(pending)\b.*\b(payment|payments)\b/.test(normalized)
   ) {
     return "PENDING_PAYMENTS";
   }
 
-  if (/\b(vote|voting|bid)\b/.test(normalized)) {
+  if (/\b(vote|voting|bid|bidding|matdan)\b/.test(normalized)) {
     return "VOTING_STATUS";
   }
 
-  if (/\b(cluster|group order|group)\b/.test(normalized)) {
+  if (/\b(cluster|group order|group|samuh|samooh)\b/.test(normalized)) {
     return "CLUSTER_STATUS";
   }
 
   if (
-    /\b(order|buy|need|require|purchase|book|chahiye|mujhe|hame)\b/.test(
+    /\b(order|buy|need|require|purchase|book|chahiye|chahie|chaiye|chiye|mujhe|hame|humein|kharidna|mangwao|mangao|lena|dedo|bhejo|bhejdo)\b/.test(
       normalized,
     ) ||
     (/\b\d+(?:\.\d+)?\b/.test(normalized) &&
-      /\b(kg|kilo|quintal|ton|bag|litre|liter|liters|litres|bags)\b/.test(
+      /\b(kg|kilo|quintal|ton|bag|litre|liter|liters|litres|bags|bori|bora)\b/.test(
         normalized,
       ))
   ) {
     return "PLACE_ORDER";
   }
 
-  if (/^(what|which|when|how|who|why)\b/.test(normalized)) {
+  if (/^(what|which|when|how|who|why|kya|kaun|kab|kaise|kyun)\b/.test(normalized)) {
     return "GENERAL_QUESTION";
   }
 
@@ -338,10 +434,6 @@ async function callModelForAssistantExtraction(params: {
   conversationContext?: string[];
   pendingDraft?: VoiceOrderDraft | null;
 }) {
-  const modelId =
-    process.env.BEDROCK_MODEL_ID?.trim() ||
-    "anthropic.claude-3-sonnet-20240229-v1:0";
-
   const normalizedTranscript = normalizeTextForMatch(params.transcript);
   const kbContext = staticKbContext;
 
@@ -357,50 +449,46 @@ async function callModelForAssistantExtraction(params: {
   const systemPrompt =
     "You are an AI farmer voice assistant for AgriSetu. Classify user intent and extract order details only when needed.\n\n" +
     "CRITICAL RULES:\n" +
-    "1. Respond with ONLY one valid JSON object and no extra text.\n" +
-    '2. JSON schema: { "intent": "PLACE_ORDER"|"TRACK_ORDERS"|"PENDING_PAYMENTS"|"CLUSTER_STATUS"|"VOTING_STATUS"|"UPDATE_PROFILE"|"GENERAL_QUESTION"|"UNKNOWN", "intentConfidence": number, "assistantMessage": string|null, "product": string|null, "quantity": number|null, "unit": "kg"|"quintal"|"ton"|"bag"|"litre"|null, "confidence": number, "needsClarification": boolean, "clarificationQuestion": string|null }.\n' +
-    "3. If intent is not PLACE_ORDER: set product/quantity/unit to null, needsClarification=false, clarificationQuestion=null.\n" +
-    "4. For GENERAL_QUESTION, assistantMessage must be one concise sentence and must not trigger navigation/action.\n" +
-    "5. For PLACE_ORDER, use activeClusterProducts to understand available product vocabulary. Answer 'what products are available?' using activeClusterProducts only.\n" +
-    "6. For PLACE_ORDER, if product/quantity/unit are incomplete, set needsClarification=true and ask one short question.\n" +
-    "7. Use conversationContext and pendingDraft to complete PLACE_ORDER details across turns.\n" +
-    "8. MUST USE KNOWLEDGE BASE: follow rules in <knowledge_base>.\n\n" +
+    "1. Respond with ONLY one valid JSON object and NO other text, NO markdown, NO explanation.\n" +
+    '2. JSON must have this EXACT shape: { "intent": "<INTENT>", "intentConfidence": <number>, "assistantMessage": <string|null>, "product": <string|null>, "quantity": <number|null>, "unit": <string|null>, "confidence": <number>, "needsClarification": <boolean>, "clarificationQuestion": <string|null> }\n' +
+    '3. "intent" MUST be EXACTLY one of these strings (copy the value exactly): "PLACE_ORDER", "TRACK_ORDERS", "PENDING_PAYMENTS", "CLUSTER_STATUS", "VOTING_STATUS", "UPDATE_PROFILE", "GENERAL_QUESTION", "UNKNOWN". Do NOT use any other value.\n' +
+    '4. "unit" when present MUST be one of: "kg", "quintal", "ton", "bag", "litre".\n' +
+    "5. If intent is not PLACE_ORDER: set product/quantity/unit to null, needsClarification=false, clarificationQuestion=null.\n" +
+    "6. For GENERAL_QUESTION, assistantMessage must be one concise sentence and must not trigger navigation/action.\n" +
+    "7. For PLACE_ORDER, use activeClusterProducts to understand available product vocabulary. Answer 'what products are available?' using activeClusterProducts only.\n" +
+    "8. For PLACE_ORDER, if product/quantity/unit are incomplete, set needsClarification=true and ask one short question.\n" +
+    "9. Use conversationContext and pendingDraft to complete PLACE_ORDER details across turns.\n" +
+    "10. Follow guidance in <knowledge_base> for behavior and extraction policy.\n\n" +
+    "INTENT CLASSIFICATION GUIDE:\n" +
+    '- User wants to buy/order/need something → "PLACE_ORDER"\n' +
+    '- User asks about order status/tracking/delivery → "TRACK_ORDERS"\n' +
+    '- User asks about payments/dues/pending money → "PENDING_PAYMENTS"\n' +
+    '- User asks about cluster/group order status → "CLUSTER_STATUS"\n' +
+    '- User asks about vendor voting/bidding → "VOTING_STATUS"\n' +
+    '- User wants to edit/update profile → "UPDATE_PROFILE"\n' +
+    '- User has a general informational question → "GENERAL_QUESTION"\n' +
+    '- Cannot determine intent → "UNKNOWN"\n\n' +
     "<knowledge_base>\n" +
     (kbContext || "No knowledge base context available for this request.") +
-    "\n</knowledge_base>";
+    "\n</knowledge_base>"
 
   try {
-    const response = await bedrockClient.send(
-      new ConverseCommand({
-        modelId,
-        system: [{ text: systemPrompt }],
-        messages: [
-          {
-            role: "user",
-            content: [{ text: JSON.stringify(promptPayload) }],
-          },
-        ],
-        inferenceConfig: {
-          temperature: 0.1,
-          maxTokens: 1000,
-        },
-      }),
-    );
+    const contentText = await callManifestAI({
+      systemPrompt,
+      userContent: JSON.stringify(promptPayload),
+      temperature: 0.1,
+      maxTokens: 1000,
+    });
 
-    let contentText = "";
-    if (response.output?.message?.content) {
-      for (const part of response.output.message.content) {
-        if (part.text) {
-          contentText += part.text;
-        }
-      }
-    }
-
+    logAiJson("raw-model-text", contentText);
     const parsed = extractJsonObject(contentText);
     logAiJson("parsed-model-json", parsed);
+    if (parsed) {
+      logAiJson("model-intent-field", parsed.intent);
+    }
     return parsed;
   } catch (error) {
-    logger.error("[ai-order-parser] Error calling Bedrock model:", error);
+    logger.error("[ai-order-parser] Error calling Manifest AI:", error);
     return null;
   }
 }
@@ -484,6 +572,7 @@ export async function extractVoiceAssistantFromTranscript(params: {
     }
 
     const intent = normalizeAssistantIntent(parsed.intent, transcript);
+    logAiJson("intent-resolution", { raw: parsed.intent, resolved: intent });
     const intentConfidence = clampConfidence(parsed.intentConfidence, 0.6);
     const assistantMessage = sanitizeAssistantMessage(parsed.assistantMessage);
 

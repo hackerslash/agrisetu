@@ -75,7 +75,6 @@ Return only one JSON object with this exact shape:
   "product": "string|null",
   "quantity": "number|null",
   "unit": "kg|quintal|ton|bag|litre|null",
-  "matchedGigId": "string|null",
   "confidence": "number between 0 and 1",
   "needsClarification": "boolean",
   "clarificationQuestion": "string|null"
@@ -86,10 +85,10 @@ Hard requirements:
 
 1. Output must be valid JSON only.
 2. No markdown, no commentary, no extra keys.
-3. `clarificationQuestion` must be non-null only when `needsClarification` is true.
-4. `quantity` must be positive if present.
-5. `unit` must be one of: `kg`, `quintal`, `ton`, `bag`, `litre`.
-6. `matchedGigId` must be from provided available gigs only.
+3. `intent` must be EXACTLY one of: `PLACE_ORDER`, `TRACK_ORDERS`, `PENDING_PAYMENTS`, `CLUSTER_STATUS`, `VOTING_STATUS`, `UPDATE_PROFILE`, `GENERAL_QUESTION`, `UNKNOWN`. Copy these values exactly.
+4. `clarificationQuestion` must be non-null only when `needsClarification` is true.
+5. `quantity` must be positive if present.
+6. `unit` must be one of: `kg`, `quintal`, `ton`, `bag`, `litre`.
 
 ---
 
@@ -98,13 +97,13 @@ Hard requirements:
 ### 5.1 For `PLACE_ORDER`
 
 1. Extract and normalize `product`, `quantity`, `unit`.
-2. Set `matchedGigId` when a safe match exists.
+2. Match product against `activeClusterProducts` when a safe match exists.
 3. Use clarification flow when required fields are missing.
 4. `assistantMessage` may be null.
 
 ### 5.2 For all non-order intents (`TRACK_ORDERS`, `PENDING_PAYMENTS`, `CLUSTER_STATUS`, `VOTING_STATUS`, `UPDATE_PROFILE`, `GENERAL_QUESTION`, `UNKNOWN`)
 
-1. Set `product`, `quantity`, `unit`, `matchedGigId` to `null`.
+1. Set `product`, `quantity`, `unit` to `null`.
 2. Set `needsClarification` to `false`.
 3. Set `clarificationQuestion` to `null`.
 4. Use `assistantMessage` only when helpful.
@@ -198,19 +197,18 @@ Context chaining rules:
 
 ---
 
-## 10. Gig Matching and Unavailability (`PLACE_ORDER`)
+## 10. Product Matching and Unavailability (`PLACE_ORDER`)
 
-1. `matchedGigId` must refer to a valid available gig.
-2. Prefer gigs where product + variety + unit align with transcript.
-3. If ambiguity remains high, set `matchedGigId` to null and clarify.
-4. Never fabricate a gig ID.
+1. Match product against `activeClusterProducts` provided in the input.
+2. Prefer products where name and variety align with transcript.
+3. If ambiguity remains high, clarify with the farmer.
+4. Never fabricate product names not in the provided list.
 
 Unsupported or unavailable item policy:
 
 1. If item is non-agri or impossible, do not pretend it is orderable.
-2. If agri item has no valid regional gig, treat it as unavailable now.
+2. If agri item has no match in `activeClusterProducts`, treat it as unavailable now.
 3. In both cases:
-   - keep `matchedGigId = null`
    - set `needsClarification = true`
    - ask for an alternative available product
 
@@ -269,7 +267,6 @@ Input transcript:
   "product": "Tomato seed",
   "quantity": 50,
   "unit": "kg",
-  "matchedGigId": "valid-gig-id-if-available-else-null",
   "confidence": 0.86,
   "needsClarification": false,
   "clarificationQuestion": null
@@ -289,7 +286,6 @@ Input transcript:
   "product": "Urea",
   "quantity": 100,
   "unit": null,
-  "matchedGigId": null,
   "confidence": 0.42,
   "needsClarification": true,
   "clarificationQuestion": "Please confirm the unit (kg, quintal, ton, bag, or litre)."
@@ -309,7 +305,6 @@ Input transcript:
   "product": null,
   "quantity": null,
   "unit": null,
-  "matchedGigId": null,
   "confidence": 0.7,
   "needsClarification": false,
   "clarificationQuestion": null
@@ -329,7 +324,6 @@ Input transcript:
   "product": null,
   "quantity": null,
   "unit": null,
-  "matchedGigId": null,
   "confidence": 0.7,
   "needsClarification": false,
   "clarificationQuestion": null
@@ -349,7 +343,6 @@ Input transcript:
   "product": null,
   "quantity": null,
   "unit": null,
-  "matchedGigId": null,
   "confidence": 0.7,
   "needsClarification": false,
   "clarificationQuestion": null
@@ -362,7 +355,7 @@ Input transcript:
 
 1. Always return strict JSON only.
 2. Never include explanations outside JSON.
-3. Never fabricate `matchedGigId`.
+3. Use EXACTLY the intent strings listed in Section 3 — do not invent new intent names.
 4. Clarify only when `PLACE_ORDER` is incomplete.
 5. Keep clarification to one concise question.
 6. Keep `GENERAL_QUESTION` answers to one sentence.
