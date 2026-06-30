@@ -64,7 +64,11 @@ export function getAllowedCorsOrigins(): string[] {
   return [...allowedOrigins];
 }
 
+export const CORS_ALLOW_ALL = process.env.CORS_ALLOW_ALL === "true";
+
 export function isAllowedCorsOrigin(origin: string): boolean {
+  if (CORS_ALLOW_ALL) return true;
+
   const normalized = normalizeOrigin(origin);
   if (!normalized) return false;
 
